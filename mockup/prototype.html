@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Beside — Prototype bấm thử</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .proto{display:flex;gap:44px;align-items:flex-start;justify-content:center;
+         padding:34px 28px 70px;flex-wrap:wrap}
+  .side{width:288px;flex:0 0 auto;position:sticky;top:28px}
+  .side .card{padding:12px}
+  .navitem{display:flex;align-items:center;gap:11px;padding:10px 11px;border-radius:14px;
+           cursor:pointer;font-size:13.5px;font-weight:650;color:var(--ink-700);
+           border:0;background:none;width:100%;text-align:left;font-family:var(--font)}
+  .navitem:hover{background:var(--rose-50)}
+  .navitem.on{background:var(--grad-love);color:#fff;box-shadow:var(--sh-md)}
+  .navitem .ni{width:28px;height:28px;border-radius:9px;background:var(--ink-100);
+               display:flex;align-items:center;justify-content:center;font-size:15px;flex:0 0 auto}
+  .navitem.on .ni{background:rgba(255,255,255,.24)}
+  .navitem small{display:block;font-weight:600;font-size:10.5px;opacity:.7;margin-top:1px}
+  .hint{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);
+        background:var(--ink-900);color:#fff;padding:11px 20px;border-radius:var(--r-full);
+        font-size:12.5px;font-weight:600;box-shadow:var(--sh-lg);opacity:0;pointer-events:none;
+        transition:opacity .25s;z-index:99}
+  .hint.show{opacity:.95}
+  .fade{animation:fadeIn .22s ease}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+
+<div class="wrap" style="padding-bottom:0">
+  <div class="site-head">
+    <div class="brand">
+      <div class="brand-mark">💞</div>
+      <div>
+        <p class="eyebrow" style="margin-bottom:2px">Prototype bấm thử</p>
+        <h1 class="h1" style="font-size:26px">Beside</h1>
+      </div>
+    </div>
+    <a class="btn btn-ghost" href="index.html">◀ Xem tất cả màn hình</a>
+  </div>
+</div>
+
+<div class="proto">
+  <!-- Điều hướng bên trái -->
+  <div class="side">
+    <div class="card">
+      <p class="eyebrow" style="padding:6px 11px 8px">Màn hình</p>
+      <div id="nav"></div>
+    </div>
+    <div class="note" style="margin-top:16px;font-size:12.5px">
+      <b>Bấm được:</b> thanh tab dưới cùng, thẻ đếm ngày yêu, avatar góc phải,
+      4 ô truy cập nhanh, nút “Xem trên bản đồ”, nút ＋, các công tắc.
+    </div>
+  </div>
+
+  <!-- Điện thoại -->
+  <div class="phone">
+    <div class="phone-screen" id="screen"></div>
+  </div>
+
+  <!-- Chú thích màn hình hiện tại -->
+  <div style="width:290px;flex:0 0 auto">
+    <div class="card">
+      <p class="eyebrow" id="capEyebrow">Màn hình</p>
+      <h3 class="h3" id="capName" style="margin:6px 0 8px"></h3>
+      <p class="muted" id="capDesc"></p>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <p class="eyebrow">Ghi chú kỹ thuật</p>
+      <p class="muted" id="capTech" style="margin-top:8px"></p>
+    </div>
+  </div>
+</div>
+
+<div class="hint" id="hint"></div>
+
+<script src="screens.js"></script>
+<script>
+var TECH = {
+  pair:'POST /couples → sinh inviteCode 6 ký tự (hết hạn 24h). POST /couples/join kiểm tra: mã tồn tại, chưa hết hạn, không phải mã của chính mình, cả hai chưa thuộc couple nào. Dùng transaction để tránh 2 người join cùng lúc.',
+  home:'GET /love/summary + GET /locations/partner/latest + GET /events?from=today. Mini-map dùng static snapshot của MapLibre để không tốn WebGL context. Trạng thái "Trực tiếp" đến từ sự kiện socket presence.',
+  map:'MapLibre GL JS. Marker cập nhật qua sự kiện loc:partner, nội suy tuyến tính 1s cho mượt. Vòng tròn ngoài = accuracy thật của GPS. Vệt đường lấy từ GET /locations/partner/trail (GeoJSON LineString). Nút 📡 bật Live Session + Wake Lock.',
+  checkin:'Ảnh nén ở client (canvas → WebP, cạnh dài tối đa 2048px) rồi upload multipart. Server dùng sharp tạo 3 kích thước + blurhash, xoá sạch EXIF. Toạ độ lấy từ getCurrentPosition, chỉ lưu khi bật "Ghim lên bản đồ".',
+  feed:'GET /posts?cursor&limit=10 — phân trang bằng cursor (createdAt + id) chứ không offset, để không lặp bài khi có bài mới. Ảnh lazy-load, hiện blurhash trong lúc tải.',
+  schedule:'GET /events?from&to. Lưu UTC, hiển thị theo Asia/Ho_Chi_Minh. Sự kiện all-day lưu dạng date-only để không lệch ngày khi đổi múi giờ. Nhắc lịch bằng job BullMQ + Web Push.',
+  love:'Tính hoàn toàn ở client từ anniversaryAt để không lệch khi đổi ngày lúc nửa đêm; server chỉ trả mốc kế tiếp. Cẩn thận 29/02 (năm nhuận) và trường hợp anniversary = hôm nay (0 ngày).',
+  places:'PostGIS: ST_DWithin(geog_point, place_geog, radius). Trạng thái vào/ra lưu ở Redis để phát hiện chuyển trạng thái (chống bắn thông báo lặp). Có hysteresis: ra khỏi vùng phải vượt radius + 30m mới tính là "đã rời".',
+  settings:'Ghost mode bật → gateway bỏ qua loc:update, KHÔNG ghi LocationPoint và KHÔNG phát cho đối phương. "Làm mờ vị trí" xử lý ở server (dịch toạ độ ngẫu nhiên trong bán kính) để client không tự bỏ qua được.'
+};
+
+var current = 'home';
+
+function render(id) {
+  var s = screenById(id);
+  current = id;
+  var scr = document.getElementById('screen');
+  scr.innerHTML = renderPhone(s);
+  scr.classList.remove('fade'); void scr.offsetWidth; scr.classList.add('fade');
+
+  document.getElementById('capName').textContent = s.name;
+  document.getElementById('capDesc').textContent = s.desc;
+  document.getElementById('capTech').textContent = TECH[id] || '';
+  document.getElementById('capEyebrow').textContent =
+    'Màn ' + (SCREENS.indexOf(s) + 1) + ' / ' + SCREENS.length;
+
+  document.querySelectorAll('#nav .navitem').forEach(function (b) {
+    b.classList.toggle('on', b.dataset.id === id);
+  });
+}
+
+/* Điều hướng bên trái */
+document.getElementById('nav').innerHTML = SCREENS.map(function (s, i) {
+  return '<button class="navitem" data-id="' + s.id + '">' +
+    '<span class="ni">' + s.icon + '</span>' +
+    '<span>' + s.name + '<small>' + (i + 1) + ' / ' + SCREENS.length + '</small></span></button>';
+}).join('');
+
+document.getElementById('nav').addEventListener('click', function (e) {
+  var b = e.target.closest('.navitem'); if (b) render(b.dataset.id);
+});
+
+/* Bấm trong màn hình */
+var hint = document.getElementById('hint'), hintTimer;
+function say(msg) {
+  hint.textContent = msg; hint.classList.add('show');
+  clearTimeout(hintTimer); hintTimer = setTimeout(function () { hint.classList.remove('show'); }, 1700);
+}
+
+document.getElementById('screen').addEventListener('click', function (e) {
+  var sw = e.target.closest('.sw');
+  if (sw) { sw.classList.toggle('on'); return; }
+
+  var go = e.target.closest('[data-goto]');
+  if (go) { render(go.dataset.goto); return; }
+
+  var react = e.target.closest('.react span');
+  if (react) { react.classList.toggle('on'); return; }
+
+  if (e.target.closest('.btn, .icon-btn, .map-fab, .pill, .lrow, .ev, .wday')) {
+    say('Mockup — hành động này sẽ có ở bản thật');
+  }
+});
+
+render('home');
+</script>
+</body>
+</html>

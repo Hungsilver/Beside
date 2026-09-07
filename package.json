@@ -1,0 +1,40 @@
+{
+  "name": "beside",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Beside — app check-in & theo dõi lịch trình cho cặp đôi (PWA)",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build:shared": "npm run build -w @beside/shared",
+    "build": "npm run build:shared && npm run db:generate && npm run build -w @beside/api && npm run build -w @beside/web",
+    "dev:api": "npm run build:shared && npm run db:generate && npm run start:dev -w @beside/api",
+    "dev:web": "npm run build:shared && npm run dev -w @beside/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "_comment_db": "Các lệnh Prisma PHẢI chạy từ gốc repo vì .env nằm ở đây",
+    "db:generate": "prisma generate --schema apps/api/prisma/schema.prisma",
+    "db:migrate": "prisma migrate dev --schema apps/api/prisma/schema.prisma",
+    "db:deploy": "prisma migrate deploy --schema apps/api/prisma/schema.prisma",
+    "db:reset": "prisma migrate reset --schema apps/api/prisma/schema.prisma",
+    "db:studio": "prisma studio --schema apps/api/prisma/schema.prisma",
+    "trace:phase1": "node apps/api/test/trace-auth-pairing.mjs",
+    "infra:up": "docker compose up -d db redis",
+    "infra:down": "docker compose down",
+    "trace:phase2": "node apps/api/test/trace-phase2-realtime.mjs",
+    "docker:up": "docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build",
+    "docker:down": "docker compose -f docker-compose.yml -f docker-compose.local.yml down",
+    "docker:logs": "docker compose -f docker-compose.yml -f docker-compose.local.yml logs -f --tail=80",
+    "docker:ps": "docker compose -f docker-compose.yml -f docker-compose.local.yml ps",
+    "verify:local": "node scripts/verify-local.mjs",
+    "seed:demo": "node scripts/seed-demo.mjs",
+    "trace:review": "node apps/api/test/trace-phase2-review.mjs",
+    "trace:phase3": "node apps/api/test/trace-phase3-posts.mjs"
+  }
+}

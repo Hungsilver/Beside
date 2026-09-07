@@ -1,0 +1,37 @@
+# Lớp phủ để chạy TOÀN BỘ stack trên máy dev bằng Docker.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+#   (hoặc: npm run docker:up)
+#
+# Khác với khi chạy trên VPS ở chỗ dùng domain `localhost`:
+#   - Caddy tự cấp chứng chỉ bằng CA NỘI BỘ của nó cho localhost, không cần
+#     Let's Encrypt và không cần DNS. Trình duyệt sẽ cảnh báo "không tin cậy" —
+#     bấm qua là được, đây là chuyện bình thường khi chạy local.
+#   - Vẫn là HTTPS thật, nên Geolocation API của trình duyệt vẫn hoạt động —
+#     điều kiện bắt buộc để thử tính năng bản đồ.
+#
+# TUYỆT ĐỐI không dùng file này trên VPS.
+
+services:
+  api:
+    environment:
+      APP_ORIGIN: https://localhost
+      COOKIE_DOMAIN: localhost
+      # Mở thêm để có thể gọi thẳng vào API khi cần gỡ lỗi
+      CORS_EXTRA_ORIGINS: http://localhost:5173,http://localhost:3000
+    ports:
+      # Chỉ mở khi chạy local, để chạy được kịch bản trace mà không phải
+      # đi qua chứng chỉ tự ký. Trên VPS thì API KHÔNG phơi cổng ra ngoài.
+      - "127.0.0.1:3001:3000"
+
+  web:
+    build:
+      args:
+        VITE_API_BASE_URL: /api/v1
+        VITE_WS_PATH: /socket.io
+        VITE_MAP_STYLE_URL: https://tiles.openfreemap.org/styles/liberty
+
+  caddy:
+    environment:
+      APP_DOMAIN: localhost
+      ACME_EMAIL: dev@localhost

@@ -1,0 +1,118 @@
+@import 'tailwindcss';
+
+/* =========================================================
+   Design token — lấy nguyên từ mockup/styles.css (Phase 0)
+   Sửa màu ở ĐÂY, không hardcode mã màu trong component.
+   ========================================================= */
+@theme {
+  --font-sans: 'Be Vietnam Pro', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  --color-love-50: #fff3f6;
+  --color-love-100: #ffe3ea;
+  --color-love-200: #ffc7d6;
+  --color-love-300: #ffa3ba;
+  --color-love-400: #ff7a9c;
+  --color-love-500: #ff4d7d;
+  --color-love-600: #ea2f65;
+  --color-love-700: #c41f51;
+
+  --color-plum-100: #f0e9ff;
+  --color-plum-300: #c4a9ff;
+  --color-plum-500: #8b5cf6;
+  --color-plum-600: #7239e0;
+
+  --color-mint-100: #e1f8f1;
+  --color-mint-400: #3fcfa6;
+
+  --color-ink-100: #f5eff3;
+  --color-ink-200: #e9dfe6;
+  --color-ink-300: #cfc2cb;
+  --color-ink-400: #ac9ca9;
+  --color-ink-500: #8e7a8b;
+  --color-ink-700: #5a4257;
+  --color-ink-900: #231320;
+
+  --color-canvas: #fff7fa;
+
+  --radius-card: 22px;
+  --radius-hero: 34px;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-ink-900);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  /* Chặn kéo đàn hồi khi vuốt quá đầu/cuối trang — trông giống app hơn */
+  overscroll-behavior-y: none;
+}
+
+/* Không cho iOS tự phóng to khi focus input (font < 16px là bị) */
+input,
+textarea,
+select,
+button {
+  font-family: inherit;
+  font-size: 16px;
+}
+
+@layer components {
+  /* Vùng an toàn cho tai thỏ / thanh gạt của iPhone */
+  .safe-top {
+    padding-top: max(env(safe-area-inset-top), 12px);
+  }
+  .safe-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom), 16px);
+  }
+
+  .card {
+    @apply rounded-[var(--radius-card)] border border-black/[0.04] bg-white p-[18px]
+           shadow-[0_2px_8px_rgba(35,19,32,0.06)];
+  }
+
+  /* Tailwind v4: @apply chỉ nhận UTILITY, không nhận class do mình tự định nghĩa.
+     Nên gom phần dùng chung vào một danh sách selector, thay vì `@apply btn`. */
+  .btn,
+  .btn-primary,
+  .btn-ghost {
+    /* min-h 48px: vùng chạm tối thiểu 44px theo CLAUDE.md R2 */
+    @apply inline-flex min-h-12 cursor-pointer items-center justify-center gap-2
+           rounded-full px-5 text-center text-[15px] font-bold no-underline transition
+           disabled:cursor-not-allowed disabled:opacity-55;
+  }
+  .btn-primary {
+    @apply text-white shadow-[0_10px_30px_rgba(234,47,101,0.35)];
+    background: linear-gradient(135deg, #ff7a9c 0%, #ff4d7d 42%, #b14be8 100%);
+  }
+  .btn-ghost {
+    @apply border-[1.5px] border-ink-200 bg-white text-ink-900;
+  }
+
+  .field-input {
+    @apply min-h-12 w-full rounded-2xl border-[1.5px] border-ink-200 bg-white px-4
+           text-ink-900 outline-none transition
+           placeholder:text-ink-400
+           focus:border-love-400 focus:ring-4 focus:ring-love-100;
+  }
+  .field-input[aria-invalid='true'] {
+    @apply border-love-600 focus:ring-love-100;
+  }
+
+  .love-gradient {
+    background: linear-gradient(135deg, #ff7a9c 0%, #ff4d7d 42%, #b14be8 100%);
+  }
+  .dusk-gradient {
+    background: linear-gradient(150deg, #ffb27a 0%, #ff6e8e 55%, #8b5cf6 100%);
+  }
+}

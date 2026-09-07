@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Beside — Giao diện chức năng (Phase 1 + 2)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .proto{display:flex;gap:40px;align-items:flex-start;justify-content:center;
+         padding:30px 26px 70px;flex-wrap:wrap}
+  .side{width:300px;flex:0 0 auto;position:sticky;top:24px}
+  .navitem{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:14px;
+           cursor:pointer;font-size:13px;font-weight:650;color:var(--ink-700);
+           border:0;background:none;width:100%;text-align:left;font-family:var(--font)}
+  .navitem:hover{background:var(--rose-50)}
+  .navitem.on{background:var(--grad-love);color:#fff;box-shadow:var(--sh-md)}
+  .navitem .ni{width:28px;height:28px;border-radius:9px;background:var(--ink-100);
+               display:flex;align-items:center;justify-content:center;font-size:15px;flex:0 0 auto}
+  .navitem.on .ni{background:rgba(255,255,255,.24)}
+  .fade{animation:fadeIn .2s ease}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .hint{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink-900);
+        color:#fff;padding:10px 20px;border-radius:var(--r-full);font-size:12.5px;font-weight:600;
+        box-shadow:var(--sh-lg);opacity:0;pointer-events:none;transition:opacity .25s;z-index:99}
+  .hint.show{opacity:.95}
+</style>
+</head>
+<body>
+
+<div class="wrap" style="padding-bottom:0">
+  <div class="site-head">
+    <div class="brand">
+      <div class="brand-mark">💞</div>
+      <div>
+        <p class="eyebrow" style="margin-bottom:2px">Giao diện chức năng · Phase 1 + 2</p>
+        <h1 class="h1" style="font-size:26px">Beside</h1>
+        <p class="muted" style="margin-top:4px;max-width:640px">
+          Đây là các màn hình <b>đã dựng thật</b> trong <code>apps/web</code> — đúng chữ,
+          đúng trạng thái, kể cả trạng thái lỗi và rỗng. Khác với
+          <a class="link" href="index.html">bản phác thảo Phase 0</a> vốn chỉ để duyệt hướng thiết kế.
+        </p>
+      </div>
+    </div>
+    <div class="toolbar">
+      <a class="btn btn-ghost" href="index.html">Bản phác thảo Phase 0</a>
+      <a class="btn btn-primary" href="app-gallery.html">Xem tất cả cùng lúc</a>
+    </div>
+  </div>
+</div>
+
+<div class="proto">
+  <div class="side">
+    <div class="card" style="padding:12px">
+      <p class="eyebrow" style="padding:6px 11px 8px">Màn hình</p>
+      <div id="nav"></div>
+    </div>
+    <div class="note" style="margin-top:14px;font-size:12.5px">
+      <b>Bấm được:</b> thanh tab dưới, avatar góc phải, nút “Xem trên bản đồ”,
+      “Chia sẻ vị trí trực tiếp”, và các công tắc quyền riêng tư.
+    </div>
+  </div>
+
+  <div class="phone"><div class="phone-screen" id="screen"></div></div>
+
+  <div style="width:290px;flex:0 0 auto">
+    <div class="card">
+      <p class="eyebrow" id="capEyebrow">Màn hình</p>
+      <h3 class="h3" id="capName" style="margin:6px 0 8px"></h3>
+      <p class="muted" id="capDesc"></p>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <p class="eyebrow">Đằng sau màn hình này</p>
+      <p class="muted" id="capTech" style="margin-top:8px"></p>
+    </div>
+  </div>
+</div>
+
+<div class="hint" id="hint"></div>
+
+<script src="screens.js"></script>
+<script src="app-screens.js"></script>
+<script>
+var TECH = {
+  login: 'Kiểm tra ở client bằng CHÍNH schema Zod mà server dùng (packages/shared) — một luật, không viết hai lần. Access token giữ trong RAM, refresh token nằm trong cookie httpOnly nên JS không đọc được.',
+  'login-err': 'Sai mật khẩu và email không tồn tại trả cùng một câu, với thời gian phản hồi chênh nhau 1,06× — không dò được email nào đã đăng ký (trace TC-05, TC-05b).',
+  pair: 'Mã 6 ký tự sinh bằng crypto.randomInt, bỏ hẳn 0/1/O/I để không đọc nhầm khi chép tay. Ngày yêu so theo NGÀY LỊCH giờ VN, không so timestamp — nếu không thì lúc 3 giờ sáng chọn "hôm nay" sẽ bị báo là ngày tương lai.',
+  'pair-wait': 'Hai người bấm "Kết đôi" cùng lúc thì chỉ một người vào được, nhờ atomic claim trên cột invite_consumed_at. Người thua nhận 409 "Cặp đôi đã đủ 2 người", không phải lỗi 500 (trace TC-26).',
+  home: 'Số ngày yêu tính ở client từ anniversaryAt để không lệch lúc nửa đêm. Nút nhắn tin dùng link https://zalo.me/... chứ không dùng scheme zalo:// — scheme riêng bị iOS Safari nuốt im lặng khi app chưa cài.',
+  map: 'MapLibre GL + tile OpenFreeMap, không dùng Google Maps. Gói bản đồ ~1MB được tách chunk và KHÔNG nạp sẵn vào PWA — chỉ tải khi thật sự mở bản đồ.',
+  'map-live': 'watchPosition → lọc nhiễu Kalman → lấy mẫu thích ứng (đứng yên 60s, đi bộ 20s, đi xe 8s) → Socket.IO. Giữ màn hình sáng bằng Wake Lock vì watchPosition ngừng ngay khi máy khoá màn hình.',
+  'map-fuzz': 'Làm mờ bằng cách bắt toạ độ vào lưới ô vuông, KHÔNG cộng nhiễu ngẫu nhiên — nhiễu ngẫu nhiên bị triệt tiêu khi lấy trung bình nhiều mẫu. Hướng, tốc độ bị ẩn và khoảng cách làm tròn theo bội số 500m.',
+  'map-ghost': 'Ẩn danh: server không ghi, không phát, và cũng KHÔNG trả khoảng cách. Trace TC-63 từng bắt được lỗi vẫn lộ distanceM — biết vị trí mình cộng khoảng cách chính xác là khoanh được đối phương vào một đường tròn.',
+  'map-denied': 'Quyền bị chặn thì hiện hướng dẫn cụ thể, không hiện nút bấm vào không có gì xảy ra.',
+  settings: 'Cặp (app nhắn tin, số/username) được kiểm tra ở tầng service vì người dùng có thể chỉ đổi một trong hai. Công tắc quyền riêng tư có hiệu lực NGAY ở điểm vị trí kế tiếp — server đọc lại quyền mỗi lần, không cache.',
+};
+
+var current = 'home';
+
+function render(id) {
+  var s = appScreenById(id);
+  current = id;
+  var el = document.getElementById('screen');
+  el.innerHTML = renderAppPhone(s);
+  el.classList.remove('fade'); void el.offsetWidth; el.classList.add('fade');
+
+  document.getElementById('capName').textContent = s.name;
+  document.getElementById('capDesc').textContent = s.desc;
+  document.getElementById('capTech').textContent = TECH[id] || '';
+  document.getElementById('capEyebrow').textContent =
+    'Màn ' + (APP_SCREENS.indexOf(s) + 1) + ' / ' + APP_SCREENS.length;
+
+  document.querySelectorAll('#nav .navitem').forEach(function (b) {
+    b.classList.toggle('on', b.dataset.id === id);
+  });
+}
+
+document.getElementById('nav').innerHTML = APP_SCREENS.map(function (s) {
+  return '<button class="navitem" data-id="' + s.id + '">' +
+    '<span class="ni">' + s.icon + '</span><span>' + s.name + '</span></button>';
+}).join('');
+
+document.getElementById('nav').addEventListener('click', function (e) {
+  var b = e.target.closest('.navitem'); if (b) render(b.dataset.id);
+});
+
+var hint = document.getElementById('hint'), timer;
+function say(m) {
+  hint.textContent = m; hint.classList.add('show');
+  clearTimeout(timer); timer = setTimeout(function () { hint.classList.remove('show'); }, 1700);
+}
+
+document.getElementById('screen').addEventListener('click', function (e) {
+  var sw = e.target.closest('.sw');
+  if (sw) { sw.classList.toggle('on'); return; }
+  var go = e.target.closest('[data-goto]');
+  if (go) {
+    var id = go.dataset.goto;
+    if (APP_SCREENS.some(function (s) { return s.id === id; })) { render(id); return; }
+    say('Màn này thuộc Phase 3–4, chưa dựng');
+    return;
+  }
+  if (e.target.closest('.btn, .icon-btn, .map-fab, .tab, .pill')) {
+    say('Mockup — bản chạy thật ở https://localhost');
+  }
+});
+
+render('home');
+</script>
+</body>
+</html>

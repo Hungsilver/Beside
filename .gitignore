@@ -1,0 +1,33 @@
+node_modules/
+dist/
+build/
+coverage/
+.turbo/
+.vite/
+
+# Biến môi trường — TUYỆT ĐỐI không commit
+.env
+.env.*
+# Trừ ra các file MẪU (.env.example, .env.production.example).
+# Phải là `.env*.example`, không phải `!.env.example` — nếu không thì
+# .env.production.example bị nuốt mất và lúc deploy không có mẫu để làm theo.
+!.env*.example
+
+# Dữ liệu runtime
+data/
+caddy_data/
+caddy_config/
+
+# Log & tạm
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Prisma
+apps/api/prisma/*.db
+apps/api/prisma/*.db-journal
+
+# Playwright
+playwright-report/
+test-results/

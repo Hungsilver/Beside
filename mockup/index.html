@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Beside — Mockup UI (Phase 0)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ============ HEADER ============ -->
+  <div class="site-head">
+    <div class="brand">
+      <div class="brand-mark">💞</div>
+      <div>
+        <p class="eyebrow" style="margin-bottom:2px">Phase 0 · Mockup để duyệt</p>
+        <h1 class="h1" style="font-size:30px">Beside — App cho cặp đôi</h1>
+        <p class="muted" style="margin-top:5px;max-width:640px">
+          Check-in bằng ảnh · theo dõi vị trí thời gian thực · lịch trình chung · đếm ngày yêu.
+          PWA chạy trên cả iPhone &amp; Android, không cần App Store / CH Play.
+        </p>
+      </div>
+    </div>
+    <div class="toolbar">
+      <a class="btn btn-primary" href="prototype.html">▶ Bấm thử prototype</a>
+      <div class="seg" id="zoom">
+        <button data-z="1" class="on">100%</button>
+        <button data-z=".75">75%</button>
+        <button data-z=".55">55%</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ GHI CHÚ ============ -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-top:26px">
+    <div class="note">
+      <b>Cách xem:</b> đây là bản dựng giao diện tĩnh, mở trực tiếp bằng trình duyệt.
+      Bấm <b>“Bấm thử prototype”</b> để chuyển màn hình như app thật.
+      Góp ý cứ nói theo số thứ tự màn hình bên dưới.
+    </div>
+    <div class="note" style="border-left-color:var(--plum-500)">
+      <b>Bản đồ:</b> hình bản đồ ở đây là <i>vẽ tay bằng SVG</i> để mockup chạy offline.
+      Bản thật dùng <b>MapLibre GL JS</b> + tile OpenFreeMap, style hồng pastel tự thiết kế.
+    </div>
+    <div class="note" style="border-left-color:var(--mint-400)">
+      <b>Giới hạn quan trọng:</b> trình duyệt <b>không</b> lấy được vị trí khi app đã đóng /
+      khoá màn hình (nhất là iPhone). Nên thiết kế theo mô hình
+      <b>“Chia sẻ trực tiếp” + “vị trí lần cuối”</b>. Chi tiết ở <code>ARCHITECTURE.md §1.3</code>.
+    </div>
+  </div>
+
+  <!-- ============ GALLERY ============ -->
+  <div class="sec" style="margin-top:40px">
+    <h2 class="h2">9 màn hình chính</h2>
+    <span class="tiny">iPhone 14 · 390 × 844</span>
+  </div>
+  <div class="gal" id="gallery"></div>
+
+  <!-- ============ DESIGN SYSTEM ============ -->
+  <div class="sec" style="margin-top:62px"><h2 class="h2">Bảng màu &amp; Typography</h2></div>
+  <div class="card" style="padding:24px">
+    <p class="eyebrow">Màu thương hiệu</p>
+    <div class="swatches" style="margin:12px 0 26px" id="swatches"></div>
+
+    <p class="eyebrow">Gradient</p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin:12px 0 26px">
+      <div style="width:220px;border-radius:var(--r-md);overflow:hidden;box-shadow:var(--sh-xs);background:#fff">
+        <i style="display:block;height:64px;background:var(--grad-love)"></i>
+        <span style="display:block;padding:8px 10px;font-size:11px;font-weight:700">--grad-love</span>
+      </div>
+      <div style="width:220px;border-radius:var(--r-md);overflow:hidden;box-shadow:var(--sh-xs);background:#fff">
+        <i style="display:block;height:64px;background:var(--grad-dusk)"></i>
+        <span style="display:block;padding:8px 10px;font-size:11px;font-weight:700">--grad-dusk</span>
+      </div>
+      <div style="width:220px;border-radius:var(--r-md);overflow:hidden;box-shadow:var(--sh-xs);background:#fff">
+        <i style="display:block;height:64px;background:var(--grad-mint)"></i>
+        <span style="display:block;padding:8px 10px;font-size:11px;font-weight:700">--grad-mint</span>
+      </div>
+    </div>
+
+    <p class="eyebrow">Chữ — Be Vietnam Pro (hỗ trợ dấu tiếng Việt tốt)</p>
+    <div style="margin-top:12px">
+      <div class="h1" style="font-size:30px">Chúng mình đã bên nhau 1.302 ngày</div>
+      <div class="h2" style="margin-top:10px">Bình đang di chuyển · cách bạn 4,2 km</div>
+      <p class="muted" style="margin-top:8px;font-size:15px">
+        Nội dung phụ 15px — mô tả, chú thích, trạng thái.</p>
+      <p class="tiny" style="margin-top:6px">Chú thích 11,5px — thời gian, độ chính xác, ghi chú nhỏ.</p>
+    </div>
+
+    <p class="eyebrow" style="margin-top:28px">Thành phần cơ bản</p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:14px">
+      <button class="btn btn-primary">Nút chính</button>
+      <button class="btn btn-ghost">Nút phụ</button>
+      <button class="btn btn-soft">Nút mềm</button>
+      <span class="pill pill-live"><i class="dot-live"></i>Trực tiếp</span>
+      <span class="pill pill-rose">Sắp tới</span>
+      <span class="pill pill-plum">Riêng tư</span>
+      <span class="pill pill-grey">Đã qua</span>
+      <span class="sw on"></span><span class="sw"></span>
+      <span class="av-ring"><span class="av av-48 av-a">A</span></span>
+      <span class="av-ring offline"><span class="av av-48 av-b">B</span></span>
+    </div>
+  </div>
+
+  <!-- ============ TÓM TẮT KIẾN TRÚC ============ -->
+  <div class="sec" style="margin-top:56px"><h2 class="h2">Quyết định kỹ thuật chính</h2>
+    <span class="tiny">chi tiết đầy đủ ở <code>ARCHITECTURE.md</code></span></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px">
+    <div class="card">
+      <p class="eyebrow">Phân phối app</p>
+      <h3 class="h3" style="margin:6px 0">PWA — không cần store</h3>
+      <p class="muted">React + Vite + Workbox. iPhone: Safari → Chia sẻ → “Thêm vào MH chính”.
+        Android: Chrome tự hiện nút cài. Cập nhật tức thì, không chờ duyệt.</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">Bản đồ</p>
+      <h3 class="h3" style="margin:6px 0">MapLibre GL, không phải Google</h3>
+      <p class="muted">0đ, không cần API key/thẻ tín dụng, và <b>tự thiết kế style bản đồ</b> theo
+        chủ đề tình yêu. Đổi nguồn tile chỉ là đổi 1 URL nên không bị khoá cứng.</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">Thời gian thực</p>
+      <h3 class="h3" style="margin:6px 0">Socket.IO + lấy mẫu thích ứng</h3>
+      <p class="muted">Đứng yên 60s/lần, đi bộ 20s, đi xe 8s. Lọc Kalman chống nhiễu GPS.
+        Độ trễ &lt; 2 giây khi app đang mở.</p>
+    </div>
+    <div class="card">
+      <p class="eyebrow">Hạ tầng</p>
+      <h3 class="h3" style="margin:6px 0">Docker trên VPS của bạn</h3>
+      <p class="muted">Caddy (tự động HTTPS) · NestJS · PostgreSQL + PostGIS · Redis · MinIO.
+        Một lệnh <code>docker compose up -d</code>.</p>
+    </div>
+  </div>
+
+  <p class="tiny" style="text-align:center;margin-top:56px">
+    Beside · Phase 0 Mockup · 07/09/2026 — file cục bộ, chưa deploy ở đâu cả.</p>
+</div>
+
+<script src="screens.js"></script>
+<script>
+/* ---------- Dựng gallery ---------- */
+var gal = document.getElementById('gallery');
+gal.innerHTML = SCREENS.map(function (s, i) {
+  return '<div class="gal-item">' +
+    '<div class="phone"><div class="phone-screen" data-screen="' + s.id + '"></div></div>' +
+    '<div class="gal-cap"><b><span class="gal-num">' + (i + 1) + '</span>' + s.name + '</b>' +
+    '<span>' + s.desc + '</span></div></div>';
+}).join('');
+
+SCREENS.forEach(function (s) {
+  var el = gal.querySelector('[data-screen="' + s.id + '"]');
+  el.innerHTML = renderPhone(s);
+});
+
+/* ---------- Zoom ---------- */
+document.getElementById('zoom').addEventListener('click', function (e) {
+  var b = e.target.closest('button'); if (!b) return;
+  this.querySelectorAll('button').forEach(function (x) { x.classList.remove('on'); });
+  b.classList.add('on');
+  document.querySelectorAll('.gal .phone').forEach(function (p) { p.style.zoom = b.dataset.z; });
+});
+
+/* ---------- Bảng màu ---------- */
+var TOKENS = ['--rose-100','--rose-300','--rose-500','--rose-600','--plum-500','--plum-100',
+              '--peach-400','--mint-400','--sky-400','--ink-900','--ink-500','--ink-200'];
+document.getElementById('swatches').innerHTML = TOKENS.map(function (t) {
+  var v = getComputedStyle(document.documentElement).getPropertyValue(t).trim();
+  return '<div class="sw-chip"><i style="background:' + v + '"></i>' +
+         '<span>' + t.replace('--','') + '</span><small>' + v + '</small></div>';
+}).join('');
+
+/* ---------- Bấm công tắc cho vui ---------- */
+document.addEventListener('click', function (e) {
+  var s = e.target.closest('.sw'); if (s) s.classList.toggle('on');
+});
+</script>
+</body>
+</html>

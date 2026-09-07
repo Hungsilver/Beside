@@ -1,0 +1,4 @@
+# Đây là ứng dụng riêng tư chứa dữ liệu vị trí của hai người.
+# Không cho bất kỳ công cụ tìm kiếm nào lập chỉ mục.
+User-agent: *
+Disallow: /

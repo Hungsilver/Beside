@@ -1,0 +1,57 @@
+# =========================================================
+# Beside — Caddy 2
+# Tự động xin & gia hạn chứng chỉ Let's Encrypt cho {$APP_DOMAIN}.
+# HTTPS là BẮT BUỘC: Geolocation API của trình duyệt chỉ chạy trên secure context.
+# =========================================================
+
+{
+	email {$ACME_EMAIL}
+	servers {
+		protocols h1 h2 h3
+	}
+}
+
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Cho phép chính trang này xin quyền vị trí, chặn iframe bên thứ ba
+		Permissions-Policy "geolocation=(self), camera=(self), microphone=(), interest-cohort=()"
+		-Server
+	}
+
+	# ---------- API ----------
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	# ---------- WebSocket (Socket.IO) ----------
+	handle /socket.io/* {
+		reverse_proxy api:3000
+	}
+
+	# ---------- Web PWA (static) ----------
+	handle {
+		# Service worker phải luôn lấy bản mới, không được cache
+		@sw path /sw.js /service-worker.js /registerSW.js
+		header @sw Cache-Control "no-cache, no-store, must-revalidate"
+
+		# File có hash trong tên thì cache dài
+		@immutable path /assets/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+		reverse_proxy web:80
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+		format json
+	}
+}

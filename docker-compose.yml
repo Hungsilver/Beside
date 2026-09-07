@@ -1,0 +1,150 @@
+name: beside
+
+services:
+  # ---------------------------------------------------------
+  # PostgreSQL 17 + PostGIS 3.5
+  # ---------------------------------------------------------
+  db:
+    image: postgis/postgis:17-3.5
+    container_name: beside-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TZ: Asia/Ho_Chi_Minh
+      PGTZ: UTC # DB luôn lưu UTC, chỉ hiển thị mới đổi sang giờ VN
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      # Chỉ bind loopback — không phơi DB ra Internet
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  # ---------------------------------------------------------
+  # Redis — presence, pub/sub, rate limit, hàng đợi BullMQ
+  # ---------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: beside-redis
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # ---------------------------------------------------------
+  # API — NestJS
+  # ---------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: beside-api
+    restart: unless-stopped
+    env_file: [.env]
+    environment:
+      NODE_ENV: production
+      API_PORT: 3000
+      # Ghi đè: trong mạng Docker thì host là tên service, không phải localhost
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      S3_ENDPOINT: http://minio:9000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    expose: ["3000"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 6
+      start_period: 40s
+
+  # ---------------------------------------------------------
+  # Web — React PWA build tĩnh, phục vụ bởi nginx
+  # ---------------------------------------------------------
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+        VITE_WS_PATH: ${VITE_WS_PATH}
+        VITE_MAP_STYLE_URL: ${VITE_MAP_STYLE_URL}
+    container_name: beside-web
+    restart: unless-stopped
+    expose: ["80"]
+
+  # ---------------------------------------------------------
+  # Caddy — TLS tự động + reverse proxy
+  # ---------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: beside-caddy
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    depends_on: [api, web]
+
+  # ---------------------------------------------------------
+  # MinIO — lưu ảnh check-in (Phase 3)
+  # Không phơi ra Internet: API sinh link tạm thời có chữ ký, hết hạn sau 1 giờ.
+  # ---------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: beside-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    ports:
+      # Chỉ bind loopback — dùng để xem console lúc gỡ lỗi
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+
+volumes:
+  db_data:
+  redis_data:
+  minio_data:
+  caddy_data:
+  caddy_config:

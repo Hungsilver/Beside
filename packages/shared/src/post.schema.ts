@@ -1,0 +1,109 @@
+import { z } from 'zod';
+
+/** Tối đa bao nhiêu ảnh trong một bài check-in. */
+export const MAX_PHOTOS_PER_POST = 3;
+
+/** Cạnh dài nhất khi client nén ảnh TRƯỚC khi tải lên. */
+export const CLIENT_MAX_EDGE = 2048;
+
+/** Trần dung lượng mỗi tệp mà server chấp nhận. */
+export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+
+export const CAPTION_MAX = 500;
+
+/** Bộ emoji tâm trạng — cố định để giao diện hai bên hiển thị giống nhau. */
+export const MOODS = ['🥰', '😌', '🤩', '😢', '😴', '🔥'] as const;
+export type Mood = (typeof MOODS)[number];
+
+/** Emoji thả cảm xúc lên bài. */
+export const REACTIONS = ['❤️', '😍', '🥺', '🔥'] as const;
+export type ReactionEmoji = (typeof REACTIONS)[number];
+
+export const createPostSchema = z.object({
+  caption: z
+    .string()
+    .trim()
+    .max(CAPTION_MAX, `Lời nhắn tối đa ${CAPTION_MAX} ký tự`)
+    .optional()
+    .transform((v) => (v === '' ? undefined : v)),
+  mood: z.enum(MOODS).optional(),
+  /** Toạ độ CHỈ được gửi khi người dùng bật "ghim lên bản đồ". */
+  lat: z.coerce.number().min(-90).max(90).optional(),
+  lng: z.coerce.number().min(-180).max(180).optional(),
+  placeName: z.string().trim().max(120).optional(),
+});
+export type CreatePostInput = z.infer<typeof createPostSchema>;
+
+export const reactionSchema = z.object({
+  emoji: z.enum(REACTIONS),
+});
+
+export const feedQuerySchema = z.object({
+  /** Con trỏ phân trang: `createdAtMs_postId` của bài cuối trang trước. */
+  cursor: z.string().max(120).optional(),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
+  /** Lọc theo người đăng. */
+  authorId: z.string().uuid().optional(),
+  /** Chỉ lấy bài có ghim toạ độ. */
+  pinned: z
+    .union([z.boolean(), z.literal('true'), z.literal('false')])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === true || v === 'true')),
+});
+export type FeedQuery = z.infer<typeof feedQuerySchema>;
+
+export interface PhotoResponse {
+  id: string;
+  /**
+   * Đường dẫn TƯƠNG ĐỐI, đi qua API (`/api/v1/posts/photos/:id/:size`).
+   * Mỗi lượt xem đều bị kiểm tra quyền — không phải link "ai có thì xem được".
+   * URL cố định nên trình duyệt cache được vĩnh viễn.
+   */
+  urlThumb: string;
+  urlMd: string;
+  urlOrig: string;
+  width: number;
+  height: number;
+  /** Ảnh mờ dạng data URI, hiện trong lúc ảnh thật đang tải. */
+  placeholder: string;
+}
+
+export interface PostReaction {
+  userId: string;
+  emoji: string;
+  at: number;
+}
+
+export interface PostResponse {
+  id: string;
+  authorId: string;
+  authorName: string;
+  caption: string | null;
+  mood: string | null;
+  lat: number | null;
+  lng: number | null;
+  placeName: string | null;
+  photos: PhotoResponse[];
+  reactions: PostReaction[];
+  createdAt: string;
+  /** Người đang xem có xoá được bài này không (chỉ tác giả). */
+  canDelete: boolean;
+}
+
+export interface FeedResponse {
+  items: PostResponse[];
+  /** Truyền lại vào `cursor` để lấy trang kế. `null` = hết. */
+  nextCursor: string | null;
+}
+
+/** Sự kiện WebSocket khi có bài mới (bổ sung cho RT_EVENTS). */
+export const RT_POST_NEW = 'post:new';
+
+export interface PostNewEvent {
+  postId: string;
+  authorId: string;
+  authorName: string;
+  caption: string | null;
+  urlThumb: string | null;
+  createdAt: number;
+}
