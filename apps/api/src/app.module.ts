@@ -12,6 +12,7 @@ import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { CouplesModule } from './couples/couples.module';
 import { LocationsModule } from './locations/locations.module';
 import { PostsModule } from './posts/posts.module';
+import { EventsModule } from './events/events.module';
 import { UsersModule } from './users/users.module';
 import { HealthController } from './health/health.controller';
 
@@ -35,6 +36,7 @@ import { HealthController } from './health/health.controller';
     CouplesModule,
     LocationsModule,
     PostsModule,
+    EventsModule,
   ],
   controllers: [HealthController],
   providers: [

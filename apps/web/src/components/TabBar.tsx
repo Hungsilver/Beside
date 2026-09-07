@@ -12,7 +12,7 @@ const TABS = [
   { to: '/', icon: '🏠', label: 'Nhà', ready: true },
   { to: '/ban-do', icon: '🗺️', label: 'Bản đồ', ready: true },
   { to: '/check-in', icon: '＋', label: '', ready: true, fab: true },
-  { to: '/lich', icon: '🗓️', label: 'Lịch', ready: false },
+  { to: '/lich', icon: '🗓️', label: 'Lịch', ready: true },
   { to: '/ky-niem', icon: '💖', label: 'Kỷ niệm', ready: true },
 ] as const;
 

@@ -7,14 +7,15 @@
 - **Tên app:** `Beside` (đã chốt)
 - **Domain:** `https://easytech.io.vn` (tạm dùng — đã mua). Sẽ đổi sang domain `beside` sau
   ⇒ **mọi URL phải lấy từ biến môi trường, không hardcode domain ở bất kỳ đâu**
-- **Cập nhật lần cuối:** 2026-09-07
-- **Trạng thái:** `PHASE 3 — Check-in ảnh & dòng kỷ niệm` ✅ đã chạy & trace xong
+- **Cập nhật lần cuối:** 2026-09-08
+- **Trạng thái:** `PHASE 4 (F4) — Lịch trình chung` ✅ đã chạy & trace xong
   - Phase 1: `docs/traces/phase-1-auth-pairing.md` — 53/53 case
   - Phase 2: `docs/traces/phase-2-realtime-location.md` — 29/29 case
   - Rà soát: `docs/traces/phase-2-review.md` — 21/21 case (bắt được 2 lỗi rò rỉ quyền riêng tư)
   - Phase 3: `docs/traces/phase-3-posts.md` — 34/34 case (bắt được 4 lỗi, xem L16–L19)
-  - Tổng: **140 unit test** + **137 case trace**, typecheck sạch cả 3 workspace
-  - ✅ `npm run verify:local` → **32/32 mục đạt** trên Docker thật
+  - Phase 4 (F4): `docs/traces/phase-4-events.md` — 37/37 case (bắt được 2 lỗi, L22–L23)
+  - Tổng: **192 unit test** + **174 case trace**, typecheck sạch cả 3 workspace
+  - ✅ `npm run verify:local` → **33/33 mục đạt** trên Docker thật
     (6/6 container healthy: db · redis · api · web · caddy · minio), đi qua Caddy HTTPS
 - **Triển khai:** chủ dự án tự deploy — hướng dẫn ở `docs/DEPLOY.md`
 
@@ -372,6 +373,30 @@ CREATE TRIGGER location_points_set_geog
   bao giờ lệch với lat/lng kể cả khi ghi bằng Prisma Client.
 - Kiểm chứng: `prisma migrate diff` trả về "empty migration".
 
+### 6.3 Hai loại thời gian trên lịch (đã triển khai & trace)
+
+Một cái lịch có hai loại "thời gian" khác hẳn nhau. Trộn chúng vào một kiểu dữ
+liệu là nguồn gốc của gần hết lỗi lệch ngày, nên `Event` tách rõ:
+
+| Loại | Ví dụ | Lưu thế nào | Đọc lại thế nào |
+|---|---|---|---|
+| **Mốc thời gian thật** (`allDay = false`) | "19:00 tối thứ năm" | UTC như mọi chỗ khác | đổi sang `Asia/Ho_Chi_Minh` rồi mới lấy ngày |
+| **Ngày trôi nổi** (`allDay = true`) | "sinh nhật 12/09" | 00:00 **UTC** của đúng ngày đó | đọc Y/M/D theo **UTC**, KHÔNG đổi múi giờ |
+
+"Sinh nhật 12/09" không phải một khoảnh khắc — nó là một ô trên tờ lịch. Lưu nó
+theo 00:00 giờ VN sẽ ra mốc `2026-09-11T17:00Z`, và truy vấn lịch bắt đầu từ
+00:00 UTC ngày 12 sẽ bỏ sót nó.
+
+Mọi phép đổi đi qua `packages/shared/src/event.schema.ts` (server) và
+`apps/web/src/lib/event-display.ts` (web). **Không được** dùng
+`new Date("2026-09-10T19:00")` (chuỗi không có offset) ở bất cứ đâu — trình duyệt
+hiểu nó theo múi giờ của MÁY, nên máy đang để múi giờ khác là lệch vài tiếng.
+
+Truy vấn khoảng dùng điều kiện **giao**, không phải `startAt` nằm trong khoảng:
+`startAt < to AND (endAt ?? startAt) >= from`. Nếu lọc theo mỗi `startAt` thì
+chuyến đi 3 ngày bắt đầu từ hôm qua sẽ biến mất khỏi lịch hôm nay, đúng lúc cần
+thấy nó nhất.
+
 ### 6.2 Quy tắc quyền riêng tư — áp dụng ở MỌI đường ra
 
 | Cài đặt | Hiệu lực |
@@ -463,7 +488,11 @@ DELETE /posts/:id                  chỉ người đăng mới xoá được    
 POST   /posts/:id/react            {emoji} — mỗi người 1 cảm xúc, bấm lại = bỏ    ✅
 GET    /posts/photos/:photoId/:size   size = thumb | md | orig                    ✅
 
-GET|POST /events?from&to           PATCH|DELETE /events/:id
+GET    /events?from&to             sự kiện GIAO với khoảng đó (§6.3)              ✅
+POST   /events                     có giờ hoặc cả ngày, riêng tư hoặc chung        ✅
+GET    /events/:id                                                                ✅
+PATCH  /events/:id                 chỉ người tạo                                   ✅
+DELETE /events/:id                 chỉ người tạo                                   ✅
 
 GET    /love/summary               {daysTogether, nextMilestone, streak}
 GET|POST /milestones
@@ -562,7 +591,7 @@ Bắt buộc tối thiểu: 1 happy path + 3 edge case + 1 case lỗi.
 | **1** | ✅ Hạ tầng: docker compose, Caddy+TLS, Postgres+PostGIS, NestJS, Auth, Pairing, đếm ngày yêu | Đăng nhập & ghép đôi chạy thật · 39/39 trace · 56 unit test |
 | **2** | ✅ Vị trí realtime: Socket.IO, Kalman, MapLibre, trail, presence, ghost mode, làm mờ vị trí, dọn lịch sử | Xem nhau di chuyển trên bản đồ · 29/29 trace |
 | **3** | ✅ Check-in ảnh + dòng kỷ niệm + MinIO + sharp (xoay & xoá EXIF), phân trang con trỏ, cảm xúc | Đăng & xem kỷ niệm · 34/34 trace |
-| **4** | Lịch trình + Milestone + Web Push + Geofence + ghim ảnh check-in lên bản đồ *(tiếp theo)* | Đủ tính năng cốt lõi |
+| **4** | 🔸 F4 Lịch trình ✅ (37/37 trace) · còn Milestone, Web Push, Geofence, ghim ảnh check-in lên bản đồ *(đang làm)* | Đủ tính năng cốt lõi |
 | **5** | Giao diện PC (≥1024px), tối ưu hiệu năng, PWA offline | Bản 1.0 |
 | **6** | *(tuỳ chọn)* APK Android qua Capacitor cho tracking nền | File APK sideload |
 
@@ -604,6 +633,11 @@ Bắt buộc tối thiểu: 1 happy path + 3 edge case + 1 case lỗi.
 | 2026-09-07 | Cảm xúc lưu trong cột `Json` của `Post`, không tách bảng riêng | Đúng 2 người/couple nên tối đa 2 cảm xúc mỗi bài; tách bảng chỉ tốn thêm một lần join | Không truy vấn thống kê theo emoji được — chưa cần |
 | 2026-09-07 | Ẩn danh (ghost mode) **chặn ghim toạ độ** nhưng vẫn cho đăng ảnh | Ẩn danh là về vị trí, không phải cấm dùng app (trace P3-16) | Người dùng có thể tưởng đã ghim mà thực ra không |
 | 2026-09-07 | `verify:local` khởi động lại API **trước mỗi bộ trace** | Bộ đếm chống spam nằm trong bộ nhớ tiến trình; chạy nối tiếp làm case sau nhận 429 và báo hỏng oan (trace L19) | Mỗi lượt verify chậm thêm ~1 phút |
+| 2026-09-08 | Sự kiện cả ngày lưu bằng **ngày trôi nổi** (00:00 UTC, đọc theo UTC) | "Sinh nhật 12/09" là ô trên tờ lịch, không phải khoảnh khắc — lưu theo giờ VN sẽ trôi về ngày 11 (§6.3) | Hai loại sự kiện đọc theo hai múi giờ khác nhau, phải nhớ khi sửa code |
+| 2026-09-08 | Ô nhập ngày/giờ đổi sang UTC bằng **offset `+07:00` ghép tay** | `new Date("…T19:00")` không offset được trình duyệt hiểu theo múi giờ của MÁY — người dùng đi nước ngoài là lệch giờ hẹn | Sẽ phải sửa nếu sau này hỗ trợ múi giờ khác |
+| 2026-09-08 | Sự kiện **chung** thì ai cũng THẤY nhưng chỉ người tạo mới SỬA/XOÁ | Lịch của hai người cần nhìn thấy nhau, nhưng sửa đồ của nhau thì dễ cãi nhau | Muốn sửa hộ thì phải nhắn nhau — chấp nhận được với 2 người |
+| 2026-09-08 | Việc riêng của người kia trả **404**, không phải 403 | 403 tự nó đã tiết lộ "id này có tồn tại" | Người dùng không phân biệt được "không có" với "không được xem" — đúng ý đồ |
+| 2026-09-08 | Thêm migration `20260907000000_enable_postgis` chạy trước mọi migration khác | Shadow database của `migrate dev` là DB trắng, không có PostGIS nên migration cột `geog` chết (trace L22) | Trùng việc với `infra/postgres/init/01-extensions.sql`, nhưng mọi câu lệnh đều IF NOT EXISTS nên vô hại |
 
 ---
 

@@ -8,6 +8,7 @@ export * from './kalman';
 export * from './sampling';
 export * from './location.schema';
 export * from './post.schema';
+export * from './event.schema';
 export * from './love';
 export * from './messaging';
 

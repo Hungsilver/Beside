@@ -171,7 +171,7 @@ export default function HomeScreen() {
           Sắp có
         </p>
         <p className="mt-2 text-[13.5px] leading-relaxed text-ink-500">
-          Lịch trình chung và thông báo đẩy khi người ấy tới nơi.
+          Thông báo đẩy khi người ấy tới nơi, và nhắc trước mỗi cuộc hẹn.
         </p>
       </section>
 

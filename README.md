@@ -136,7 +136,7 @@ infra/
   nginx/web.conf         ← phục vụ file tĩnh PWA, SPA fallback
   postgres/init/         ← bật PostGIS, unaccent, ép timezone UTC
 packages/shared/         ← Zod schema + logic ngày tháng dùng CHUNG cho API và web
-apps/api/                ← NestJS + Prisma  (auth, me, couples, locations + WebSocket, posts)
+apps/api/                ← NestJS + Prisma  (auth, me, couples, locations + WebSocket, posts, events)
 apps/web/                ← React 19 + Vite + Tailwind v4 + PWA
 mockup/
   index.html             ← phác thảo Phase 0 (9 màn, để duyệt hướng thiết kế)
@@ -147,7 +147,7 @@ docs/DEPLOY.md           ← hướng dẫn triển khai lên VPS
 docs/BACKLOG.md          ← ý tưởng & việc chờ quyết định
 ```
 
-## Đã có gì (Phase 1 → 3)
+## Đã có gì (Phase 1 → 4)
 
 | | |
 |---|---|
@@ -166,12 +166,14 @@ docs/BACKLOG.md          ← ý tưởng & việc chờ quyết định
 | **Xoá EXIF** | ảnh được xoay theo thẻ EXIF rồi **xoá sạch metadata** (toạ độ GPS, model máy) trước khi lưu |
 | **Dòng kỷ niệm** | cuộn vô hạn bằng con trỏ, lọc (tất cả / của tôi / của người ấy / có ghim), thả cảm xúc, xoá bài của chính mình |
 | Ảnh riêng tư | ảnh **không** phát bằng link công khai — mỗi lượt xem đều kiểm tra quyền theo cặp đôi |
+| **Lịch trình chung** | lịch tháng, sự kiện có giờ hoặc cả ngày, nhiều ngày, cảnh báo trùng giờ, việc riêng chỉ mình thấy |
+| Ai sửa được gì | sự kiện chung thì cả hai đều **thấy**, nhưng chỉ người tạo mới **sửa/xoá** |
 | PWA | cài lên màn hình chính, manifest + icon + service worker, cache tile bản đồ |
 
 ## Chưa có
 
-Lịch trình + thông báo đẩy + geofence (Phase 4), giao diện PC (Phase 5).
-Ảnh check-in đã lưu được toạ độ nhưng **chưa hiện lên bản đồ** — để ở Phase 4.
+Còn lại của Phase 4: thông báo đẩy, nhắc lịch, địa điểm + geofence, mốc kỷ niệm.
+Giao diện PC ở Phase 5. Ảnh check-in đã lưu được toạ độ nhưng **chưa hiện lên bản đồ**.
 Xem lộ trình ở `ARCHITECTURE.md §9`.
 
 ## Điều cần biết trước khi kỳ vọng

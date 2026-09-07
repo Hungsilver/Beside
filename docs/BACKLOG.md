@@ -58,6 +58,15 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 - [x] `verify:local` khởi động lại API trước **mỗi** bộ trace (bộ đếm chống spam nằm
       trong bộ nhớ tiến trình, chạy nối tiếp làm case sau báo hỏng oan — xem L19)
 
+## Đã chốt (08/09/2026 — Phase 4, F4 Lịch trình)
+
+- [x] **Sự kiện cả ngày dùng "ngày trôi nổi"** (00:00 UTC, đọc theo UTC) —
+      tách hẳn khỏi mốc thời gian thật. Xem ARCHITECTURE §6.3
+- [x] Sự kiện **chung** thì cả hai đều thấy, chỉ người tạo mới sửa/xoá
+- [x] Việc riêng của người kia trả **404** chứ không phải 403
+- [x] Truy vấn lịch dùng điều kiện **giao khoảng**, không lọc theo mỗi `startAt`
+- [x] Thêm migration bật PostGIS chạy đầu tiên, để shadow DB replay được
+
 ## Nợ kỹ thuật (ghi khi phát sinh)
 
 | Ngày | Mô tả | Mức độ | File |
@@ -77,3 +86,9 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 | 07/09 | Chưa test **mất mạng giữa chừng lúc upload** (case bắt buộc của R1 nhóm check-in ảnh) — cần chặn mạng ở tầng trình duyệt | Trung bình | `apps/web/src/screens/CheckinScreen.tsx` |
 | 07/09 | Xoá bài xoá bản ghi DB trước, xoá tệp MinIO sau. Nếu tiến trình chết ở giữa thì còn **tệp mồ côi** trong kho — vô hại nhưng tốn chỗ, chưa có job dọn | Thấp | `apps/api/src/posts/posts.service.ts` |
 | 07/09 | Chưa có E2E Playwright cho hai màn mới `/check-in` và `/ky-niem` ở 390×844 | Trung bình | `apps/web/src/screens/` |
+| 08/09 | **`prisma migrate dev` vẫn không chạy được** dù đã thêm migration bật PostGIS và đã kiểm chứng cả 6 migration replay sạch vào DB trắng. Đang đi đường vòng: `migrate diff` → viết tay thư mục migration → `migrate deploy`. Cần tìm ra nguyên nhân thật | Trung bình | `apps/api/prisma/migrations/` |
+| 08/09 | **Chuỗi hiển thị vẫn nằm rải rác trong component**, chưa gom về `src/i18n/vi.ts` như CLAUDE.md R2 yêu cầu. Lệch từ Phase 1, mỗi phase lại thêm — càng để lâu càng khó gom | Trung bình | `apps/web/src/` |
+| 08/09 | Nhắc lịch chưa chạy: `remindMinBefore` đã lưu và chọn được nhưng chưa có job gửi thông báo (cần Web Push trước) | Cao | `apps/api/src/events/` |
+| 08/09 | Chưa gắn được địa điểm vào sự kiện — `placeId` đã có và đã kiểm quyền, nhưng chưa có màn quản lý Địa điểm (F6) | Trung bình | `apps/web/src/screens/CalendarScreen.tsx` |
+| 08/09 | Lịch mới có chế độ xem tháng + danh sách theo ngày; chưa có xem tuần / xem danh sách dài | Thấp | `apps/web/src/screens/CalendarScreen.tsx` |
+| 08/09 | `<input type="date">` và `type="time"` hiển thị rất khác nhau giữa iOS Safari và Chrome Android — chưa bấm thử trên máy thật | Cao | `apps/web/src/components/EventSheet.tsx` |

@@ -256,6 +256,14 @@ async function checkFlows() {
     TRACE_BASE_URL: `${HTTPS}/api/v1`,
     TRACE_INSECURE_TLS: '1',
   });
+
+  sh(`${COMPOSE} restart api`, { allowFail: true });
+  await waitHealthy();
+
+  runTrace('apps/api/test/trace-phase4-events.mjs', 'Phase 4 — lịch trình chung', {
+    TRACE_BASE_URL: `${HTTPS}/api/v1`,
+    TRACE_INSECURE_TLS: '1',
+  });
 }
 
 async function waitHealthy() {
@@ -312,13 +320,14 @@ const run = async () => {
   if (failed === 0) {
     console.log(`\x1b[32m\x1b[1m✓ ${total}/${total} mục đạt — bản local chạy đúng.\x1b[0m`);
     console.log('');
-    console.log('Còn 3 thứ CHỈ kiểm tra được bằng tay trên trình duyệt:');
+    console.log('Còn mấy thứ CHỈ kiểm tra được bằng tay trên trình duyệt:');
     console.log('  1. Quyền vị trí + chấm di chuyển  → F12 › Sensors › Location');
     console.log('  2. Giữ màn hình sáng (Wake Lock)  → bật "Chia sẻ trực tiếp"');
     console.log('  3. Cài PWA lên màn hình chính     → cần thiết bị thật');
     console.log('  4. Chọn ảnh & đăng khoảnh khắc    → nén ảnh chỉ chạy trong trình duyệt');
+    console.log('  5. Thêm/sửa sự kiện trên lịch     → ô chọn ngày giờ của trình duyệt');
     console.log('');
-    console.log('Xong 3 mục đó là đủ tự tin lên production. Hướng dẫn: docs/DEPLOY.md');
+    console.log('Xong mấy mục đó là đủ tự tin lên production. Hướng dẫn: docs/DEPLOY.md');
   } else {
     console.log(`\x1b[31m\x1b[1m✗ ${failed}/${total} mục KHÔNG đạt — chưa nên lên production.\x1b[0m`);
     console.log('');

@@ -282,6 +282,8 @@ model Event {
   createdBy       User            @relation(fields: [createdById], references: [id], onDelete: Cascade)
   title           String
   note            String?
+  /// Emoji hiển thị trên dòng lịch. Mặc định 📅 khi người dùng không chọn.
+  emoji           String          @default("📅")
   startAt         DateTime
   endAt           DateTime?
   allDay          Boolean         @default(false)

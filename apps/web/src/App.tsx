@@ -16,6 +16,7 @@ import SettingsScreen from '@/screens/SettingsScreen';
 const MapScreen = lazy(() => import('@/screens/MapScreen'));
 const CheckinScreen = lazy(() => import('@/screens/CheckinScreen'));
 const FeedScreen = lazy(() => import('@/screens/FeedScreen'));
+const CalendarScreen = lazy(() => import('@/screens/CalendarScreen'));
 
 export default function App() {
   const { user, isRestoring } = useAuth();
@@ -67,6 +68,16 @@ export default function App() {
             <RequireCouple>
               <Suspense fallback={<Spinner label="Đang mở kỷ niệm..." />}>
                 <FeedScreen />
+              </Suspense>
+            </RequireCouple>
+          }
+        />
+        <Route
+          path="/lich"
+          element={
+            <RequireCouple>
+              <Suspense fallback={<Spinner label="Đang mở lịch..." />}>
+                <CalendarScreen />
               </Suspense>
             </RequireCouple>
           }
