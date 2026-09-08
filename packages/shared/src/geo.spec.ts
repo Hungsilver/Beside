@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { bearingDegrees, haversineMeters, isValidLatLng, snapToGrid } from './geo';
+import {
+  bearingDegrees,
+  circlePolygon,
+  haversineMeters,
+  isValidLatLng,
+  snapToGrid,
+} from './geo';
 
 // Toạ độ thật trong bộ dữ liệu giả định của dự án
 const NHA_AN = { lat: 10.7769, lng: 106.7009 }; // Quận 1
@@ -116,5 +122,62 @@ describe('isValidLatLng', () => {
     expect(isValidLatLng({ lat: 10, lng: 181 })).toBe(false);
     expect(isValidLatLng({ lat: Number.NaN, lng: 106 })).toBe(false);
     expect(isValidLatLng({ lat: 10, lng: Number.POSITIVE_INFINITY })).toBe(false);
+  });
+});
+
+describe('circlePolygon', () => {
+  const HA_NOI = { lat: 21.0278, lng: 105.8342 };
+
+  it('vành khép kín — GeoJSON Polygon bắt buộc điểm cuối trùng điểm đầu', () => {
+    const ring = circlePolygon(NHA_AN, 150);
+    expect(ring.length).toBeGreaterThan(8);
+    expect(ring[0]).toEqual(ring[ring.length - 1]);
+  });
+
+  it('MỌI điểm trên vành đều cách tâm đúng bán kính', () => {
+    const radiusM = 150;
+    const ring = circlePolygon(NHA_AN, radiusM);
+    for (const [lng, lat] of ring) {
+      const d = haversineMeters(NHA_AN, { lat, lng });
+      // Sai số dưới 0,5 m trên bán kính 150 m
+      expect(Math.abs(d - radiusM)).toBeLessThan(0.5);
+    }
+  });
+
+  it('đúng cả ở vĩ độ cao, nơi 1 độ kinh ngắn hơn hẳn 1 độ vĩ', () => {
+    // Nếu ai đó "làm cho nhanh" bằng cách cộng thẳng độ vào lat/lng thì vòng
+    // tròn ở Hà Nội sẽ méo thành hình elip. Test này khoá lại điều đó.
+    const ring = circlePolygon(HA_NOI, 500);
+    for (const [lng, lat] of ring) {
+      expect(Math.abs(haversineMeters(HA_NOI, { lat, lng }) - 500)).toBeLessThan(1);
+    }
+  });
+
+  it('bán kính lớn 2km vẫn đúng', () => {
+    const ring = circlePolygon(NHA_AN, 2000);
+    const d = haversineMeters(NHA_AN, { lat: ring[0]![1], lng: ring[0]![0] });
+    expect(Math.abs(d - 2000)).toBeLessThan(2);
+  });
+
+  it('số cạnh được kẹp trong khoảng hợp lý', () => {
+    // Quá ít cạnh thì thành đa giác thô; quá nhiều thì tốn công vẽ vô ích.
+    expect(circlePolygon(NHA_AN, 150, 2).length).toBe(8 + 1);
+    expect(circlePolygon(NHA_AN, 150, 10_000).length).toBe(256 + 1);
+  });
+
+  it('đầu vào vô nghĩa trả mảng rỗng chứ không ném lỗi', () => {
+    expect(circlePolygon(NHA_AN, 0)).toEqual([]);
+    expect(circlePolygon(NHA_AN, -5)).toEqual([]);
+    expect(circlePolygon(NHA_AN, Number.NaN)).toEqual([]);
+    expect(circlePolygon({ lat: 999, lng: 0 }, 150)).toEqual([]);
+  });
+
+  it('kinh độ luôn nằm trong dải hợp lệ, kể cả khi vắt qua kinh tuyến 180', () => {
+    // Không chuẩn hoá thì vòng tròn ở đây vẽ ra một vệt vòng quanh Trái Đất.
+    const ring = circlePolygon({ lat: 0, lng: 179.99 }, 2000);
+    for (const [lng] of ring) {
+      expect(lng).toBeGreaterThanOrEqual(-180);
+      expect(lng).toBeLessThanOrEqual(180);
+    }
   });
 });

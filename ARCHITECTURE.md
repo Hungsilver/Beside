@@ -8,7 +8,7 @@
 - **Domain:** `https://easytech.io.vn` (tạm dùng — đã mua). Sẽ đổi sang domain `beside` sau
   ⇒ **mọi URL phải lấy từ biến môi trường, không hardcode domain ở bất kỳ đâu**
 - **Cập nhật lần cuối:** 2026-09-08
-- **Trạng thái:** `PHASE 4` ✅ **xong phần tính năng** — F4 Lịch trình · F7 Thông báo đẩy · F6 Địa điểm & Geofence · F5 Mốc kỷ niệm
+- **Trạng thái:** `PHASE 5` 🔸 đang làm — đã vẽ địa điểm & ảnh check-in lên bản đồ. Phase 4 ✅ xong phần tính năng
   - Phase 1: `docs/traces/phase-1-auth-pairing.md` — 53/53 case
   - Phase 2: `docs/traces/phase-2-realtime-location.md` — 29/29 case
   - Rà soát: `docs/traces/phase-2-review.md` — 21/21 case (bắt được 2 lỗi rò rỉ quyền riêng tư)
@@ -19,6 +19,7 @@
   - Sửa lỗi: `docs/traces/fix-ban-do-khong-hien.md` — khung bản đồ cao 0px do cascade layer của Tailwind v4 (L30), 7/7 case
   - Sửa lỗi: `docs/traces/fix-lint-khong-chay.md` — `npm run lint` không kiểm gì suốt 4 phase (L31), 9/9 case
   - Kiểm thử: `docs/traces/e2e-trinh-duyet-that.md` — E2E Playwright 390×844, 12/12 case
+  - Phase 5: `docs/traces/phase-5-ban-do.md` — địa điểm & ảnh trên bản đồ, 15/15 E2E
   - Phase 4 (F5): `docs/traces/phase-4-milestones.md` — 25/25 case (không lỗi mới)
   - Tổng: **270 unit test** + **247 case trace**, typecheck + lint sạch cả 3 workspace
   - ✅ `npm run verify:local` → **38/38 mục đạt** trên Docker thật (gồm chốt ESLint và E2E trình duyệt)
@@ -637,7 +638,7 @@ Bắt buộc tối thiểu: 1 happy path + 3 edge case + 1 case lỗi.
 | `npm run typecheck` | `tsc --noEmit` cho cả 3 workspace, **bao gồm file `*.spec.ts`** | `verify:local` mục 4 |
 | `npm run lint` | **ESLint thật** (`eslint.config.mjs` ở gốc) cho cả 3 workspace | `verify:local` mục 4 |
 | `npm run test` | Vitest — hiện 270 unit test | `verify:local` mục 4 |
-| `npm run e2e` | **Playwright ở 390×844** trên bản build thật trong Docker — 12 test | `verify:local` mục 4 |
+| `npm run e2e` | **Playwright ở 390×844** trên bản build thật trong Docker — 15 test | `verify:local` mục 4 |
 
 > ⚠️ **Bài học đắt nhất của dự án này (L31).** Từ Phase 1 tới Phase 4,
 > `npm run lint` chạy `--workspaces --if-present` mà **không workspace nào có
@@ -680,7 +681,7 @@ Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L
 | **2** | ✅ Vị trí realtime: Socket.IO, Kalman, MapLibre, trail, presence, ghost mode, làm mờ vị trí, dọn lịch sử | Xem nhau di chuyển trên bản đồ · 29/29 trace |
 | **3** | ✅ Check-in ảnh + dòng kỷ niệm + MinIO + sharp (xoay & xoá EXIF), phân trang con trỏ, cảm xúc | Đăng & xem kỷ niệm · 34/34 trace |
 | **4** | ✅ F4 Lịch trình (37/37) · F7 Thông báo đẩy + nhắc lịch (21/21) · F6 Địa điểm & Geofence (27/27) · F5 Mốc kỷ niệm (25/25) | Đủ tính năng cốt lõi |
-| **5** | Vẽ địa điểm + ảnh check-in lên bản đồ · giao diện PC (≥1024px) · tối ưu hiệu năng · PWA offline *(tiếp theo)* | Bản 1.0 |
+| **5** | 🔸 Vẽ địa điểm + ảnh check-in lên bản đồ ✅ (15/15 E2E) · còn giao diện PC (≥1024px), tối ưu hiệu năng, PWA offline *(đang làm)* | Bản 1.0 |
 | **6** | *(tuỳ chọn)* APK Android qua Capacitor cho tracking nền | File APK sideload |
 
 ---
@@ -742,6 +743,8 @@ Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L
 | 2026-09-08 | Dùng `haversineMeters` trong RAM, chưa dùng `ST_DWithin` của PostGIS | Tối đa 20 địa điểm mỗi couple — chênh lệch không đáng kể, và hàm thuần thì unit test được | Nếu số địa điểm tăng nhiều thì phải chuyển sang truy vấn không gian |
 | 2026-09-08 | Dùng lại hằng số `GEOFENCE_EXIT_HYSTERESIS_M`/`PLACE_RADIUS_*` của Phase 0 thay vì đặt núm mới | R0: bản kế hoạch là nguồn sự thật; hai núm cùng điều khiển một thứ là mầm lệch (trace L29) | Khoảng chênh là cộng 30 m cố định, không co giãn theo bán kính |
 | 2026-09-08 | Thêm migration `20260907000000_enable_postgis` chạy trước mọi migration khác | Shadow database của `migrate dev` là DB trắng, không có PostGIS nên migration cột `geog` chết (trace L22) | Trùng việc với `infra/postgres/init/01-extensions.sql`, nhưng mọi câu lệnh đều IF NOT EXISTS nên vô hại |
+| 2026-09-08 | Hàng rào vẽ bằng **đa giác toạ độ**, không dùng lớp `circle` của MapLibre | Lớp `circle` nhận bán kính bằng **pixel**; hàng rào 150 m là khoảng cách thật ngoài đời, phải co giãn theo bản đồ | Phải tự tính hình học — `circlePolygon` ở shared, 7 unit test |
+| 2026-09-08 | `CoupleMap` phơi ra `data-places` / `data-photo-pins` | MapLibre vẽ vào **canvas**, không selector nào chạm tới; không có hai thuộc tính này thì gỡ sạch dữ liệu đi E2E vẫn xanh | Hai thuộc tính chỉ để kiểm thử và gỡ lỗi nằm trong mã production |
 | 2026-09-08 | Mỗi chốt tự động phải được kiểm chứng là **thất bại được** trước khi tin nó | `npm run lint` thoát 0 suốt 4 phase mà không chạy gì; `tsconfig` của shared loại trừ file test nên 100+ test chưa từng được typecheck (L31) | Thêm một bước xác minh mỗi lần dựng chốt mới |
 | 2026-09-08 | ESLint dùng **một file cấu hình ở gốc** cho cả 3 workspace | Ba workspace dùng chung `packages/shared` và chung quy ước R2; ba file cấu hình là ba chỗ để lệch nhau | File cấu hình dài hơn, phải phân nhánh theo `files:` |
 | 2026-09-08 | `packages/shared` tách `tsconfig.build.json` khỏi `tsconfig.json` | Bản build phải bỏ `*.spec.ts` khỏi `dist`, nhưng typecheck và ESLint thì phải thấy chúng — một file không phục vụ được cả hai | Thêm một file cấu hình phải giữ đồng bộ |

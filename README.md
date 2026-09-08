@@ -171,13 +171,14 @@ docs/BACKLOG.md          ← ý tưởng & việc chờ quyết định
 | Ai sửa được gì | sự kiện chung thì cả hai đều **thấy**, nhưng chỉ người tạo mới **sửa/xoá** |
 | **Thông báo đẩy** | nhắc trước mỗi cuộc hẹn, báo khi người ấy đăng khoảnh khắc mới. Tự dọn thiết bị đã gỡ app |
 | **Địa điểm & hàng rào ảo** | lưu Nhà / Công ty / quán quen; tự báo khi người ấy tới nơi hoặc rời đi |
+| **Tất cả trên một bản đồ** | hàng rào địa điểm vẽ theo bán kính thật, ảnh check-in hiện thành ghim bấm được, chọn chỗ mới bằng cách chạm lên bản đồ |
 | Chống báo sai | ba lớp lọc: bỏ qua điểm GPS kém, khoảng chênh vào/ra 30m, phải ở đủ 60 giây |
 | PWA | cài lên màn hình chính, manifest + icon + service worker tự viết, cache tile bản đồ |
 
 ## Chưa có
 
-Phase 4 đã xong phần tính năng. Còn lại: vẽ địa điểm + ảnh check-in lên bản đồ,
-giao diện PC (Phase 5). Xem lộ trình ở `ARCHITECTURE.md §9`.
+Còn lại của Phase 5: giao diện PC (≥1024px), tối ưu hiệu năng, PWA offline.
+Xem lộ trình ở `ARCHITECTURE.md §9`.
 
 > Thông báo đẩy cần **khoá VAPID** trên server. Chưa cấu hình thì tính năng tự tắt
 > và app vẫn chạy bình thường — cách sinh khoá xem `docs/DEPLOY.md §3`.

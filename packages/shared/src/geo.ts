@@ -89,3 +89,50 @@ export function isValidLatLng(p: LatLng): boolean {
     !(p.lat === 0 && p.lng === 0)
   );
 }
+
+/**
+ * Vòng tròn bán kính THẬT (mét) dưới dạng vành toạ độ `[lng, lat]`.
+ *
+ * Dùng để vẽ hàng rào địa điểm lên bản đồ. Lớp `circle` của MapLibre nhận bán
+ * kính tính bằng **pixel**, nên phóng to thu nhỏ là vòng tròn sai hoàn toàn —
+ * mà đây là một khoảng cách thật ngoài đời, phải co giãn theo bản đồ. Cách đúng
+ * là dựng hẳn một đa giác theo toạ độ địa lý.
+ *
+ * Tính theo "điểm đến từ một điểm, một hướng và một khoảng cách" trên hình cầu.
+ * Nhờ vậy vòng tròn vẫn đúng ở vĩ độ cao, nơi 1 độ kinh ngắn hơn 1 độ vĩ nhiều.
+ *
+ * Vành trả về **khép kín** (điểm cuối trùng điểm đầu) — GeoJSON Polygon bắt buộc.
+ */
+export function circlePolygon(
+  center: LatLng,
+  radiusM: number,
+  steps = 64,
+): [number, number][] {
+  if (!isValidLatLng(center) || !Number.isFinite(radiusM) || radiusM <= 0) return [];
+
+  const safeSteps = Math.max(8, Math.min(256, Math.round(steps)));
+  const angular = radiusM / EARTH_RADIUS_M;
+  const lat = toRad(center.lat);
+  const lng = toRad(center.lng);
+  const sinLat = Math.sin(lat);
+  const cosLat = Math.cos(lat);
+  const sinAng = Math.sin(angular);
+  const cosAng = Math.cos(angular);
+
+  const ring: [number, number][] = [];
+  for (let i = 0; i < safeSteps; i += 1) {
+    const bearing = (2 * Math.PI * i) / safeSteps;
+    const pointLat = Math.asin(sinLat * cosAng + cosLat * sinAng * Math.cos(bearing));
+    const pointLng =
+      lng +
+      Math.atan2(
+        Math.sin(bearing) * sinAng * cosLat,
+        cosAng - sinLat * Math.sin(pointLat),
+      );
+    // Đưa kinh độ về dải [-180, 180] để không vẽ ra một vệt vòng quanh Trái Đất
+    // khi vòng tròn nằm vắt qua kinh tuyến 180.
+    ring.push([((toDeg(pointLng) + 540) % 360) - 180, toDeg(pointLat)]);
+  }
+  ring.push(ring[0]!);
+  return ring;
+}

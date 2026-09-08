@@ -22,6 +22,7 @@ import {
   useUpdatePlace,
 } from '@/lib/places-api';
 import { FormError, Screen, Spinner } from '@/components/ui';
+import PlacePicker from '@/components/PlacePicker';
 
 export default function PlacesScreen() {
   const { user } = useAuth();
@@ -31,6 +32,7 @@ export default function PlacesScreen() {
   const [locError, setLocError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
   const [draftCoords, setDraftCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [picking, setPicking] = useState(false);
 
   const places = query.data ?? [];
   const partner = coupleQuery.data?.partner ?? null;
@@ -89,6 +91,15 @@ export default function PlacesScreen() {
         {locating ? 'Đang lấy vị trí...' : '📍 Lưu chỗ tôi đang đứng'}
       </button>
 
+      <button
+        type="button"
+        onClick={() => setPicking(true)}
+        disabled={places.length >= MAX_PLACES_PER_COUPLE}
+        className="btn-ghost mt-2.5 w-full disabled:opacity-45"
+      >
+        🗺️ Chọn trên bản đồ
+      </button>
+
       {places.length >= MAX_PLACES_PER_COUPLE && (
         <p className="mt-2 text-center text-[12px] text-ink-400">
           Đã đủ {MAX_PLACES_PER_COUPLE} địa điểm — xoá bớt chỗ cũ để thêm chỗ mới.
@@ -142,6 +153,18 @@ export default function PlacesScreen() {
       )}
 
       <div className="h-8" />
+
+      {picking && (
+        <PlacePicker
+          places={places}
+          onCancel={() => setPicking(false)}
+          onPick={(coords) => {
+            setPicking(false);
+            setDraftCoords(coords);
+            setEditing('new');
+          }}
+        />
+      )}
 
       {editing && (
         <PlaceSheet

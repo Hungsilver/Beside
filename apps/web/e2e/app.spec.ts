@@ -172,3 +172,73 @@ test.describe('Các màn dựng được, không màn trắng', () => {
     });
   }
 });
+
+test.describe('Phase 5 — địa điểm và ảnh check-in trên bản đồ', () => {
+  /*
+   * MapLibre vẽ hàng rào và nhãn địa điểm vào CANVAS, không phải DOM — không
+   * dò được bằng selector. Nên `CoupleMap` phơi ra hai thuộc tính `data-*` cho
+   * biết nó nhận được bao nhiêu địa điểm và bao nhiêu ghim ảnh. Test này đối
+   * chiếu con số đó với dữ liệu thật lấy từ API.
+   */
+  test('E2E-08 — hàng rào địa điểm được đưa lên bản đồ', async () => {
+    /*
+     * Đối chiếu CHÉO giữa hai màn: đếm địa điểm ở màn Địa điểm, rồi đòi bản đồ
+     * cũng nhận đúng bấy nhiêu. Không gọi thẳng API từ trong trang được — access
+     * token nằm trong bộ nhớ của app chứ không phải cookie, nên `fetch` trần sẽ
+     * nhận 401.
+     */
+    await page.goto('/dia-diem');
+    await expect(page.getByText(/Địa điểm quen/i)).toBeVisible();
+
+    // `count()` KHÔNG tự chờ. Phải đợi mục đầu tiên hiện ra rồi mới đếm, nếu
+    // không sẽ đếm lúc danh sách còn đang tải và luôn ra 0.
+    const items = page.locator('ul > li button[type="button"]');
+    await expect(items.first()).toBeVisible({ timeout: 15_000 });
+    const listCount = await items.count();
+    expect(listCount, 'cần ít nhất 1 địa điểm — chạy `npm run seed:demo`').toBeGreaterThan(0);
+
+    await page.goto('/ban-do');
+    const container = page.locator('[aria-label="Bản đồ"]');
+    await expect(container).toHaveAttribute('data-places', String(listCount), {
+      timeout: 15_000,
+    });
+  });
+
+  test('E2E-09 — ghim ảnh check-in hiện trên bản đồ và bấm được', async () => {
+    await page.goto('/ban-do');
+    const container = page.locator('[aria-label="Bản đồ"]');
+
+    // Chờ dữ liệu bài viết về trước khi đo.
+    await expect(container).not.toHaveAttribute('data-photo-pins', '0', { timeout: 15_000 });
+
+    /*
+     * MapLibre gắn class `maplibregl-marker` lên CHÍNH thẻ mình truyền vào, chứ
+     * không bọc thêm thẻ ngoài. Nên ghim ảnh là `button.maplibregl-marker`,
+     * không phải một button nằm trong marker. (Đã dò DOM thật để biết điều này.)
+     */
+    const pin = page.locator('button.maplibregl-marker').first();
+    await expect(pin).toBeVisible();
+    const box = await pin.boundingBox();
+    expect(box!.height, 'ghim ảnh phải đủ to để chạm được').toBeGreaterThanOrEqual(40);
+  });
+
+  test('E2E-10 — chọn địa điểm bằng cách chạm lên bản đồ', async () => {
+    await page.goto('/dia-diem');
+    await page.getByRole('button', { name: /Chọn trên bản đồ/i }).click();
+
+    await expect(page.getByText(/Chạm để chọn chỗ/i)).toBeVisible();
+    // Nút Chọn phải bị khoá khi chưa đặt ghim.
+    await expect(page.getByRole('button', { name: /^Chọn$/ })).toBeDisabled();
+
+    const map = page.locator('[aria-label="Bản đồ"]');
+    await expect(map).toBeVisible();
+    await page.locator('canvas.maplibregl-canvas').click({ position: { x: 195, y: 300 } });
+
+    await expect(page.getByText(/Đã đặt ghim tại/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Chọn$/ })).toBeEnabled();
+
+    // Thoát ra, không lưu gì cả.
+    await page.getByRole('button', { name: /^Huỷ$/ }).click();
+    await expect(page.getByText(/Địa điểm quen/i)).toBeVisible();
+  });
+});

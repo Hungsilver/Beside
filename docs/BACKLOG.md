@@ -125,8 +125,8 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 | 08/09 | Chưa tách được từng loại thông báo (nhắc lịch / check-in / geofence) — hiện bật là nhận hết | Trung bình | `apps/api/src/push/` |
 | 08/09 | Job nhắc lịch chưa chạy thật qua một mốc thời gian thật, mới kiểm bằng unit test với đồng hồ giả | Trung bình | `apps/api/src/events/event-reminder.job.ts` |
 | 08/09 | `PARTNER_ARRIVED` / `PARTNER_LEFT` đã khai báo trong `PUSH_KINDS` nhưng chưa có nơi nào gửi — chờ F6 Geofence | Trung bình | `packages/shared/src/push.schema.ts` |
-| 08/09 | **Chưa chọn được địa điểm trên bản đồ** — mới lưu được "chỗ tôi đang đứng". Muốn lưu nhà người yêu khi đang ngồi ở quán thì chưa làm được | Cao | `apps/web/src/screens/PlacesScreen.tsx` |
-| 08/09 | Hàng rào và ghim địa điểm **chưa vẽ lên `MapScreen`** | Trung bình | `apps/web/src/screens/MapScreen.tsx` |
+| ~~08/09~~ | ~~Chưa chọn được địa điểm trên bản đồ~~ → **ĐÃ SỬA**: `PlacePicker`, chạm để đặt ghim, xem trước vòng hàng rào. E2E-10 | ~~Cao~~ | — |
+| ~~08/09~~ | ~~Hàng rào và ghim địa điểm chưa vẽ lên `MapScreen`~~ → **ĐÃ SỬA**: đa giác theo bán kính thật. E2E-08 | ~~Trung bình~~ | — |
 | 08/09 | Bảng `geofence_events` ghi đầy đủ nhưng **chưa có API đọc** — chưa hiện được "hôm nay người ấy tới những đâu" | Trung bình | `apps/api/src/places/` |
 | 08/09 | Chưa có case hai người cùng ở trong một hàng rào (logic tách theo `userId` nên về lý là đúng) | Thấp | `apps/api/test/trace-phase4-places.mjs` |
 | 08/09 | Geofence dùng `haversineMeters` trong RAM, chưa dùng `ST_DWithin` của PostGIS — đủ cho 20 địa điểm, cần đổi nếu tăng nhiều | Thấp | `apps/api/src/places/geofence.service.ts` |
@@ -143,3 +143,6 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 | 08/09 | E2E chạy trên **Chromium**, chưa chạy WebKit/Safari — những thứ riêng của iOS (Web Push, `<input type="date">`, thanh địa chỉ co giãn) vẫn phải bấm tay | Trung bình | `apps/web/playwright.config.ts` |
 | 08/09 | E2E mới chỉ **mở màn và đo**, chưa test luồng có tương tác (đăng ảnh, tạo sự kiện) — mỗi luồng cần dọn dữ liệu sau đó | Trung bình | `apps/web/e2e/app.spec.ts` |
 | 08/09 | Chưa test được **hai người cùng lúc** nhìn thấy nhau di chuyển: cần hai context song song, mà điều đó đụng đúng cơ chế xoay vòng refresh token | Trung bình | `apps/web/e2e/` |
+| 08/09 | Bấm ghim ảnh trên bản đồ mới **đưa sang màn Kỷ niệm**, chưa mở ảnh tại chỗ | Thấp | `apps/web/src/screens/MapScreen.tsx` |
+| 08/09 | Chưa lọc ghim ảnh theo thời gian — đang lấy 40 bài mới nhất có toạ độ | Thấp | `apps/web/src/screens/MapScreen.tsx` |
+| 08/09 | Chưa chỉnh được bán kính ngay trên bản đồ lúc chọn chỗ, nên không thấy trước hàng rào rộng cỡ nào so với đường thật | Trung bình | `apps/web/src/components/PlacePicker.tsx` |

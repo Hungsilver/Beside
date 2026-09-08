@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   haversineMeters,
   LIVE_STALE_AFTER_MS,
@@ -9,13 +9,26 @@ import { useCouple } from '@/lib/couple-api';
 import { usePartnerLatest, usePartnerTrail } from '@/lib/location-api';
 import { useRealtime } from '@/lib/realtime';
 import { useLiveLocation } from '@/lib/use-live-location';
-import CoupleMap, { type MapMarker } from '@/components/CoupleMap';
+import CoupleMap, {
+  type MapMarker,
+  type MapPhotoPin,
+  type MapPlace,
+} from '@/components/CoupleMap';
+import { usePlaces } from '@/lib/places-api';
+import { useFeed } from '@/lib/posts-api';
 import TabBar from '@/components/TabBar';
 
 export default function MapScreen() {
   const coupleQuery = useCouple();
   const partnerQuery = usePartnerLatest();
+  const navigate = useNavigate();
   const trailQuery = usePartnerTrail();
+  const placesQuery = usePlaces();
+  /*
+   * Chỉ lấy bài CÓ GHIM toạ độ. Bộ lọc `pinned` đã có sẵn từ Phase 3 nên
+   * không phải tải cả dòng kỷ niệm rồi lọc ở client.
+   */
+  const pinnedQuery = useFeed('pinned', null, null);
   const { connected, partnerLocation, partnerPresence } = useRealtime();
   const live = useLiveLocation();
 
@@ -84,9 +97,43 @@ export default function MapScreen() {
     Boolean(partnerPoint) &&
     now - (partnerPoint?.ts ?? 0) < LIVE_STALE_AFTER_MS;
 
+  const places = useMemo<MapPlace[]>(
+    () =>
+      (placesQuery.data ?? []).map((p) => ({
+        id: p.id,
+        name: p.name,
+        emoji: p.emoji,
+        point: { lat: p.lat, lng: p.lng },
+        radiusM: p.radiusM,
+        active: p.peopleInside.length > 0,
+      })),
+    [placesQuery.data],
+  );
+
+  const photoPins = useMemo<MapPhotoPin[]>(() => {
+    const posts = pinnedQuery.data?.pages.flatMap((page) => page.items) ?? [];
+    return posts
+      .filter((post) => post.lat !== null && post.lng !== null && post.photos.length > 0)
+      .slice(0, 40) // Nhiều hơn nữa thì bản đồ rối và tốn data tải ảnh
+      .map((post) => ({
+        id: post.id,
+        point: { lat: post.lat!, lng: post.lng! },
+        thumbPath: post.photos[0]!.urlThumb,
+        placeholder: post.photos[0]!.placeholder,
+        label: post.caption ?? `Khoảnh khắc của ${post.authorName}`,
+      }));
+  }, [pinnedQuery.data]);
+
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-canvas">
-      <CoupleMap markers={markers} trail={trailQuery.data?.points} recenterToken={recenterToken} />
+      <CoupleMap
+        markers={markers}
+        trail={trailQuery.data?.points}
+        places={places}
+        photoPins={photoPins}
+        onPhotoPinClick={() => void navigate('/ky-niem')}
+        recenterToken={recenterToken}
+      />
 
       {/* Thanh trên cùng */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 px-4 pt-[max(env(safe-area-inset-top),12px)]">

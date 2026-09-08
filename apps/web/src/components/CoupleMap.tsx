@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import maplibregl, { type LngLatLike, type Map as MapLibreMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import type { LatLng, TrailPoint } from '@beside/shared';
+import { circlePolygon, type LatLng, type TrailPoint } from '@beside/shared';
+import { fetchPhotoObjectUrl } from '@/lib/posts-api';
 
 const STYLE_URL =
   import.meta.env.VITE_MAP_STYLE_URL ?? 'https://tiles.openfreemap.org/styles/liberty';
@@ -20,9 +21,40 @@ export interface MapMarker {
   headingDeg?: number | null;
 }
 
+/** Địa điểm đã lưu — vẽ thành hàng rào tròn theo bán kính THẬT. */
+export interface MapPlace {
+  id: string;
+  name: string;
+  emoji: string;
+  point: LatLng;
+  radiusM: number;
+  /** Đang có người trong hàng rào → tô đậm hơn cho dễ thấy. */
+  active: boolean;
+}
+
+/** Ảnh check-in đã ghim toạ độ. */
+export interface MapPhotoPin {
+  id: string;
+  point: LatLng;
+  /** Đường dẫn ảnh nhỏ, đi qua API nên cần token — xem AuthedImage. */
+  thumbPath: string;
+  /** Ảnh mờ nhúng sẵn, hiện ngay trong lúc ảnh thật đang tải. */
+  placeholder: string;
+  label: string;
+}
+
 interface Props {
   markers: MapMarker[];
   trail?: TrailPoint[];
+  places?: MapPlace[];
+  photoPins?: MapPhotoPin[];
+  /** Bấm vào một ghim ảnh. */
+  onPhotoPinClick?: (id: string) => void;
+  /**
+   * Bật chế độ chọn toạ độ: bấm lên bản đồ để lấy điểm.
+   * Khi bật, con trỏ đổi thành chữ thập và mọi cú bấm gọi hàm này.
+   */
+  onPickPoint?: (point: LatLng) => void;
   /** Đổi giá trị này để buộc bản đồ căn lại khung nhìn. */
   recenterToken?: number;
   onMapReady?: () => void;
@@ -40,11 +72,42 @@ const COLORS = {
  * theo mỗi lần render React: dựng lại marker mỗi giây sẽ làm chấm nhấp nháy
  * và bản đồ giật.
  */
-export default function CoupleMap({ markers, trail, recenterToken, onMapReady }: Props) {
+export default function CoupleMap({
+  markers,
+  trail,
+  places,
+  photoPins,
+  onPhotoPinClick,
+  onPickPoint,
+  recenterToken,
+  onMapReady,
+}: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const photoMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   const readyRef = useRef(false);
+
+  /*
+   * Giữ callback trong ref rồi mới dùng trong listener của MapLibre.
+   *
+   * Listener được gắn MỘT LẦN lúc khởi tạo bản đồ. Nếu bắt thẳng prop vào đó,
+   * nó sẽ đóng băng ở giá trị của lần render đầu tiên và mọi cú bấm sau này
+   * gọi vào một hàm cũ — đúng loại bẫy của L21.
+   */
+  const onPickPointRef = useRef(onPickPoint);
+  onPickPointRef.current = onPickPoint;
+  const onPhotoPinClickRef = useRef(onPhotoPinClick);
+  onPhotoPinClickRef.current = onPhotoPinClick;
+
+  /*
+   * Đếm số lần bản đồ sẵn sàng.
+   *
+   * Dữ liệu địa điểm có thể về TRƯỚC khi MapLibre bắn sự kiện `load`. Lúc đó
+   * `getSource('places')` chưa tồn tại và effect lặng lẽ không làm gì — hàng
+   * rào không bao giờ hiện. Tăng số này lúc `load` để effect chạy lại.
+   */
+  const [mapReadyTick, setMapReadyTick] = useState(0);
 
   // ---------------------------------------------------------------- khởi tạo
   useEffect(() => {
@@ -70,6 +133,7 @@ export default function CoupleMap({ markers, trail, recenterToken, onMapReady }:
 
     map.on('load', () => {
       readyRef.current = true;
+      setMapReadyTick((n) => n + 1);
 
       // Nguồn + lớp cho vệt đường, tạo sẵn rỗng rồi cập nhật dữ liệu sau.
       map.addSource('trail', {
@@ -90,12 +154,79 @@ export default function CoupleMap({ markers, trail, recenterToken, onMapReady }:
         },
       });
 
+      /*
+       * Hàng rào địa điểm.
+       *
+       * Vẽ bằng đa giác toạ độ chứ KHÔNG dùng lớp `circle` của MapLibre: lớp đó
+       * nhận bán kính tính bằng pixel, nên phóng to thu nhỏ là vòng tròn sai
+       * hoàn toàn — trong khi đây là một khoảng cách thật ngoài đời.
+       * `circlePolygon` ở packages/shared lo phần hình học (có 7 unit test).
+       *
+       * Chèn NGAY DƯỚI lớp vệt đường để đường đi không bị nền hàng rào che.
+       */
+      map.addSource('places', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      map.addLayer(
+        {
+          id: 'place-fill',
+          type: 'fill',
+          source: 'places',
+          paint: {
+            'fill-color': ['case', ['get', 'active'], '#03A47B', '#8B5CF6'],
+            'fill-opacity': ['case', ['get', 'active'], 0.18, 0.08],
+          },
+        },
+        'trail-line',
+      );
+      map.addLayer(
+        {
+          id: 'place-outline',
+          type: 'line',
+          source: 'places',
+          paint: {
+            'line-color': ['case', ['get', 'active'], '#03A47B', '#8B5CF6'],
+            'line-width': 1.5,
+            'line-opacity': 0.55,
+          },
+        },
+        'trail-line',
+      );
+      map.addLayer({
+        id: 'place-label',
+        type: 'symbol',
+        source: 'places',
+        layout: {
+          'text-field': ['concat', ['get', 'emoji'], ' ', ['get', 'name']],
+          'text-size': 12,
+          'text-anchor': 'top',
+          // Đẩy chữ xuống dưới tâm để không đè lên chấm vị trí của người.
+          'text-offset': [0, 0.6],
+          'text-allow-overlap': false,
+        },
+        paint: {
+          'text-color': '#4A2540',
+          'text-halo-color': 'rgba(255,255,255,0.9)',
+          'text-halo-width': 1.4,
+        },
+      });
+
       onMapReady?.();
     });
+
+    // Chọn toạ độ bằng cách bấm lên bản đồ (dùng ở màn Địa điểm).
+    map.on('click', (e) => {
+      onPickPointRef.current?.({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+    });
+
+    const photoMarkers = photoMarkersRef.current;
 
     return () => {
       markers.forEach((m) => m.remove());
       markers.clear();
+      photoMarkers.forEach((m) => m.remove());
+      photoMarkers.clear();
       map.remove();
       mapRef.current = null;
       readyRef.current = false;
@@ -153,6 +284,75 @@ export default function CoupleMap({ markers, trail, recenterToken, onMapReady }:
     };
   }, [markers]);
 
+  // ---------------------------------------------------------------- địa điểm
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !readyRef.current) return;
+
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+    const source = map.getSource('places') as maplibregl.GeoJSONSource | undefined;
+    if (!source) return;
+
+    source.setData({
+      type: 'FeatureCollection',
+      features: (places ?? [])
+        .map((place) => {
+          const ring = circlePolygon(place.point, place.radiusM);
+          if (ring.length === 0) return null;
+          return {
+            type: 'Feature' as const,
+            properties: { name: place.name, emoji: place.emoji, active: place.active },
+            geometry: { type: 'Polygon' as const, coordinates: [ring] },
+          };
+        })
+        .filter((f) => f !== null),
+    });
+  }, [places, mapReadyTick]);
+
+  // ---------------------------------------------------------------- ghim ảnh
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const seen = new Set<string>();
+
+    for (const pin of photoPins ?? []) {
+      seen.add(pin.id);
+      const lngLat: [number, number] = [pin.point.lng, pin.point.lat];
+      const existing = photoMarkersRef.current.get(pin.id);
+      if (existing) {
+        existing.setLngLat(lngLat);
+        continue;
+      }
+
+      const el = buildPhotoPinElement(pin);
+      el.addEventListener('click', (ev) => {
+        // Không để cú bấm rơi xuống bản đồ — nếu không, ở chế độ chọn toạ độ
+        // bấm vào ảnh sẽ vừa mở ảnh vừa đặt một điểm mới.
+        ev.stopPropagation();
+        onPhotoPinClickRef.current?.(pin.id);
+      });
+      const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+        .setLngLat(lngLat)
+        .addTo(map);
+      photoMarkersRef.current.set(pin.id, marker);
+    }
+
+    for (const [id, marker] of photoMarkersRef.current) {
+      if (!seen.has(id)) {
+        marker.remove();
+        photoMarkersRef.current.delete(id);
+      }
+    }
+  }, [photoPins]);
+
+  // Con trỏ chữ thập khi đang ở chế độ chọn toạ độ.
+  useEffect(() => {
+    const canvas = mapRef.current?.getCanvas();
+    if (!canvas) return;
+    canvas.style.cursor = onPickPoint ? 'crosshair' : '';
+  }, [onPickPoint]);
+
   // ---------------------------------------------------------------- vệt đường
   useEffect(() => {
     const map = mapRef.current;
@@ -179,7 +379,7 @@ export default function CoupleMap({ markers, trail, recenterToken, onMapReady }:
           }
         : { type: 'FeatureCollection', features: [] },
     );
-  }, [trail]);
+  }, [trail, mapReadyTick]);
 
   // ---------------------------------------------------------------- căn khung nhìn
   useEffect(() => {
@@ -214,7 +414,19 @@ export default function CoupleMap({ markers, trail, recenterToken, onMapReady }:
    */
   return (
     <div className="absolute inset-0">
-      <div ref={containerRef} className="size-full" aria-label="Bản đồ" />
+      {/*
+        Hai thuộc tính data-* nói ra thứ MapLibre vẽ vào canvas — mà canvas thì
+        không dò được từ bên ngoài. Nhờ chúng, E2E khẳng định được "hàng rào có
+        thật sự lên bản đồ không", chứ không chỉ "khung bản đồ có tồn tại không".
+        Cũng tiện lúc gỡ lỗi bằng công cụ dành cho nhà phát triển.
+      */}
+      <div
+        ref={containerRef}
+        className="size-full"
+        aria-label="Bản đồ"
+        data-places={places?.length ?? 0}
+        data-photo-pins={photoPins?.length ?? 0}
+      />
     </div>
   );
 }
@@ -287,4 +499,65 @@ function metersToPixels(meters: number, lat: number, zoom: number): number {
   const metersPerPixel =
     (156_543.03392 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, zoom);
   return meters / metersPerPixel;
+}
+
+/**
+ * Ghim ảnh check-in trên bản đồ.
+ *
+ * Ảnh nằm sau lớp xác thực nên `<img src>` sẽ nhận 401 — phải tải bằng fetch
+ * kèm token rồi đổi sang blob URL, đúng cách `AuthedImage` làm. Trong lúc chờ,
+ * hiện ảnh mờ nhúng sẵn để ghim không bị trống.
+ *
+ * Dựng bằng DOM thuần chứ không phải React: MapLibre quản lý vòng đời marker
+ * theo kiểu mệnh lệnh, trộn hai mô hình vào nhau chỉ tổ rối.
+ */
+function buildPhotoPinElement(pin: MapPhotoPin): HTMLElement {
+  const el = document.createElement('button');
+  el.type = 'button';
+  el.setAttribute('aria-label', pin.label);
+  el.style.cssText = [
+    'width:46px',
+    'height:46px',
+    'padding:0',
+    'border:2.5px solid #fff',
+    'border-radius:14px',
+    'overflow:hidden',
+    'cursor:pointer',
+    'background:#eee',
+    'box-shadow:0 3px 10px rgba(35,19,32,0.3)',
+    'display:block',
+  ].join(';');
+
+  const img = document.createElement('img');
+  img.src = pin.placeholder;
+  img.alt = '';
+  img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block';
+  el.appendChild(img);
+
+  let objectUrl: string | null = null;
+  void fetchPhotoObjectUrl(pin.thumbPath)
+    .then((url) => {
+      // Marker có thể đã bị gỡ trong lúc chờ mạng — kiểm trước khi gán.
+      if (!el.isConnected) {
+        URL.revokeObjectURL(url);
+        return;
+      }
+      objectUrl = url;
+      img.src = url;
+    })
+    .catch(() => undefined);
+
+  /*
+   * MapLibre không báo khi marker bị gỡ, nên tự theo dõi để thu hồi blob URL.
+   * Không thu hồi thì mỗi lần mở lại bản đồ là rò thêm một ảnh trong bộ nhớ.
+   */
+  const observer = new MutationObserver(() => {
+    if (!el.isConnected) {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      observer.disconnect();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  return el;
 }

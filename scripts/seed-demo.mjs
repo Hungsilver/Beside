@@ -23,6 +23,15 @@ const PEOPLE = [
 
 const ANNIVERSARY = '2023-02-14';
 
+/**
+ * Địa điểm mẫu — toạ độ Quận 1 / Quận 3 dùng xuyên suốt dự án.
+ * Có chúng thì mở tab Bản đồ ra là thấy hàng rào ngay, không phải tự nhập.
+ */
+const PLACES = [
+  { name: 'Nhà em', emoji: '🏠', lat: 10.7769, lng: 106.7009, radiusM: 150 },
+  { name: 'Công ty anh', emoji: '🏢', lat: 10.8231, lng: 106.6297, radiusM: 200 },
+];
+
 // ---------------------------------------------------------------- chốt chặn
 const host = (() => {
   try {
@@ -84,6 +93,38 @@ async function ensureAccount(person) {
   throw new Error(`Không tạo được ${person.email}: ${reg.status} ${JSON.stringify(reg.body)}`);
 }
 
+/**
+ * Đăng một khoảnh khắc có ảnh và có ghim toạ độ.
+ *
+ * Ảnh được sinh tại chỗ bằng sharp — không nhúng tệp nhị phân vào repo, và
+ * cũng đi đúng đường xử lý ảnh thật (xoay, xoá EXIF, ba cỡ WebP).
+ */
+async function seedPinnedPost(token) {
+  const { default: sharp } = await import('sharp');
+  const photo = await sharp({
+    create: { width: 900, height: 600, channels: 3, background: { r: 255, g: 140, b: 175 } },
+  })
+    .jpeg()
+    .toBuffer();
+
+  const form = new FormData();
+  form.append('photos', new Blob([photo], { type: 'image/jpeg' }), 'demo.jpg');
+  form.append('caption', 'Hoàng hôn ở Thủ Thiêm');
+  form.append('mood', '🥰');
+  form.append('lat', String(PLACES[0].lat));
+  form.append('lng', String(PLACES[0].lng));
+  form.append('placeName', 'Quận 1');
+
+  const res = await fetch(`${BASE}/posts`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  });
+  if (!res.ok) {
+    console.warn(`  (bỏ qua khoảnh khắc mẫu: HTTP ${res.status})`);
+  }
+}
+
 const run = async () => {
   const health = await call('GET', '/health');
   if (health.status !== 200) {
@@ -115,6 +156,20 @@ const run = async () => {
     });
   }
 
+  // Địa điểm mẫu — bỏ qua nếu đã có, để chạy lại seed không đẻ ra bản trùng.
+  const havePlaces = await call('GET', '/places', { token: a.token });
+  if ((havePlaces.body?.length ?? 0) === 0) {
+    for (const place of PLACES) {
+      await call('POST', '/places', { body: place, token: a.token });
+    }
+  }
+
+  // Một khoảnh khắc có ghim toạ độ, để bản đồ có ghim ảnh mà xem.
+  const havePinned = await call('GET', '/posts?pinned=true&limit=1', { token: a.token });
+  if ((havePinned.body?.items?.length ?? 0) === 0) {
+    await seedPinnedPost(a.token);
+  }
+
   const couple = await call('GET', '/couples/me', { token: a.token });
   const love = await call('GET', '/couples/me/love-summary', { token: a.token });
 
@@ -128,6 +183,9 @@ const run = async () => {
   console.log(`  Ghép đôi   : ${couple.body?.members?.map((m) => m.displayName).join(' + ')}`);
   console.log(`  Ngày yêu   : ${couple.body?.anniversaryAt} → ${love.body?.daysTogether} ngày`);
   console.log(`  Mốc kế tiếp: ${love.body?.nextMilestone?.title} (còn ${love.body?.nextMilestone?.daysLeft} ngày)`);
+  console.log('');
+  const places = await call('GET', '/places', { token: a.token });
+  console.log(`  Địa điểm   : ${places.body?.map((p) => p.emoji + ' ' + p.name).join(' · ')}`);
   console.log('');
   console.log('  Mở https://localhost — đăng nhập An ở cửa sổ thường,');
   console.log('  Bình ở cửa sổ ẩn danh, rồi vào tab Bản đồ.');
