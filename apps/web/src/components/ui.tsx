@@ -19,6 +19,35 @@ export function Screen({
   );
 }
 
+/**
+ * Lớp neo vào đáy **KHUNG NHÌN**, dùng cho thanh tab và các nút nổi góc dưới.
+ *
+ * Phải là `fixed`, không được `absolute`. Các màn dùng `<Screen>` (`min-h-dvh`)
+ * cuộn cả trang, mà `<Screen>` lại không phải phần tử được định vị — nên phần tử
+ * `absolute bottom-0` neo vào đáy của **khối chứa ban đầu** (một hình chữ nhật cao
+ * đúng một khung nhìn, đặt ở đầu tài liệu), chứ không phải đáy màn hình. Cuộn
+ * xuống vài trăm pixel là nó trôi lên mất. Xem `docs/traces/fix-thanh-tab-troi-khi-cuon.md`.
+ *
+ * `max-w-[430px] mx-auto` để trùng cột nội dung của `<Screen>` khi màn hình rộng
+ * hơn điện thoại; ở khổ 390px thì phủ kín chiều ngang y như trước.
+ *
+ * `pointer-events-none` ở lớp ngoài để khoảng trống của lớp không nuốt thao tác
+ * lên nội dung phía dưới — mỗi phần tử con phải tự bật lại `pointer-events-auto`.
+ */
+export function BottomLayer({
+  children,
+  className = 'z-30',
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`pointer-events-none fixed inset-x-0 bottom-0 mx-auto w-full max-w-[430px] ${className}`}>
+      {children}
+    </div>
+  );
+}
+
 export function Field({
   label,
   error,

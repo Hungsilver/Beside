@@ -205,7 +205,7 @@ function MilestoneSheet({
   }
 
   return (
-    <div className="absolute inset-0 z-40 flex flex-col justify-end">
+    <div className="fixed inset-0 z-40 flex flex-col justify-end">
       <button
         type="button"
         aria-label="Đóng"
@@ -213,7 +213,7 @@ function MilestoneSheet({
         className="absolute inset-0 bg-black/35 backdrop-blur-[2px]"
       />
 
-      <div className="relative max-h-[88%] overflow-y-auto rounded-t-[28px] bg-white pb-[max(env(safe-area-inset-bottom),20px)] shadow-[0_-8px_40px_rgba(35,19,32,0.18)]">
+      <div className="relative mx-auto max-h-[88%] w-full max-w-[430px] overflow-y-auto rounded-t-[28px] bg-white pb-[max(env(safe-area-inset-bottom),20px)] shadow-[0_-8px_40px_rgba(35,19,32,0.18)]">
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-black/[0.05] bg-white/95 px-5 py-3 backdrop-blur">
           <button
             type="button"

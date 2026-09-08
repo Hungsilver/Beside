@@ -100,6 +100,77 @@ test.describe('Khung nhìn 390×844', () => {
       expect(box!.height, `mục ${i} cao ${box!.height}px`).toBeGreaterThanOrEqual(40);
     }
   });
+
+  /**
+   * Thanh tab và nút nổi góc dưới phải neo vào đáy **KHUNG NHÌN**, không phải
+   * đáy trang. Trước bản sửa chúng dùng `absolute`, mà `<Screen>` không phải
+   * phần tử được định vị — nên neo nhầm vào khối chứa ban đầu và trôi mất ngay
+   * khi người dùng cuộn. Xem `docs/traces/fix-thanh-tab-troi-khi-cuon.md`.
+   *
+   * Phép thử chỉ có nghĩa nếu trang THẬT SỰ cuộn được, nên nó chốt luôn điều đó:
+   * nếu không màn nào cuộn, test đỏ chứ không xanh giả.
+   */
+  test('E2E-13 — thanh tab và nút nổi bám đáy khung nhìn sau khi cuộn', async () => {
+    const viewport = page.viewportSize();
+    expect(viewport, 'phải có khung nhìn cố định').not.toBeNull();
+    const viewportHeight = viewport!.height;
+    let anyScrolled = false;
+
+    for (const path of ['/', '/ky-niem', '/lich']) {
+      await page.goto(path);
+      await page.waitForLoadState('networkidle');
+
+      const nav = page.getByRole('navigation', { name: /điều hướng chính/i });
+      await expect(nav).toBeVisible();
+
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      const scrollY = await page.evaluate(() => Math.round(window.scrollY));
+      if (scrollY > 0) anyScrolled = true;
+
+      const box = await nav.boundingBox();
+      expect(box, `${path}: thanh tab phải còn nằm trong trang`).not.toBeNull();
+      // Đáy thanh tab phải trùng đáy khung nhìn. Nới 2px cho việc làm tròn.
+      expect(
+        Math.abs(box!.y + box!.height - viewportHeight),
+        `${path}: thanh tab lệch đáy khung nhìn sau khi cuộn ${scrollY}px`,
+      ).toBeLessThanOrEqual(2);
+      await expect(nav, `${path}: thanh tab phải còn nhìn thấy`).toBeInViewport({ ratio: 0.9 });
+    }
+
+    expect(anyScrolled, 'không màn nào cuộn được — phép thử này vô nghĩa, phải xem lại').toBe(true);
+
+    // Nút ＋ của màn Lịch cũng phải ở lại (đang ở /lich, đã cuộn tới đáy)
+    const fab = page.getByRole('button', { name: /thêm sự kiện/i });
+    await expect(fab, 'nút ＋ phải còn trong khung nhìn sau khi cuộn').toBeInViewport({
+      ratio: 0.9,
+    });
+  });
+
+  /**
+   * Lớp phủ toàn màn hình (bảng thêm sự kiện, mốc kỷ niệm, địa điểm, chọn chỗ
+   * trên bản đồ) dính đúng lỗi của thanh tab: `absolute inset-0` neo vào khối
+   * chứa ban đầu, nên cuộn xuống rồi mở bảng thì bảng lệch đúng bằng `scrollY`.
+   * Đo được trước khi sửa: cuộn 170px → lớp phủ nằm ở −170..494 thay vì 0..664.
+   */
+  test('E2E-14 — lớp phủ modal phủ đúng khung nhìn sau khi cuộn', async () => {
+    await page.goto('/lich');
+    await page.waitForLoadState('networkidle');
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    const scrollY = await page.evaluate(() => Math.round(window.scrollY));
+    expect(scrollY, 'màn Lịch phải cuộn được, nếu không phép thử vô nghĩa').toBeGreaterThan(0);
+
+    await page.getByRole('button', { name: /thêm sự kiện/i }).click();
+
+    const rect = await page.evaluate(() => {
+      const overlay = document.querySelector('.z-40');
+      if (!overlay) return null;
+      const r = overlay.getBoundingClientRect();
+      return { top: Math.round(r.top), bottom: Math.round(r.bottom), inner: window.innerHeight };
+    });
+    expect(rect, 'phải mở được lớp phủ').not.toBeNull();
+    expect(rect!.top, `lớp phủ lệch ${-rect!.top}px lên trên sau khi cuộn ${scrollY}px`).toBe(0);
+    expect(rect!.bottom, 'lớp phủ phải chạm đáy khung nhìn').toBe(rect!.inner);
+  });
 });
 
 test.describe('Bản đồ — chốt chặn cho lỗi khung cao 0px', () => {

@@ -27,7 +27,7 @@ export default function PlacePicker({
   const [point, setPoint] = useState<LatLng | null>(null);
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col bg-white">
+    <div className="fixed inset-0 z-50 mx-auto w-full max-w-[430px] flex flex-col bg-white">
       <header className="flex items-center justify-between border-b border-black/[0.06] px-4 py-3">
         <button
           type="button"

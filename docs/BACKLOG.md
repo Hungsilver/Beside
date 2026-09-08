@@ -159,3 +159,4 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 | 08/09 | Chưa có màn báo "đang xem bản offline" — người dùng không biết dữ liệu đang thấy là cũ hay mới | Trung bình | `apps/web/src/` |
 | 08/09 | `registerType: 'prompt'` nhưng **chưa có giao diện hỏi** người dùng có muốn cập nhật bản mới không | Trung bình | `apps/web/src/` |
 | 08/09 | Toàn bộ đo đạc offline chạy với cờ bỏ qua lỗi chứng chỉ; chưa kiểm chứng trên production có Let's Encrypt thật | Trung bình | `apps/web/playwright.config.ts` |
+| ~~08/09~~ | ~~Bốn lớp phủ toàn màn hình dùng `absolute inset-0`: cuộn 170px rồi mở bảng thì bảng nằm ở −170..494 thay vì 0..664 — hở đáy màn và cắt mất phần đầu~~ → **ĐÃ SỬA** 08/09: `absolute` → `fixed` ở `EventSheet`, `MilestonesScreen`, `PlacesScreen`, `PlacePicker`; chốt bằng `E2E-14`. Xem `docs/traces/fix-thanh-tab-troi-khi-cuon.md` §3 | ~~Cao~~ | — |

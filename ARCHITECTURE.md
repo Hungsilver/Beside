@@ -759,6 +759,7 @@ Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L
 | 2026-09-08 | `api`/`web` mở cổng trên **IP gateway của mạng bridge** (`172.18.0.1:3003`/`:3002`), không dùng tên container | Caddy nằm ở stack khác nên không cùng mạng Docker, không phân giải được `api:3000`. Đây cũng là cách stack cũ vẫn dùng | Phụ thuộc vào IP gateway; mạng bridge bị dựng lại thì IP có thể đổi và phải sửa Caddyfile |
 | 2026-09-08 | TLS ở production đi bằng **Cloudflare Origin Certificate**, không phải Let's Encrypt | DNS đang bật proxy Cloudflare (mây cam) nên ACME HTTP-01 không tới được origin. Cert sẵn có phủ `*.easytech.io.vn`, hạn 2041 | Trái với mặc định "Caddy tự lo TLS" của §4; đổi domain sau này phải xin cert origin mới, và `curl -k https://127.0.0.1` ở origin báo lỗi SSL vì thiếu SNI |
 | 2026-09-08 | `POSTGRES_PORT=5433` trên VPS đó | 5432 đã bị Postgres của dự án kia chiếm, và nó bind `0.0.0.0` | Lệnh Prisma chạy tay trên máy chủ phải nhớ cổng khác |
+| 2026-09-08 | Mọi thứ neo theo KHUNG NHÌN — thanh tab, nút nổi, lớp phủ modal — phải dùng `fixed` (thứ neo đáy thì đi qua `<BottomLayer>`); **cấm** `absolute bottom-0` / `absolute inset-0` | `<Screen>` là `min-h-dvh` và không được định vị, nên `absolute` neo vào khối chứa ban đầu ở đầu tài liệu: cuộn 259px thì thanh tab trôi lên 259px, cuộn 170px thì bảng modal lệch xuống −170..494 (trace `fix-thanh-tab-troi-khi-cuon.md`) | Thêm một lớp bọc và phải nhớ `pointer-events-auto` cho từng phần tử con; trên PC thanh tab và bảng modal thu về đúng cột 430px thay vì kéo hết bề ngang |
 
 ---
 

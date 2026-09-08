@@ -15,7 +15,7 @@ import {
 } from '@/lib/event-display';
 import EventSheet from '@/components/EventSheet';
 import TabBar from '@/components/TabBar';
-import { Screen, Spinner } from '@/components/ui';
+import { BottomLayer, Screen, Spinner } from '@/components/ui';
 
 export default function CalendarScreen() {
   const { user } = useAuth();
@@ -190,15 +190,17 @@ export default function CalendarScreen() {
 
       <div className="h-[120px]" />
 
-      {/* Nút thêm — nổi trên thanh tab */}
-      <button
-        type="button"
-        onClick={() => setSheet({ event: null })}
-        aria-label="Thêm sự kiện"
-        className="love-gradient absolute bottom-[calc(env(safe-area-inset-bottom)+92px)] right-5 z-20 flex size-14 items-center justify-center rounded-full text-[26px] text-white shadow-[0_10px_30px_rgba(234,47,101,0.4)]"
-      >
-        ＋
-      </button>
+      {/* Nút thêm — nổi trên thanh tab, phải bám đáy khung nhìn y như thanh tab */}
+      <BottomLayer className="z-20">
+        <button
+          type="button"
+          onClick={() => setSheet({ event: null })}
+          aria-label="Thêm sự kiện"
+          className="love-gradient pointer-events-auto absolute bottom-[calc(env(safe-area-inset-bottom)+92px)] right-5 flex size-14 items-center justify-center rounded-full text-[26px] text-white shadow-[0_10px_30px_rgba(234,47,101,0.4)]"
+        >
+          ＋
+        </button>
+      </BottomLayer>
 
       <TabBar />
 
