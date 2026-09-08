@@ -242,3 +242,56 @@ test.describe('Phase 5 — địa điểm và ảnh check-in trên bản đồ',
     await expect(page.getByText(/Địa điểm quen/i)).toBeVisible();
   });
 });
+
+test.describe('Hiệu năng — nạp socket.io theo kiểu động', () => {
+  /*
+   * `socket.io-client` được chuyển sang nạp động để nó không nằm trong gói tải
+   * về đầu tiên (người chưa ghép đôi không dùng tới nó một dòng nào).
+   *
+   * Rủi ro của thay đổi đó là kết nối thời gian thực chết trong im lặng —
+   * không lỗi, không màn trắng, chỉ là vị trí không bao giờ cập nhật. Trace API
+   * ở Phase 2 kiểm WebSocket ở phía SERVER, không kiểm client trong trình duyệt.
+   * Test này lấp đúng chỗ đó.
+   */
+  test('E2E-11 — socket vẫn kết nối được sau khi chuyển sang nạp động', async () => {
+    await page.goto('/ban-do');
+
+    // Khi chưa kết nối, thanh trên cùng hiện "Đang kết nối lại...".
+    // Kết nối xong thì dòng đó phải biến mất.
+    await expect(page.getByText('Đang kết nối lại...')).toBeHidden({ timeout: 20_000 });
+  });
+
+  /*
+   * Chiều ngược lại của E2E-11 — để nó không thành một test rỗng.
+   *
+   * Một khẳng định "đã kết nối" chỉ có nghĩa khi ta biết nó ĐỎ ĐƯỢC lúc kết nối
+   * hỏng. Phải dùng `routeWebSocket`: `page.route` thường KHÔNG chặn WebSocket
+   * (đã đo: 0 request bị chặn), nên nếu chỉ dùng nó thì phép thử này xanh giả.
+   *
+   * Test này mở context riêng vì nó cố tình phá mạng — không được để lây sang
+   * các test khác đang dùng chung một context.
+   */
+  test('E2E-12 — chặn WebSocket thì giao diện PHẢI báo mất kết nối', async ({ browser }) => {
+    const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
+    const p = await ctx.newPage();
+    try {
+      let blocked = 0;
+      await p.routeWebSocket(/socket\.io/, (ws) => {
+        blocked += 1;
+        ws.close();
+      });
+
+      await p.goto('/dang-nhap');
+      await p.getByLabel(/email/i).fill(EMAIL);
+      await p.getByLabel(/mật khẩu/i).fill(PASSWORD);
+      await p.getByRole('button', { name: /đăng nhập/i }).click();
+      await expect(p.getByText(/CHÚNG MÌNH ĐÃ BÊN NHAU/i)).toBeVisible();
+
+      await p.goto('/ban-do');
+      await expect(p.getByText('Đang kết nối lại...')).toBeVisible({ timeout: 15_000 });
+      expect(blocked, 'phải thật sự có WebSocket bị chặn').toBeGreaterThan(0);
+    } finally {
+      await ctx.close();
+    }
+  });
+});

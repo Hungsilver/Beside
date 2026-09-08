@@ -95,6 +95,12 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 - [x] Cách làm đã chứng minh hiệu quả: **tách hàm thuần + unit test trước, nối API sau**
       → F5 chạy đúng ngay lượt trace đầu, không lỗi nào
 
+## Đã chốt (08/09/2026 — đợt 5)
+
+- [x] **Chỉ làm giao diện mobile.** Giao diện PC (breakpoint `lg:`, thanh điều
+      hướng dọc) chỉ làm khi chủ dự án yêu cầu. Phần đã làm thử đã được gỡ bỏ.
+- [x] `socket.io-client` nạp động — gói tải đầu 364 → 323 KB
+
 ## Nợ kỹ thuật (ghi khi phát sinh)
 
 | Ngày | Mô tả | Mức độ | File |
@@ -146,3 +152,6 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 | 08/09 | Bấm ghim ảnh trên bản đồ mới **đưa sang màn Kỷ niệm**, chưa mở ảnh tại chỗ | Thấp | `apps/web/src/screens/MapScreen.tsx` |
 | 08/09 | Chưa lọc ghim ảnh theo thời gian — đang lấy 40 bài mới nhất có toạ độ | Thấp | `apps/web/src/screens/MapScreen.tsx` |
 | 08/09 | Chưa chỉnh được bán kính ngay trên bản đồ lúc chọn chỗ, nên không thấy trước hàng rào rộng cỡ nào so với đường thật | Trung bình | `apps/web/src/components/PlacePicker.tsx` |
+| 08/09 | **Chưa đo hiệu năng trên mạng chậm thật** — con số 41 KB tiết kiệm được là đo tĩnh trên bản build, chưa ai mở app bằng 3G thật | Trung bình | `apps/web/` |
+| 08/09 | Gói chính còn 323 KB (gzip 99 KB); chưa phân tích chi tiết React / TanStack Query / Zod đóng góp bao nhiêu | Thấp | `apps/web/vite.config.ts` |
+| 08/09 | **Giao diện PC chưa làm** (chủ dự án hoãn) — màn hình rộng vẫn hiện cột 430px ở giữa | Chờ yêu cầu | `apps/web/src/components/ui.tsx` |

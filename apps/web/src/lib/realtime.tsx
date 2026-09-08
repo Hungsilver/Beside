@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { io, type Socket } from 'socket.io-client';
+import type { Socket } from 'socket.io-client';
 import {
   RT_EVENTS,
   RT_NAMESPACE,
@@ -45,6 +45,34 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     // Chưa ghép đôi thì không có gì để nghe.
     if (!coupleId) return;
 
+    /*
+     * Nạp `socket.io-client` theo kiểu ĐỘNG.
+     *
+     * Nó là một trong những thư viện nặng nhất của app, mà người chưa ghép đôi
+     * thì không dùng tới một dòng nào — vậy mà trước đây nó nằm trong gói tải
+     * về đầu tiên, chặn cả lần vẽ màn hình đầu.
+     *
+     * `cancelled` là bắt buộc: người dùng có thể rời màn hình trước khi mạng
+     * trả về, và lúc đó hàm dọn dẹp đã chạy xong rồi. Không có cờ này thì ta
+     * tạo ra một socket không ai gỡ — rò kết nối.
+     */
+    let socket: Socket | null = null;
+    let cancelled = false;
+
+    void import('socket.io-client').then(({ io }) => {
+      if (cancelled) return;
+      socket = connect(io);
+    });
+
+    return () => {
+      cancelled = true;
+      socket?.removeAllListeners();
+      socket?.disconnect();
+      socketRef.current = null;
+      setConnected(false);
+    };
+
+    function connect(io: typeof import('socket.io-client').io): Socket {
     const socket = io(RT_NAMESPACE, {
       // Đường dẫn tương đối → dev đi qua proxy của Vite, production đi qua Caddy.
       // Không bao giờ hardcode domain (xem ARCHITECTURE.md phần đầu).
@@ -78,12 +106,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       setPartnerPresence(e);
     });
 
-    return () => {
-      socket.removeAllListeners();
-      socket.disconnect();
-      socketRef.current = null;
-      setConnected(false);
-    };
+    return socket;
+    }
   }, [coupleId, myId]);
 
   const sendLocation = useCallback((payload: unknown): boolean => {
