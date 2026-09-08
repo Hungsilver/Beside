@@ -285,6 +285,14 @@ async function checkFlows() {
     TRACE_BASE_URL: `${HTTPS}/api/v1`,
     TRACE_INSECURE_TLS: '1',
   });
+
+  sh(`${COMPOSE} restart api`, { allowFail: true });
+  await waitHealthy();
+
+  runTrace('apps/api/test/trace-phase4-milestones.mjs', 'Phase 4 — mốc kỷ niệm', {
+    TRACE_BASE_URL: `${HTTPS}/api/v1`,
+    TRACE_INSECURE_TLS: '1',
+  });
 }
 
 async function waitHealthy() {

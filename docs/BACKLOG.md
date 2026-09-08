@@ -86,6 +86,15 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 - [x] Làm mờ vị trí rộng hơn hàng rào ⇒ vẫn ghi cho chính chủ nhưng **không báo** cho người kia
 - [x] Dùng lại hằng số Phase 0 (`GEOFENCE_EXIT_HYSTERESIS_M`, `PLACE_RADIUS_*`)
 
+## Đã chốt (08/09/2026 — Phase 4, F5 Mốc kỷ niệm)
+
+- [x] Mốc **tự sinh** (mốc ngày, kỷ niệm năm, sinh nhật) không lưu DB — tính lúc đọc
+- [x] Mốc **tự thêm** mặc định lặp hằng năm; `yearly: false` cho việc chỉ xảy ra một lần
+- [x] Ghi/sửa trả về **cả danh sách mới** đã sắp xếp
+- [x] Nhắc mốc **mỗi ngày 08:00 giờ VN**, ở các nấc còn 7/3/1/0 ngày
+- [x] Cách làm đã chứng minh hiệu quả: **tách hàm thuần + unit test trước, nối API sau**
+      → F5 chạy đúng ngay lượt trace đầu, không lỗi nào
+
 ## Nợ kỹ thuật (ghi khi phát sinh)
 
 | Ngày | Mô tả | Mức độ | File |
@@ -122,3 +131,7 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 | 08/09 | Chưa có case hai người cùng ở trong một hàng rào (logic tách theo `userId` nên về lý là đúng) | Thấp | `apps/api/test/trace-phase4-places.mjs` |
 | 08/09 | Geofence dùng `haversineMeters` trong RAM, chưa dùng `ST_DWithin` của PostGIS — đủ cho 20 địa điểm, cần đổi nếu tăng nhiều | Thấp | `apps/api/src/places/geofence.service.ts` |
 | 08/09 | `npm run verify:local` giờ mất ~2,5 phút chỉ riêng bộ trace địa điểm (phải chờ thật 2×65 giây vì ngưỡng "ở đủ lâu") | Thấp | `apps/api/test/trace-phase4-places.mjs` |
+| 08/09 | Job nhắc mốc có 17 unit test nhưng **chưa ai chờ tới 08:00 giờ VN thật** để xem nó chạy (giống nợ của job nhắc lịch) | Trung bình | `apps/api/src/milestones/milestone-reminder.job.ts` |
+| 08/09 | **Chưa cho chọn mốc nào muốn được nhắc** — hiện mọi mốc đều nhắc như nhau | Thấp | `apps/api/src/milestones/` |
+| 08/09 | Mốc tự sinh **không tắt được** — ai không muốn thấy "1460 ngày bên nhau" thì đành chịu | Thấp | `packages/shared/src/milestone.schema.ts` |
+| 08/09 | Chưa gắn được ảnh cho mốc kỷ niệm — dữ liệu đã có sẵn ở `posts`, chỉ thiếu phần nối | Thấp | `apps/web/src/screens/MilestonesScreen.tsx` |

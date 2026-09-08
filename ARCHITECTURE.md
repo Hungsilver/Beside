@@ -8,7 +8,7 @@
 - **Domain:** `https://easytech.io.vn` (tạm dùng — đã mua). Sẽ đổi sang domain `beside` sau
   ⇒ **mọi URL phải lấy từ biến môi trường, không hardcode domain ở bất kỳ đâu**
 - **Cập nhật lần cuối:** 2026-09-08
-- **Trạng thái:** `PHASE 4` — F4 Lịch trình ✅ · F7 Thông báo đẩy ✅ · F6 Địa điểm & Geofence ✅ · còn F5 Milestone
+- **Trạng thái:** `PHASE 4` ✅ **xong phần tính năng** — F4 Lịch trình · F7 Thông báo đẩy · F6 Địa điểm & Geofence · F5 Mốc kỷ niệm
   - Phase 1: `docs/traces/phase-1-auth-pairing.md` — 53/53 case
   - Phase 2: `docs/traces/phase-2-realtime-location.md` — 29/29 case
   - Rà soát: `docs/traces/phase-2-review.md` — 21/21 case (bắt được 2 lỗi rò rỉ quyền riêng tư)
@@ -16,8 +16,9 @@
   - Phase 4 (F4): `docs/traces/phase-4-events.md` — 37/37 case (bắt được 2 lỗi, L22–L23)
   - Phase 4 (F7): `docs/traces/phase-4-push.md` — 21/21 case (bắt được 3 lỗi, L24–L26)
   - Phase 4 (F6): `docs/traces/phase-4-places.md` — 27/27 case (bắt được 3 lỗi, L27–L29)
-  - Tổng: **227 unit test** + **222 case trace**, typecheck + lint sạch cả 3 workspace
-  - ✅ `npm run verify:local` → **35/35 mục đạt** trên Docker thật
+  - Phase 4 (F5): `docs/traces/phase-4-milestones.md` — 25/25 case (không lỗi mới)
+  - Tổng: **270 unit test** + **247 case trace**, typecheck + lint sạch cả 3 workspace
+  - ✅ `npm run verify:local` → **36/36 mục đạt** trên Docker thật
     (6/6 container healthy: db · redis · api · web · caddy · minio), đi qua Caddy HTTPS
 - **Triển khai:** chủ dự án tự deploy — hướng dẫn ở `docs/DEPLOY.md`
 
@@ -539,8 +540,10 @@ GET    /events/:id                                                              
 PATCH  /events/:id                 chỉ người tạo                                   ✅
 DELETE /events/:id                 chỉ người tạo                                   ✅
 
-GET    /love/summary               {daysTogether, nextMilestone, streak}
-GET|POST /milestones
+GET    /milestones                 mốc sắp tới — trộn tự sinh + tự thêm         ✅
+POST   /milestones                 {title, date, emoji, yearly} → cả danh sách  ✅
+PATCH  /milestones/:id             → cả danh sách mới                           ✅
+DELETE /milestones/:id             chỉ xoá được mốc TỰ THÊM                     ✅
 
 GET    /push/public-key            khoá công khai VAPID — endpoint PUBLIC        ✅
 POST   /push/subscribe             {endpoint, keys, userAgent?}                  ✅
@@ -640,8 +643,8 @@ Bắt buộc tối thiểu: 1 happy path + 3 edge case + 1 case lỗi.
 | **1** | ✅ Hạ tầng: docker compose, Caddy+TLS, Postgres+PostGIS, NestJS, Auth, Pairing, đếm ngày yêu | Đăng nhập & ghép đôi chạy thật · 39/39 trace · 56 unit test |
 | **2** | ✅ Vị trí realtime: Socket.IO, Kalman, MapLibre, trail, presence, ghost mode, làm mờ vị trí, dọn lịch sử | Xem nhau di chuyển trên bản đồ · 29/29 trace |
 | **3** | ✅ Check-in ảnh + dòng kỷ niệm + MinIO + sharp (xoay & xoá EXIF), phân trang con trỏ, cảm xúc | Đăng & xem kỷ niệm · 34/34 trace |
-| **4** | 🔸 F4 Lịch trình ✅ (37/37) · F7 Thông báo đẩy + nhắc lịch ✅ (21/21) · F6 Địa điểm & Geofence ✅ (27/27) · còn F5 Milestone, vẽ địa điểm + ảnh check-in lên bản đồ *(đang làm)* | Đủ tính năng cốt lõi |
-| **5** | Giao diện PC (≥1024px), tối ưu hiệu năng, PWA offline | Bản 1.0 |
+| **4** | ✅ F4 Lịch trình (37/37) · F7 Thông báo đẩy + nhắc lịch (21/21) · F6 Địa điểm & Geofence (27/27) · F5 Mốc kỷ niệm (25/25) | Đủ tính năng cốt lõi |
+| **5** | Vẽ địa điểm + ảnh check-in lên bản đồ · giao diện PC (≥1024px) · tối ưu hiệu năng · PWA offline *(tiếp theo)* | Bản 1.0 |
 | **6** | *(tuỳ chọn)* APK Android qua Capacitor cho tracking nền | File APK sideload |
 
 ---
@@ -692,6 +695,10 @@ Bắt buộc tối thiểu: 1 happy path + 3 edge case + 1 case lỗi.
 | 2026-09-08 | Service worker chuyển từ `generateSW` sang **`injectManifest`** | Cần `addEventListener('push')` do mình viết, bản sinh tự động không chèn code riêng vào được | Phải tự viết luôn phần runtime caching (MapLibre, tile bản đồ) |
 | 2026-09-08 | Thiếu khoá VAPID = **tắt tính năng**, không phải lỗi boot; nhưng khai báo **một nửa** thì từ chối boot | Thông báo là tính năng phụ, không được làm sập API. Còn nửa vời là cấu hình sai rõ ràng | Người deploy có thể quên bật mà không biết — màn Cài đặt nói rõ "máy chủ chưa bật" |
 | 2026-09-08 | Đăng ký đẩy trùng `endpoint` thì **chuyển chủ**, không nhân đôi | Hai người dùng chung một máy: người đăng nhập sau sẽ nhận thông báo của người trước | Người trước im lặng mất thông báo trên máy đó — đúng ý đồ |
+| 2026-09-08 | Mốc tự sinh (mốc ngày, kỷ niệm năm, sinh nhật) **không lưu DB**, tính lúc đọc | Chúng suy ra được hoàn toàn từ ngày yêu + ngày sinh; lưu là tạo ra hai nguồn sự thật phải giữ đồng bộ | Mỗi lần đọc phải tính lại — rẻ, vì chỉ vài chục phép cộng ngày |
+| 2026-09-08 | Ghi/sửa mốc trả về **cả danh sách mới** thay vì một bản ghi | Thêm một mốc có thể chen vào giữa và đổi thứ tự mọi thứ; trả cả danh sách thì client khỏi gọi thêm vòng nữa | Payload lớn hơn chút — danh sách có trần 400 ngày nên vẫn nhỏ |
+| 2026-09-08 | Nhắc mốc **mỗi ngày 08:00 giờ VN**, ở các nấc còn 7/3/1/0 ngày | Mốc kỷ niệm là chuyện của cả một ngày, không phải một giờ hẹn — bắn lúc 3 giờ sáng chỉ làm người ta khó chịu | Server chết qua 08:00 thì mất lời nhắc hôm đó; các nấc sau vẫn nhắc lại |
+| 2026-09-08 | Tách phần tính ngày tháng thành **hàm thuần** rồi mới nối vào service | F5 chạy đúng ngay lượt trace đầu (25/25), trong khi F6 để logic lẫn trong service thì dính 3 lỗi khâu kiểm thử. Hàm thuần nhận `now` làm tham số nên không phải chờ thật | Thêm một lớp trung gian giữa service và phép tính |
 | 2026-09-08 | Hàng rào ảo có **ba chốt chặn** chống báo sai (§6.4) | Thông báo vị trí sai tệ hơn hẳn không có thông báo — mất lòng tin vào cả tính năng | Báo chậm hơn tối đa 60 giây so với lúc thật sự tới nơi |
 | 2026-09-08 | Trạng thái hàng rào để ở **bảng riêng** `GeofenceState`, không suy từ sự kiện gần nhất | Mỗi điểm vị trí đều phải hỏi "trong hay ngoài"; truy vấn "sự kiện mới nhất theo từng địa điểm" là câu khó và tốn | Thêm một bảng phải giữ đồng bộ khi dời/xoá địa điểm |
 | 2026-09-08 | Đối chiếu hàng rào chạy **không chờ** trong luồng nhận vị trí | Địa điểm là việc phụ, không được làm chậm đường thời gian thực | Đọc `/places` ngay sau khi gửi điểm có thể thấy trạng thái cũ |

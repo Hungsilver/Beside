@@ -68,9 +68,12 @@ export default function HomeScreen() {
         </Link>
       </header>
 
-      {/* Bộ đếm ngày yêu */}
+      {/* Bộ đếm ngày yêu — bấm vào để xem đủ danh sách mốc sắp tới */}
       {love && (
-        <section className="love-gradient relative overflow-hidden rounded-[var(--radius-hero)] p-5 text-white shadow-[0_18px_48px_rgba(139,92,246,0.16)]">
+        <Link
+          to="/ngay-yeu"
+          className="love-gradient relative block overflow-hidden rounded-[var(--radius-hero)] p-5 text-white shadow-[0_18px_48px_rgba(139,92,246,0.16)]"
+        >
           <p className="text-[12px] font-bold tracking-[1.2px] opacity-90">
             CHÚNG MÌNH ĐÃ BÊN NHAU
           </p>
@@ -102,7 +105,11 @@ export default function HomeScreen() {
               </div>
             </div>
           )}
-        </section>
+
+          <span className="mt-4 block text-[12px] font-semibold opacity-90">
+            Xem mọi mốc sắp tới →
+          </span>
+        </Link>
       )}
 
       {/* Thẻ người ấy */}

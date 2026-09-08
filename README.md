@@ -136,7 +136,7 @@ infra/
   nginx/web.conf         ← phục vụ file tĩnh PWA, SPA fallback
   postgres/init/         ← bật PostGIS, unaccent, ép timezone UTC
 packages/shared/         ← Zod schema + logic ngày tháng dùng CHUNG cho API và web
-apps/api/                ← NestJS + Prisma  (auth, me, couples, locations + WebSocket, posts, events, push, places)
+apps/api/                ← NestJS + Prisma  (auth, me, couples, locations, posts, events, push, places, milestones)
 apps/web/                ← React 19 + Vite + Tailwind v4 + PWA
 mockup/
   index.html             ← phác thảo Phase 0 (9 màn, để duyệt hướng thiết kế)
@@ -155,6 +155,7 @@ docs/BACKLOG.md          ← ý tưởng & việc chờ quyết định
 | Phiên đăng nhập | JWT 15 phút + refresh cookie httpOnly 30 ngày, xoay vòng + phát hiện token bị đánh cắp |
 | Ghép đôi | mã 6 ký tự (bỏ 0/1/O/I), hết hạn 24h, chống race khi 2 người bấm cùng lúc |
 | Đếm ngày yêu | tính theo ngày lịch giờ VN, có mốc kế tiếp + tiến độ |
+| **Mốc kỷ niệm** | mốc ngày (100/365/1000…), kỷ niệm hằng năm và sinh nhật tự tính từ hồ sơ; thêm được mốc riêng, lặp hằng năm hoặc một lần |
 | Huỷ ghép đôi | phải xác nhận, xoá couple + toàn bộ dữ liệu chung |
 | Nút nhắn tin | deep-link Zalo / Messenger / gọi / SMS — **không có chat trong app** |
 | Sửa hồ sơ | màn `/cai-dat`: tên, ngày sinh, app nhắn tin + số, ngày kỷ niệm, huỷ ghép đôi |
@@ -175,8 +176,8 @@ docs/BACKLOG.md          ← ý tưởng & việc chờ quyết định
 
 ## Chưa có
 
-Còn lại của Phase 4: mốc kỷ niệm (F5), và vẽ địa điểm + ảnh check-in lên bản đồ.
-Giao diện PC ở Phase 5. Xem lộ trình ở `ARCHITECTURE.md §9`.
+Phase 4 đã xong phần tính năng. Còn lại: vẽ địa điểm + ảnh check-in lên bản đồ,
+giao diện PC (Phase 5). Xem lộ trình ở `ARCHITECTURE.md §9`.
 
 > Thông báo đẩy cần **khoá VAPID** trên server. Chưa cấu hình thì tính năng tự tắt
 > và app vẫn chạy bình thường — cách sinh khoá xem `docs/DEPLOY.md §3`.

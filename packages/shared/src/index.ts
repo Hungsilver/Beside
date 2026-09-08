@@ -11,6 +11,7 @@ export * from './post.schema';
 export * from './event.schema';
 export * from './push.schema';
 export * from './place.schema';
+export * from './milestone.schema';
 export * from './love';
 export * from './messaging';
 

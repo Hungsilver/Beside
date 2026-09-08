@@ -332,9 +332,15 @@ model Milestone {
   coupleId String
   couple   Couple        @relation(fields: [coupleId], references: [id], onDelete: Cascade)
   title    String
+  /// Ngày trôi nổi (§6.3): "kỷ niệm 11/11" là một ô trên tờ lịch, không phải
+  /// một khoảnh khắc — nên lưu kiểu Date, không kèm múi giờ.
   date     DateTime      @db.Date
   kind     MilestoneKind
   emoji    String        @default("💖")
+  /// Lặp lại hằng năm (mặc định) hay chỉ xảy ra đúng một lần.
+  /// Mốc một lần đã qua thì biến mất khỏi danh sách "sắp tới".
+  yearly   Boolean       @default(true)
+  createdAt DateTime     @default(now())
 
   @@index([coupleId, date])
   @@map("milestones")

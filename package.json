@@ -38,6 +38,7 @@
     "trace:phase3": "node apps/api/test/trace-phase3-posts.mjs",
     "trace:phase4": "node apps/api/test/trace-phase4-events.mjs",
     "trace:push": "node apps/api/test/trace-phase4-push.mjs",
-    "trace:places": "node apps/api/test/trace-phase4-places.mjs"
+    "trace:places": "node apps/api/test/trace-phase4-places.mjs",
+    "trace:milestones": "node apps/api/test/trace-phase4-milestones.mjs"
   }
 }

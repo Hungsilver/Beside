@@ -18,6 +18,7 @@ const CheckinScreen = lazy(() => import('@/screens/CheckinScreen'));
 const FeedScreen = lazy(() => import('@/screens/FeedScreen'));
 const CalendarScreen = lazy(() => import('@/screens/CalendarScreen'));
 const PlacesScreen = lazy(() => import('@/screens/PlacesScreen'));
+const MilestonesScreen = lazy(() => import('@/screens/MilestonesScreen'));
 
 export default function App() {
   const { user, isRestoring } = useAuth();
@@ -89,6 +90,16 @@ export default function App() {
             <RequireCouple>
               <Suspense fallback={<Spinner label="Đang mở địa điểm..." />}>
                 <PlacesScreen />
+              </Suspense>
+            </RequireCouple>
+          }
+        />
+        <Route
+          path="/ngay-yeu"
+          element={
+            <RequireCouple>
+              <Suspense fallback={<Spinner label="Đang tính ngày yêu..." />}>
+                <MilestonesScreen />
               </Suspense>
             </RequireCouple>
           }
