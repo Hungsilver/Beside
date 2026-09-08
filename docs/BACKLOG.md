@@ -155,3 +155,7 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 | 08/09 | **Chưa đo hiệu năng trên mạng chậm thật** — con số 41 KB tiết kiệm được là đo tĩnh trên bản build, chưa ai mở app bằng 3G thật | Trung bình | `apps/web/` |
 | 08/09 | Gói chính còn 323 KB (gzip 99 KB); chưa phân tích chi tiết React / TanStack Query / Zod đóng góp bao nhiêu | Thấp | `apps/web/vite.config.ts` |
 | 08/09 | **Giao diện PC chưa làm** (chủ dự án hoãn) — màn hình rộng vẫn hiện cột 430px ở giữa | Chờ yêu cầu | `apps/web/src/components/ui.tsx` |
+| 08/09 | **PWA offline mức 2 chưa làm được** — mất mạng vẫn ra màn đăng nhập vì khôi phục phiên cần gọi mạng. Cần chủ dự án quyết định về đánh đổi bảo mật (xem `docs/traces/phase-5-pwa-offline.md` §4) | Chờ quyết định | `apps/web/src/lib/auth-context.tsx` |
+| 08/09 | Chưa có màn báo "đang xem bản offline" — người dùng không biết dữ liệu đang thấy là cũ hay mới | Trung bình | `apps/web/src/` |
+| 08/09 | `registerType: 'prompt'` nhưng **chưa có giao diện hỏi** người dùng có muốn cập nhật bản mới không | Trung bình | `apps/web/src/` |
+| 08/09 | Toàn bộ đo đạc offline chạy với cờ bỏ qua lỗi chứng chỉ; chưa kiểm chứng trên production có Let's Encrypt thật | Trung bình | `apps/web/playwright.config.ts` |

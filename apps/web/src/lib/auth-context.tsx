@@ -97,6 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       // Dù server lỗi vẫn phải đăng xuất ở máy này.
       clearSession();
+      clearOfflineCache();
     }
   }, [clearSession]);
 
@@ -116,4 +117,22 @@ export function useAuth(): AuthState {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth phải nằm trong <AuthProvider>');
   return ctx;
+}
+
+/**
+ * Xoá kho dữ liệu offline khi đăng xuất.
+ *
+ * Service worker giữ bản sao của lịch, kỷ niệm, địa điểm… để xem được lúc mất
+ * mạng. Dữ liệu riêng tư của một cặp đôi thì không nên nằm lại trên máy sau khi
+ * họ đã chủ động thoát.
+ *
+ * Nuốt mọi lỗi: máy không có service worker (Safari cũ, chế độ ẩn danh) vẫn phải
+ * đăng xuất được bình thường.
+ */
+function clearOfflineCache(): void {
+  try {
+    navigator.serviceWorker?.controller?.postMessage({ type: 'CLEAR_API_CACHE' });
+  } catch {
+    /* không có service worker thì thôi */
+  }
 }

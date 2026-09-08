@@ -20,7 +20,8 @@
   - Sửa lỗi: `docs/traces/fix-lint-khong-chay.md` — `npm run lint` không kiểm gì suốt 4 phase (L31), 9/9 case
   - Kiểm thử: `docs/traces/e2e-trinh-duyet-that.md` — E2E Playwright 390×844, 12/12 case
   - Phase 5: `docs/traces/phase-5-ban-do.md` — địa điểm & ảnh trên bản đồ, 15/15 E2E
-  - Phase 5: `docs/traces/phase-5-hieu-nang.md` — tách socket.io khỏi gói tải đầu, 17/17 E2E
+  - Phase 5: `docs/traces/phase-5-hieu-nang.md` — tách socket.io khỏi gói tải đầu
+  - Phase 5: `docs/traces/phase-5-pwa-offline.md` — PWA offline mức 1, 4/4 case (mức 2 chưa làm được)
   - Phase 4 (F5): `docs/traces/phase-4-milestones.md` — 25/25 case (không lỗi mới)
   - Tổng: **270 unit test** + **247 case trace**, typecheck + lint sạch cả 3 workspace
   - ✅ `npm run verify:local` → **38/38 mục đạt** trên Docker thật (gồm chốt ESLint và E2E trình duyệt)
@@ -639,7 +640,7 @@ Bắt buộc tối thiểu: 1 happy path + 3 edge case + 1 case lỗi.
 | `npm run typecheck` | `tsc --noEmit` cho cả 3 workspace, **bao gồm file `*.spec.ts`** | `verify:local` mục 4 |
 | `npm run lint` | **ESLint thật** (`eslint.config.mjs` ở gốc) cho cả 3 workspace | `verify:local` mục 4 |
 | `npm run test` | Vitest — hiện 270 unit test | `verify:local` mục 4 |
-| `npm run e2e` | **Playwright ở 390×844** trên bản build thật trong Docker — 17 test | `verify:local` mục 4 |
+| `npm run e2e` | **Playwright ở 390×844** trên bản build thật trong Docker — 21 test (17 mobile + 4 offline) | `verify:local` mục 4 |
 
 > ⚠️ **Bài học đắt nhất của dự án này (L31).** Từ Phase 1 tới Phase 4,
 > `npm run lint` chạy `--workspaces --if-present` mà **không workspace nào có
@@ -682,7 +683,7 @@ Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L
 | **2** | ✅ Vị trí realtime: Socket.IO, Kalman, MapLibre, trail, presence, ghost mode, làm mờ vị trí, dọn lịch sử | Xem nhau di chuyển trên bản đồ · 29/29 trace |
 | **3** | ✅ Check-in ảnh + dòng kỷ niệm + MinIO + sharp (xoay & xoá EXIF), phân trang con trỏ, cảm xúc | Đăng & xem kỷ niệm · 34/34 trace |
 | **4** | ✅ F4 Lịch trình (37/37) · F7 Thông báo đẩy + nhắc lịch (21/21) · F6 Địa điểm & Geofence (27/27) · F5 Mốc kỷ niệm (25/25) | Đủ tính năng cốt lõi |
-| **5** | 🔸 Vẽ địa điểm + ảnh check-in lên bản đồ ✅ · tách socket.io khỏi gói tải đầu ✅ · còn PWA offline. **Giao diện PC hoãn lại theo yêu cầu của chủ dự án** — chỉ làm khi được yêu cầu | Bản 1.0 |
+| **5** | 🔸 Địa điểm + ảnh check-in lên bản đồ ✅ · tách socket.io khỏi gói tải đầu ✅ · PWA offline **mức 1** ✅ (mức 2 chờ quyết định, xem trace) · **Giao diện PC hoãn theo yêu cầu chủ dự án** | Bản 1.0 |
 | **6** | *(tuỳ chọn)* APK Android qua Capacitor cho tracking nền | File APK sideload |
 
 ---
@@ -744,6 +745,8 @@ Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L
 | 2026-09-08 | Dùng `haversineMeters` trong RAM, chưa dùng `ST_DWithin` của PostGIS | Tối đa 20 địa điểm mỗi couple — chênh lệch không đáng kể, và hàm thuần thì unit test được | Nếu số địa điểm tăng nhiều thì phải chuyển sang truy vấn không gian |
 | 2026-09-08 | Dùng lại hằng số `GEOFENCE_EXIT_HYSTERESIS_M`/`PLACE_RADIUS_*` của Phase 0 thay vì đặt núm mới | R0: bản kế hoạch là nguồn sự thật; hai núm cùng điều khiển một thứ là mầm lệch (trace L29) | Khoảng chênh là cộng 30 m cố định, không co giãn theo bán kính |
 | 2026-09-08 | Thêm migration `20260907000000_enable_postgis` chạy trước mọi migration khác | Shadow database của `migrate dev` là DB trắng, không có PostGIS nên migration cột `geog` chết (trace L22) | Trùng việc với `infra/postgres/init/01-extensions.sql`, nhưng mọi câu lệnh đều IF NOT EXISTS nên vô hại |
+| 2026-09-08 | PWA offline chỉ làm **mức 1** (vỏ app + cache dữ liệu đọc), **không** khôi phục phiên từ hồ sơ lưu máy | Mức 2 đòi coi "mất mạng" khác "chưa đăng nhập" — một đánh đổi về bảo mật cần chủ dự án đồng ý, và tôi chưa kiểm chứng được nó chạy (xem trace §4) | Mất mạng vẫn ra màn đăng nhập; vỏ app tải được nhưng chưa vào tới dữ liệu |
+| 2026-09-08 | **KHÔNG cache `/locations/*`** trong service worker | Vị trí phải luôn mới nhất (quyết định từ Phase 2). Hiện vị trí cũ khi mất mạng dễ làm người ta tin nhầm "người ấy đang ở đó" | Bản đồ trống hoàn toàn khi mất mạng |
 | 2026-09-08 | **Chỉ làm giao diện mobile**; giao diện PC hoãn tới khi chủ dự án yêu cầu | Chủ dự án chốt: "tập trung vào mobile thôi". App dành cho hai người, dùng trên điện thoại là chính | Màn hình rộng vẫn hiện cột 430px ở giữa — chấp nhận được, sẽ làm sau |
 | 2026-09-08 | `socket.io-client` **nạp động**, không nằm trong gói tải đầu | Người chưa ghép đôi không dùng tới nó dòng nào, mà nó chặn lần vẽ màn hình đầu. Gói chính 364 → 323 KB | Cần cờ `cancelled` chống tạo socket sau khi unmount; thời gian thực bắt đầu chậm hơn một nhịp mạng |
 | 2026-09-08 | Hàng rào vẽ bằng **đa giác toạ độ**, không dùng lớp `circle` của MapLibre | Lớp `circle` nhận bán kính bằng **pixel**; hàng rào 150 m là khoảng cách thật ngoài đời, phải co giãn theo bản đồ | Phải tự tính hình học — `circlePolygon` ở shared, 7 unit test |

@@ -38,11 +38,34 @@ export default defineConfig({
        * chiều cao khung nhìn — vẫn nằm trong danh sách phải bấm tay.
        */
       name: 'mobile-390x844',
+      // Nhóm offline cần trình duyệt có service worker (cờ riêng), nên loại ra
+      // khỏi nhóm này — nếu không nó chạy lây và hỏng vì không có SW.
+      grepInvert: /@offline/,
       use: {
         ...devices['iPhone 14'],
         browserName: 'chromium',
         isMobile: true,
         hasTouch: true,
+      },
+    },
+    {
+      /*
+       * Nhóm kiểm offline — chạy trong trình duyệt CÓ service worker.
+       *
+       * Caddy cấp chứng chỉ bằng CA nội bộ cho `localhost`, và Chromium từ chối
+       * đăng ký service worker trên chứng chỉ đó (đã đo: `hasSW=false`). Cờ
+       * `--ignore-certificate-errors` làm nó chịu đăng ký, nhờ vậy phần offline
+       * kiểm được ngay ở máy dev thay vì phải chờ lên production.
+       *
+       * Chỉ bật cho nhóm này: các nhóm khác chạy KHÔNG có service worker, để
+       * cache không làm chúng thấy dữ liệu cũ.
+       */
+      name: 'offline',
+      grep: /@offline/,
+      use: {
+        ...devices['iPhone 14'],
+        browserName: 'chromium',
+        launchOptions: { args: ['--ignore-certificate-errors'] },
       },
     },
   ],
