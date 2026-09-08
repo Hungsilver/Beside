@@ -102,7 +102,7 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 | 07/09 | Chưa test hành vi khi **Redis chết giữa chừng** (đang chạy rồi mất kết nối). Đã test nhánh "không có Redis từ đầu" và nhánh "có Redis", chưa test lúc chuyển trạng thái | Trung bình | `apps/api/src/common/redis/redis.service.ts` |
 | 07/09 | Chưa test hai instance API dùng chung một Redis — hạn mức và cache lúc đó mới thật sự cần Redis | Thấp (đang chạy 1 instance) | `apps/api/src/locations/` |
 | 07/09 | Icon PWA đang là hình trái tim sinh bằng script, cần bộ icon thật | Thấp | `apps/web/public/icons/` |
-| 07/09 | Chưa có E2E Playwright ở viewport 390×844. `api-client` đã có 10 test, nhưng **render React chưa được test** (cần jsdom + Testing Library) | Trung bình | `apps/web/src/` |
+| ~~07/09~~ | ~~Chưa có E2E Playwright ở 390×844; render React chưa được test~~ → **ĐÃ SỬA** 08/09: 6 màn đều có test dựng được nội dung thật và không lỗi JS | ~~Trung bình~~ | — |
 | 07/09 | Chưa test job dọn lịch sử vị trí trên dữ liệu quá 7/90 ngày (cần tách đồng hồ ra khỏi service) | Trung bình | `apps/api/src/locations/location-retention.job.ts` |
 | 07/09 | Chưa test kịch bản rớt mạng giữa chuyến đi rồi nối lại | Trung bình | `apps/web/src/lib/realtime.tsx` |
 | 07/09 | `watchPosition` / Wake Lock / MapLibre chỉ chạy được trong trình duyệt thật — phần ghép nối giao diện chưa được bấm thử. Đã có `https://localhost` nên thử được | Cao | `apps/web/src/lib/use-live-location.ts` |
@@ -136,7 +136,10 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 | 08/09 | Mốc tự sinh **không tắt được** — ai không muốn thấy "1460 ngày bên nhau" thì đành chịu | Thấp | `packages/shared/src/milestone.schema.ts` |
 | 08/09 | Chưa gắn được ảnh cho mốc kỷ niệm — dữ liệu đã có sẵn ở `posts`, chỉ thiếu phần nối | Thấp | `apps/web/src/screens/MilestonesScreen.tsx` |
 | ~~08/09~~ | ~~`npm run lint` không kiểm gì cả~~ → **ĐÃ SỬA** cùng ngày: dựng ESLint thật ở `eslint.config.mjs`, tìm ra 27 lỗi, đã sửa hết. Xem `docs/traces/fix-lint-khong-chay.md` | ~~Cao~~ | — |
-| 08/09 | Lỗi khung bản đồ cao 0px **không test tự động nào bắt được** — typecheck/unit test đều xanh vì đây là lỗi cascade CSS chỉ lộ ra khi render thật. Cần E2E Playwright ở 390×844 khẳng định khung bản đồ có chiều cao > 0 | Cao | `apps/web/src/components/CoupleMap.tsx` |
+| ~~08/09~~ | ~~Lỗi khung bản đồ 0px không test nào bắt được~~ → **ĐÃ SỬA**: E2E Playwright 390×844, 12 test, đã kiểm chứng là đỏ được với bản có lỗi. Xem `docs/traces/e2e-trinh-duyet-that.md` | ~~Cao~~ | — |
 | 08/09 | Hai cảnh báo `react-refresh/only-export-components` (`auth-context.tsx`, `realtime.tsx` vừa xuất component vừa xuất hook) — chỉ ảnh hưởng tốc độ hot-reload lúc dev | Thấp | `apps/web/src/lib/` |
 | 08/09 | **Chưa có Prettier** — định dạng code dựa vào thói quen, không có công cụ chốt lại | Thấp | gốc dự án |
 | 08/09 | **Chưa có CI** — `verify:local` là chốt chặn duy nhất và phải chạy bằng tay. Một lần quên là một lần lọt | Trung bình | gốc dự án |
+| 08/09 | E2E chạy trên **Chromium**, chưa chạy WebKit/Safari — những thứ riêng của iOS (Web Push, `<input type="date">`, thanh địa chỉ co giãn) vẫn phải bấm tay | Trung bình | `apps/web/playwright.config.ts` |
+| 08/09 | E2E mới chỉ **mở màn và đo**, chưa test luồng có tương tác (đăng ảnh, tạo sự kiện) — mỗi luồng cần dọn dữ liệu sau đó | Trung bình | `apps/web/e2e/app.spec.ts` |
+| 08/09 | Chưa test được **hai người cùng lúc** nhìn thấy nhau di chuyển: cần hai context song song, mà điều đó đụng đúng cơ chế xoay vòng refresh token | Trung bình | `apps/web/e2e/` |

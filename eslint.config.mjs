@@ -37,6 +37,10 @@ export default tseslint.config(
        */
       '**/vite.config.ts',
       '**/vitest.config.ts',
+      '**/playwright.config.ts',
+      'apps/web/e2e/**',
+      'apps/web/playwright-report/**',
+      'apps/web/test-results/**',
     ],
   },
 

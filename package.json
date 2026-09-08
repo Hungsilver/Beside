@@ -18,6 +18,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "e2e": "playwright test -c apps/web/playwright.config.ts",
     "test": "npm run test --workspaces --if-present",
     "_comment_db": "Các lệnh Prisma PHẢI chạy từ gốc repo vì .env nằm ở đây",
     "db:generate": "prisma generate --schema apps/api/prisma/schema.prisma",

@@ -31,3 +31,6 @@ apps/api/prisma/*.db-journal
 # Playwright
 playwright-report/
 test-results/
+apps/web/e2e/.auth/
+apps/web/test-results/
+apps/web/playwright-report/

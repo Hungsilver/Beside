@@ -18,9 +18,10 @@
   - Phase 4 (F6): `docs/traces/phase-4-places.md` — 27/27 case (bắt được 3 lỗi, L27–L29)
   - Sửa lỗi: `docs/traces/fix-ban-do-khong-hien.md` — khung bản đồ cao 0px do cascade layer của Tailwind v4 (L30), 7/7 case
   - Sửa lỗi: `docs/traces/fix-lint-khong-chay.md` — `npm run lint` không kiểm gì suốt 4 phase (L31), 9/9 case
+  - Kiểm thử: `docs/traces/e2e-trinh-duyet-that.md` — E2E Playwright 390×844, 12/12 case
   - Phase 4 (F5): `docs/traces/phase-4-milestones.md` — 25/25 case (không lỗi mới)
   - Tổng: **270 unit test** + **247 case trace**, typecheck + lint sạch cả 3 workspace
-  - ✅ `npm run verify:local` → **37/37 mục đạt** trên Docker thật (đã gồm chốt ESLint)
+  - ✅ `npm run verify:local` → **38/38 mục đạt** trên Docker thật (gồm chốt ESLint và E2E trình duyệt)
     (6/6 container healthy: db · redis · api · web · caddy · minio), đi qua Caddy HTTPS
 - **Triển khai:** chủ dự án tự deploy — hướng dẫn ở `docs/DEPLOY.md`
 
@@ -636,6 +637,7 @@ Bắt buộc tối thiểu: 1 happy path + 3 edge case + 1 case lỗi.
 | `npm run typecheck` | `tsc --noEmit` cho cả 3 workspace, **bao gồm file `*.spec.ts`** | `verify:local` mục 4 |
 | `npm run lint` | **ESLint thật** (`eslint.config.mjs` ở gốc) cho cả 3 workspace | `verify:local` mục 4 |
 | `npm run test` | Vitest — hiện 270 unit test | `verify:local` mục 4 |
+| `npm run e2e` | **Playwright ở 390×844** trên bản build thật trong Docker — 12 test | `verify:local` mục 4 |
 
 > ⚠️ **Bài học đắt nhất của dự án này (L31).** Từ Phase 1 tới Phase 4,
 > `npm run lint` chạy `--workspaces --if-present` mà **không workspace nào có
@@ -651,6 +653,15 @@ Bắt buộc tối thiểu: 1 happy path + 3 edge case + 1 case lỗi.
 Bộ quy tắc ESLint **không chọn theo mặc định** mà chọn theo đúng những lỗi dự án
 này đã thật sự mắc phải: `no-floating-promises` (L11),
 `react-hooks/exhaustive-deps` (L20, L21), `no-explicit-any` và `no-console` (R2).
+
+**E2E tồn tại vì một lý do cụ thể:** lỗi khung bản đồ cao 0px (L30) làm cả tính
+năng bản đồ vô hình mà bốn chốt kia đều xanh — đó là loại lỗi chỉ tồn tại sau
+khi trình duyệt tính bố cục. Bộ E2E **không** lặp lại việc của trace API; nó chỉ
+đo những thứ chỉ trình duyệt trả lời được: kích thước thật của khung, tràn ngang,
+vùng chạm 44px, và màn có dựng ra trang trắng không.
+
+Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L30 trở lại → E2E-04 bắt
+được ngay; khôi phục → 12/12 xanh.
 
 **Bộ dữ liệu giả định chuẩn** (`packages/fixtures/`) — dùng lại cho mọi trace:
 - Couple `An ❤ Bình`, anniversary `2023-02-14`

@@ -306,8 +306,8 @@ async function waitHealthy() {
 
 // ---------------------------------------------------------------- 4. MÃ NGUỒN
 
-function checkCode() {
-  section('4 · Mã nguồn');
+async function checkCode() {
+  section('4 · Mã nguồn & trình duyệt');
 
   const tc = stripAnsi(sh('npm run typecheck', { allowFail: true }));
   check('code', 'typecheck 3 workspace', !/error TS/.test(tc));
@@ -318,6 +318,23 @@ function checkCode() {
    * luôn thoát 0 và bước 3 của R1 xanh một cách giả suốt bốn phase.
    * Giờ nó chạy ESLint thật, và verify:local là nơi chốt lại điều đó.
    */
+  /*
+   * E2E chạy trước lint/test vì nó cần API vừa được khởi động lại (hạn mức đăng
+   * nhập là 10 lần / 5 phút; bộ trace ở mục 3 đã dùng gần hết).
+   */
+  sh(`${COMPOSE} restart api`, { allowFail: true });
+  await waitHealthy();
+
+  const e2e = stripAnsi(sh('npm run e2e', { allowFail: true }));
+  const e2ePassed = /(\d+) passed/.exec(e2e);
+  const e2eFailed = /(\d+) failed/.exec(e2e);
+  check(
+    'code',
+    'E2E trình duyệt thật 390×844',
+    Boolean(e2ePassed) && !e2eFailed,
+    e2eFailed ? `${e2eFailed[1]} test hỏng` : `${e2ePassed?.[1] ?? 0} test`,
+  );
+
   const lint = stripAnsi(sh('npm run lint', { allowFail: true }));
   const problems = /(\d+) problems? \((\d+) errors?/.exec(lint);
   const lintErrors = problems ? Number(problems[2]) : 0;
@@ -353,7 +370,7 @@ const run = async () => {
   await checkInfra();
   await checkHttps();
   await checkFlows();
-  checkCode();
+  await checkCode();
   cleanup();
 
   const total = results.length;
