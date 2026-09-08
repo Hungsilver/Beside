@@ -1,6 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
+  ADDRESS_MAX_LENGTH,
+  BIO_MAX_LENGTH,
   buildMessagingUrl,
   MESSAGING_APP_LABELS,
   MESSAGING_APPS,
@@ -11,8 +13,15 @@ import { useAuth } from '@/lib/auth-context';
 import { ApiRequestError } from '@/lib/api-client';
 import { usePush } from '@/lib/push-api';
 import { useCouple, useUnpair } from '@/lib/couple-api';
-import { useUpdateAnniversary, useUpdatePrivacy, useUpdateProfile } from '@/lib/profile-api';
-import { Field, FormError, Screen, Spinner } from '@/components/ui';
+import {
+  useRemoveAvatar,
+  useSetAvatar,
+  useUpdateAnniversary,
+  useUpdatePrivacy,
+  useUpdateProfile,
+} from '@/lib/profile-api';
+import { Field, FormError, Screen, Spinner, TextAreaField } from '@/components/ui';
+import Avatar from '@/components/Avatar';
 
 /**
  * Nơi hai người tự sửa thông tin cá nhân — tên, ngày sinh, app nhắn tin,
@@ -86,6 +95,8 @@ export default function SettingsScreen() {
     const updateProfile = useUpdateProfile(patchUser);
     const [displayName, setDisplayName] = useState(user!.displayName);
     const [birthday, setBirthday] = useState(user!.birthday ?? '');
+    const [bio, setBio] = useState(user!.bio ?? '');
+    const [address, setAddress] = useState(user!.address ?? '');
     const [error, setError] = useState<string | null>(null);
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [saved, setSaved] = useState(false);
@@ -100,10 +111,22 @@ export default function SettingsScreen() {
       setFieldErrors({});
       setSaved(false);
 
-      const parsed = updateProfileSchema.safeParse({
+      /*
+       * Chuỗi rỗng nghĩa là "xoá thông tin này", và `optionalText` trong
+       * `updateProfileSchema` (dùng chung FE + BE) là nơi DUY NHẤT định nghĩa
+       * luật đó — server tự dịch `''` thành `null` dù client gửi gì.
+       *
+       * Đổi ở đây cho payload nói đúng ý định ngay từ lúc rời máy người dùng,
+       * nhưng đừng nhầm nó là chốt chặn: bỏ dòng này đi hành vi vẫn đúng.
+       */
+      const payload = {
         displayName,
         birthday: birthday === '' ? null : birthday,
-      });
+        bio: bio.trim() === '' ? null : bio,
+        address: address.trim() === '' ? null : address,
+      };
+
+      const parsed = updateProfileSchema.safeParse(payload);
       if (!parsed.success) {
         const errs: Record<string, string> = {};
         for (const i of parsed.error.issues) {
@@ -115,10 +138,7 @@ export default function SettingsScreen() {
       }
 
       try {
-        await updateProfile.mutateAsync({
-          displayName,
-          birthday: birthday === '' ? null : birthday,
-        });
+        await updateProfile.mutateAsync(payload);
         setSaved(true);
       } catch (err) {
         setError(err instanceof ApiRequestError ? err.message : 'Không lưu được');
@@ -129,6 +149,8 @@ export default function SettingsScreen() {
       <form onSubmit={submit} noValidate className="card flex flex-col gap-4">
         <SectionTitle emoji="🙋" title="Hồ sơ của bạn" />
         <FormError message={error} />
+
+        <AvatarPicker />
 
         <Field
           label="Tên hiển thị"
@@ -150,8 +172,114 @@ export default function SettingsScreen() {
           hint="Để trống nếu không muốn khai"
         />
 
+        <TextAreaField
+          label="Vài dòng về bạn"
+          name="bio"
+          rows={3}
+          maxLength={BIO_MAX_LENGTH}
+          value={bio}
+          onChange={(e) => setBio(e.target.value)}
+          error={fieldErrors.bio}
+          hint="Người ấy sẽ đọc được"
+        />
+
+        <Field
+          label="Địa chỉ"
+          name="address"
+          maxLength={ADDRESS_MAX_LENGTH + 20}
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          error={fieldErrors.address}
+          hint="Chỉ để người ấy biết — không dùng để định vị hay tính khoảng cách"
+        />
+
         <SaveButton pending={updateProfile.isPending} saved={saved} />
       </form>
+    );
+  }
+
+  /**
+   * Chọn / gỡ ảnh đại diện.
+   *
+   * Đứng tách khỏi biểu mẫu hồ sơ: ảnh gửi đi NGAY khi chọn, không chờ bấm Lưu.
+   * Trộn chung thì phải giữ tệp trong state rồi mới gửi lúc submit — thêm một
+   * đường để lệch giữa thứ đang thấy và thứ đã lưu.
+   */
+  function AvatarPicker() {
+    const inputRef = useRef<HTMLInputElement | null>(null);
+    const setAvatar = useSetAvatar(patchUser);
+    const removeAvatar = useRemoveAvatar(patchUser);
+    const [avatarError, setAvatarError] = useState<string | null>(null);
+
+    const busy = setAvatar.isPending || removeAvatar.isPending;
+
+    async function pick(e: ChangeEvent<HTMLInputElement>) {
+      const file = e.target.files?.[0];
+      // Cho phép chọn LẠI đúng tệp vừa chọn: không xoá value thì sự kiện
+      // `change` không bắn lần hai và người dùng tưởng app bị treo.
+      e.target.value = '';
+      if (!file) return;
+
+      setAvatarError(null);
+      try {
+        await setAvatar.mutateAsync(file);
+      } catch (err) {
+        // Nói ra nguyên nhân thật. Lỗi ở đây có thể tới từ khâu NÉN ẢNH ngay
+        // trên máy (ảnh hỏng, trình duyệt không dựng được canvas) chứ không chỉ
+        // từ server — nuốt hết vào một câu chung chung thì không ai gỡ nổi.
+        setAvatarError(
+          err instanceof Error && err.message
+            ? err.message
+            : 'Không tải được ảnh lên',
+        );
+      }
+    }
+
+    return (
+      <div>
+        <div className="flex items-center gap-3.5">
+          <Avatar url={user!.avatarUrl} name={user!.displayName} size={72} />
+
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => inputRef.current?.click()}
+              className="flex min-h-11 items-center justify-center rounded-2xl border-[1.5px] border-ink-200 bg-white px-4 text-[13.5px] font-bold text-ink-700 disabled:opacity-50"
+            >
+              {setAvatar.isPending ? 'Đang tải lên…' : user!.avatarUrl ? 'Đổi ảnh' : 'Chọn ảnh'}
+            </button>
+
+            {user!.avatarUrl && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setAvatarError(null);
+                  removeAvatar.mutate();
+                }}
+                className="flex min-h-11 items-center justify-center rounded-2xl px-4 text-[13px] font-bold text-ink-400 disabled:opacity-50"
+              >
+                Gỡ ảnh
+              </button>
+            )}
+          </div>
+        </div>
+
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => void pick(e)}
+        />
+
+        {avatarError && (
+          <p role="alert" className="mt-2 text-[12px] font-semibold text-love-600">
+            {avatarError}
+          </p>
+        )}
+      </div>
     );
   }
 

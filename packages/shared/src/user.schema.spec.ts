@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ADDRESS_MAX_LENGTH, BIO_MAX_LENGTH } from './constants';
 import { birthdaySchema, updateProfileSchema } from './user.schema';
 
 describe('birthdaySchema', () => {
@@ -68,5 +69,57 @@ describe('updateProfileSchema', () => {
     expect(
       updateProfileSchema.safeParse({ messagingHandle: 'a'.repeat(65) }).success,
     ).toBe(false);
+  });
+});
+
+describe('updateProfileSchema — lời giới thiệu và địa chỉ', () => {
+  it('cắt khoảng trắng thừa hai đầu', () => {
+    const r = updateProfileSchema.parse({ bio: '  Thích cà phê sáng  ' });
+    expect(r.bio).toBe('Thích cà phê sáng');
+  });
+
+  it('chuỗi rỗng và chuỗi toàn khoảng trắng đều thành null — đó là cách XOÁ', () => {
+    expect(updateProfileSchema.parse({ bio: '' }).bio).toBeNull();
+    expect(updateProfileSchema.parse({ bio: '   ' }).bio).toBeNull();
+    expect(updateProfileSchema.parse({ address: '\t\n ' }).address).toBeNull();
+  });
+
+  it('không gửi lên thì là undefined — GIỮ NGUYÊN, khác hẳn với xoá', () => {
+    const r = updateProfileSchema.parse({ displayName: 'An' });
+    expect(r.bio).toBeUndefined();
+    expect(r.address).toBeUndefined();
+  });
+
+  it('từ chối khi vượt trần độ dài', () => {
+    const tooLongBio = updateProfileSchema.safeParse({ bio: 'a'.repeat(BIO_MAX_LENGTH + 1) });
+    expect(tooLongBio.success).toBe(false);
+
+    const okBio = updateProfileSchema.safeParse({ bio: 'a'.repeat(BIO_MAX_LENGTH) });
+    expect(okBio.success).toBe(true);
+
+    const tooLongAddress = updateProfileSchema.safeParse({
+      address: 'a'.repeat(ADDRESS_MAX_LENGTH + 1),
+    });
+    expect(tooLongAddress.success).toBe(false);
+  });
+
+  it('đo độ dài SAU khi cắt khoảng trắng — không tính khoảng trắng thừa vào trần', () => {
+    const r = updateProfileSchema.safeParse({
+      bio: '   ' + 'a'.repeat(BIO_MAX_LENGTH) + '   ',
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('giữ nguyên dấu tiếng Việt và emoji, đếm theo ký tự chứ không theo byte', () => {
+    const r = updateProfileSchema.parse({ address: 'Số 1 Đại Cồ Việt, Hà Nội 🏠' });
+    expect(r.address).toBe('Số 1 Đại Cồ Việt, Hà Nội 🏠');
+  });
+
+  it('gửi null tường minh cũng là xoá', () => {
+    expect(updateProfileSchema.parse({ bio: null }).bio).toBeNull();
+  });
+
+  it('chỉ gửi mỗi bio vẫn hợp lệ — không bị coi là body rỗng', () => {
+    expect(updateProfileSchema.safeParse({ bio: 'xin chào' }).success).toBe(true);
   });
 });

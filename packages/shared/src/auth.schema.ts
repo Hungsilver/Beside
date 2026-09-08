@@ -56,8 +56,16 @@ export interface PublicUser {
   id: string;
   displayName: string;
   email: string | null;
+  /**
+   * Đường dẫn TƯƠNG ĐỐI tới ảnh đại diện, đã kèm phiên bản (`?v=`).
+   * `null` nghĩa là chưa đặt ảnh — client tự vẽ chữ cái đầu thay thế.
+   */
   avatarUrl: string | null;
   birthday: string | null;
+  /** Vài dòng tự giới thiệu. */
+  bio: string | null;
+  /** Địa chỉ tự gõ, chỉ để người ấy biết — không liên quan tới định vị. */
+  address: string | null;
   coupleId: string | null;
   messagingApp: string;
   messagingHandle: string | null;

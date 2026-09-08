@@ -11,7 +11,9 @@ import {
   type SelfUser,
 } from '@beside/shared';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { StorageService } from '../common/storage/storage.service';
 import { AppError } from '../common/errors/app-error';
+import { avatarKey, ImageProcessor, type AvatarSize } from '../posts/image.processor';
 import { toSelfUser } from './user.mapper';
 
 export interface UpdateProfileData {
@@ -19,11 +21,17 @@ export interface UpdateProfileData {
   birthday?: Date | null;
   messagingApp?: MessagingApp;
   messagingHandle?: string | null;
+  bio?: string | null;
+  address?: string | null;
 }
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+    private readonly images: ImageProcessor,
+  ) {}
 
   async findMe(userId: string): Promise<SelfUser> {
     return toSelfUser(await this.getOrThrow(userId));
@@ -77,10 +85,123 @@ export class UsersService {
         ...(data.messagingHandle !== undefined
           ? { messagingHandle: data.messagingHandle }
           : {}),
+        // `null` là XOÁ, `undefined` là không đụng tới — phân biệt ngay ở đây,
+        // nếu không thì gõ trắng rồi lưu sẽ không xoá được nội dung cũ.
+        ...(data.bio !== undefined ? { bio: data.bio } : {}),
+        ...(data.address !== undefined ? { address: data.address } : {}),
       },
     });
 
     return toSelfUser(updated);
+  }
+
+  // ------------------------------------------------------ ảnh đại diện
+
+  /**
+   * Đặt ảnh đại diện mới.
+   *
+   * Thứ tự có chủ đích: **ghi tệp lên kho trước, cập nhật DB sau**. Nếu làm
+   * ngược lại mà việc ghi kho hỏng giữa chừng, DB sẽ trỏ tới một ảnh không tồn
+   * tại và người dùng thấy ô ảnh vỡ. Theo thứ tự này, hỏng ở bước ghi kho thì
+   * DB chưa đổi — người dùng vẫn giữ ảnh cũ, chỉ là lần đổi này thất bại.
+   *
+   * Ảnh cũ được xoá SAU khi DB đã trỏ sang ảnh mới. Xoá hụt cũng không sao:
+   * đó chỉ là vài chục KB nằm lại trong kho, không ai chạm tới được nữa.
+   */
+  async setAvatar(userId: string, file: { buffer: Buffer; mimetype: string }): Promise<SelfUser> {
+    const current = await this.getOrThrow(userId);
+    const processed = await this.images.processAvatar(file);
+
+    await Promise.all(
+      processed.files.map((f) => this.storage.put(f.key, f.body, f.contentType)),
+    );
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { avatarId: processed.avatarId },
+    });
+
+    await this.deleteAvatarFiles(current.avatarId);
+    return toSelfUser(updated);
+  }
+
+  /** Gỡ ảnh đại diện, quay về hiển thị chữ cái đầu của tên. */
+  async removeAvatar(userId: string): Promise<SelfUser> {
+    const current = await this.getOrThrow(userId);
+    if (!current.avatarId) return toSelfUser(current);
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { avatarId: null },
+    });
+
+    await this.deleteAvatarFiles(current.avatarId);
+    return toSelfUser(updated);
+  }
+
+  /**
+   * Lấy tệp ảnh đại diện để truyền cho trình duyệt.
+   *
+   * Quyền kiểm tra ở ĐÂY (R3 — tầng service, không tin client): chỉ xem được
+   * ảnh của chính mình hoặc của người cùng couple. Không dựa vào chuyện URL
+   * khó đoán — id người dùng có thể lộ ra từ nhiều chỗ khác.
+   *
+   * Cố ý KHÔNG dùng `LocationsService.getContext`: hàm đó ném lỗi khi chưa ghép
+   * đôi, mà người chưa ghép đôi vẫn phải xem được ảnh của chính mình.
+   */
+  async avatarStream(
+    viewerId: string,
+    ownerId: string,
+    size: AvatarSize,
+    /**
+     * Phiên bản ảnh mà URL yêu cầu (`?v=`).
+     *
+     * Phải khớp với ảnh đang dùng, nếu không trả 404. Bỏ qua tham số này thì
+     * một URL cũ sẽ phục vụ ảnh MỚI — mà header đang là `immutable`, nghĩa là
+     * mình hứa "nội dung của URL này không bao giờ đổi". Hứa rồi đổi nội dung
+     * là cách chắc chắn nhất để trình duyệt hiện ảnh sai và không ai gỡ được.
+     */
+    version?: string,
+  ) {
+    const owner = await this.prisma.user.findUnique({
+      where: { id: ownerId },
+      select: { id: true, avatarId: true, coupleId: true },
+    });
+
+    if (!owner?.avatarId) {
+      throw AppError.notFound(ERROR_CODES.NOT_FOUND, 'Người này chưa đặt ảnh đại diện');
+    }
+    if (version !== undefined && version !== owner.avatarId) {
+      throw AppError.notFound(ERROR_CODES.NOT_FOUND, 'Ảnh đại diện này không còn nữa');
+    }
+
+    if (owner.id !== viewerId) {
+      const viewer = await this.prisma.user.findUnique({
+        where: { id: viewerId },
+        select: { coupleId: true },
+      });
+      // `null === null` phải bị coi là KHÔNG cùng couple: hai người đều chưa
+      // ghép đôi thì không có quan hệ gì với nhau cả.
+      if (!viewer?.coupleId || viewer.coupleId !== owner.coupleId) {
+        throw AppError.notFound(ERROR_CODES.NOT_FOUND, 'Người này chưa đặt ảnh đại diện');
+      }
+    }
+
+    const file = await this.storage.getStream(avatarKey(owner.avatarId, size));
+    if (!file) {
+      throw AppError.notFound(ERROR_CODES.NOT_FOUND, 'Người này chưa đặt ảnh đại diện');
+    }
+    return file;
+  }
+
+  /** Xoá tệp của một ảnh đại diện cũ. Hỏng thì bỏ qua — không chặn luồng chính. */
+  private async deleteAvatarFiles(avatarId: string | null): Promise<void> {
+    if (!avatarId) return;
+    try {
+      await this.storage.deleteMany([avatarKey(avatarId, 'md'), avatarKey(avatarId, 'thumb')]);
+    } catch {
+      // Rác trong kho không đáng để người dùng thấy lỗi.
+    }
   }
 
   // ------------------------------------------------------------------

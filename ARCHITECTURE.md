@@ -7,7 +7,7 @@
 - **Tên app:** `Beside` (đã chốt)
 - **Domain:** `https://easytech.io.vn` (tạm dùng — đã mua). Sẽ đổi sang domain `beside` sau
   ⇒ **mọi URL phải lấy từ biến môi trường, không hardcode domain ở bất kỳ đâu**
-- **Cập nhật lần cuối:** 2026-09-08
+- **Cập nhật lần cuối:** 2026-09-09
 - **Trạng thái:** `PHASE 5` 🔸 đang làm — đã vẽ địa điểm & ảnh check-in lên bản đồ. Phase 4 ✅ xong phần tính năng
   - Phase 1: `docs/traces/phase-1-auth-pairing.md` — 53/53 case
   - Phase 2: `docs/traces/phase-2-realtime-location.md` — 29/29 case
@@ -593,6 +593,18 @@ trong server (trace Phase 2, L9).
 > ở schema: người dùng có thể chỉ đổi một trong hai, nên phải trộn với giá trị đang
 > lưu trong DB rồi mới biết cặp đó có hợp lệ không.
 
+### 7.1c Hồ sơ cá nhân & ảnh đại diện (đã triển khai)
+
+| Method | Đường dẫn | Việc |
+|---|---|---|
+| `PATCH` | `/me` | Thêm `bio` (≤160) và `address` (≤120). Gửi `null` hoặc chuỗi rỗng = **xoá**; không gửi = giữ nguyên |
+| `POST` | `/me/avatar` | multipart, trường `avatar`. 20 lần/giờ |
+| `DELETE` | `/me/avatar` | Gỡ ảnh, lặp lại an toàn |
+| `GET` | `/users/:userId/avatar/:size?v=` | `size` ∈ `md` (512px) \| `thumb` (128px). Quyền: chính mình hoặc cùng couple, kiểm ở tầng service |
+
+Ảnh đại diện đi qua đúng đường ống của ảnh check-in (`ImageProcessor`) nên cũng
+**bị xoá sạch EXIF** — ảnh chân dung chụp bằng điện thoại cũng mang toạ độ GPS.
+
 ### 7.1b Ảnh đi ra bằng đường nào (quyết định của Phase 3)
 
 Ảnh **không** phát bằng URL ký sẵn (presigned) của S3, mà do API tự đọc luồng từ
@@ -788,6 +800,11 @@ Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L
 | 2026-09-08 | `data-places` / `data-photo-pins` lấy từ trạng thái **đã sờ vào bản đồ**, cấm lấy từ độ dài prop | Bản đầu lấy `places?.length`: nó nói "API trả về mấy địa điểm", không nói "bản đồ có vẽ không". Phá `installLayers` để thử, lớp mất sạch mà test **vẫn xanh** — cái chốt đó vô dụng ngay từ đầu | Thêm hai state và `styledata` phải tăng `mapReadyTick` trong mọi trường hợp để effect chạy lại soi nguồn thật |
 | 2026-09-08 | Bảng thông tin ở màn bản đồ **kéo được**, ba nấc 84px / 46% / 82% | Trên khung 390×844 bảng cố định ăn gần nửa màn hình, mà bản đồ mới là thứ người ta mở app để nhìn | Tự xử lý `pointerdown/move/up` thay vì kéo thư viện gesture về; phải đặt `touch-action: none` cho thanh nắm |
 | 2026-09-08 | **Bỏ qua** lớp giao thông và chỉ đường thời gian thực | Giao thông: không có nguồn miễn phí, làm là vi phạm ràng buộc §3.2. Chỉ đường: phải chọn engine định tuyến (OSRM tự host / dịch vụ ngoài) — quyết định của chủ dự án. Chủ dự án chốt: "2 chỗ vướng thì bỏ qua" | Hai tính năng nằm ở `docs/BACKLOG.md`, chưa làm |
+| 2026-09-08 | Ảnh đại diện dùng LẠI `ImageProcessor` của ảnh check-in, tách phần kiểm tra ra `inspect()` | Hai đường ống ảnh phải chịu ĐÚNG một bộ luật: cùng trần dung lượng, cùng danh sách định dạng, cùng chốt ảnh bom nén, cùng luật xoá EXIF. Hai bản sao là hai chỗ để lần sau siết một bên quên bên kia | `ImageProcessor` giờ phục vụ hai module; `UsersModule` phải nạp nó từ `posts/` |
+| 2026-09-08 | Cột `avatarUrl` bị XOÁ, thay bằng `avatarId` (uuid); URL do `avatarUrlFor()` dựng ra | `avatarUrl` có từ migration đầu nhưng chưa từng được ghi (đã kiểm: 2 user, 0 giá trị). Lưu id thay vì URL để đổi cách phục vụ ảnh không phải sửa dữ liệu | Thêm một hàm phải nhớ gọi; bù lại không còn hai cột tên gần giống nhau nằm cạnh nhau |
+| 2026-09-08 | `GET /users/:id/avatar/:size` **bắt buộc** `?v=` khớp `avatarId` hiện tại, lệch thì 404 | Route trả `Cache-Control: immutable` — đã hứa "URL này không bao giờ đổi nội dung". Bỏ qua `?v=` thì URL cũ lặng lẽ phục vụ ảnh MỚI, hứa một đằng làm một nẻo và trình duyệt sẽ giữ ảnh sai không gỡ được (trace PA-11) | Trang đã tải lâu giữ URL cũ sẽ mất ảnh; `Avatar` lùi về chữ cái đầu thay vì hiện ô vỡ |
+| 2026-09-08 | Đổi ảnh: **ghi kho trước, cập nhật DB sau**, xoá ảnh cũ sau cùng | Ngược lại mà ghi kho hỏng giữa chừng thì DB trỏ tới ảnh không tồn tại — người dùng thấy ô vỡ vĩnh viễn. Theo thứ tự này, hỏng ở bước ghi kho thì người dùng vẫn giữ ảnh cũ | Xoá hụt để lại vài chục KB rác trong kho, không ai chạm tới được |
+| 2026-09-08 | `bio` / `address` là chuỗi người dùng TỰ GÕ, không geocode | `address` chỉ để người ấy biết nhà nhau. Nối nó vào hệ thống vị trí (§2) hay hàng rào (F6) là biến một ô văn bản thành dữ liệu vị trí — đúng loại dữ liệu R3 bắt phải dè dặt nhất | Không tính được khoảng cách tới "nhà" từ trường này; muốn thế thì dùng F6 Địa điểm |
 
 ---
 

@@ -4,7 +4,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import type { FeedResponse, PostResponse, ReactionEmoji } from '@beside/shared';
-import { api, apiRequest, getAccessToken } from './api-client';
+import { api, apiRequest } from './api-client';
 
 export const postKeys = {
   feed: (filter: string) => ['posts', 'feed', filter] as const,
@@ -81,16 +81,3 @@ export function useReact() {
   });
 }
 
-/**
- * Ảnh nằm sau lớp xác thực nên `<img src>` thẳng sẽ bị 401 — thẻ img không gửi
- * được header Authorization. Tải bằng fetch rồi đổi sang blob URL.
- */
-export async function fetchPhotoObjectUrl(path: string): Promise<string> {
-  const token = getAccessToken();
-  const res = await fetch(path, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    credentials: 'include',
-  });
-  if (!res.ok) throw new Error(`Không tải được ảnh (${res.status})`);
-  return URL.createObjectURL(await res.blob());
-}

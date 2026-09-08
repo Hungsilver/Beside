@@ -26,6 +26,7 @@ import {
 } from '@/lib/map-styles';
 import { useFeed } from '@/lib/posts-api';
 import TabBar from '@/components/TabBar';
+import Avatar from '@/components/Avatar';
 
 export default function MapScreen() {
   const coupleQuery = useCouple();
@@ -212,9 +213,12 @@ export default function MapScreen() {
       {/* Bảng thông tin — vuốt lên/xuống để đổi nấc */}
       <DraggableSheet>
         <div className="flex items-center gap-3">
-          <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#9BC4FF] to-[#6A7BFF] text-[18px] font-extrabold text-white">
-            {(partner?.displayName ?? '?').charAt(0).toUpperCase()}
-          </div>
+          <Avatar
+            url={partner?.avatarUrl ?? null}
+            name={partner?.displayName ?? '?'}
+            size={48}
+            fallbackClassName="bg-gradient-to-br from-[#9BC4FF] to-[#6A7BFF] text-white"
+          />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <b className="truncate text-[16px]">{partner?.displayName ?? 'Chưa ghép đôi'}</b>

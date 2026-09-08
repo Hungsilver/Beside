@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { fetchPhotoObjectUrl } from '@/lib/posts-api';
+import { fetchImageObjectUrl } from '@/lib/api-client';
 
 /**
  * Ảnh nằm sau lớp xác thực.
@@ -59,7 +59,7 @@ export default function AuthedImage({
     setUrl(null);
     setFailed(false);
 
-    void fetchPhotoObjectUrl(path)
+    void fetchImageObjectUrl(path)
       .then((u) => {
         if (cancelled) {
           URL.revokeObjectURL(u);

@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, ReactNode } from 'react';
+import type { InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react';
 
 /** Bao ngoài toàn màn hình, giới hạn bề rộng khi xem trên PC (Phase 5 sẽ mở rộng). */
 export function Screen({
@@ -44,6 +44,60 @@ export function BottomLayer({
   return (
     <div className={`pointer-events-none fixed inset-x-0 bottom-0 mx-auto w-full max-w-[430px] ${className}`}>
       {children}
+    </div>
+  );
+}
+
+/**
+ * Ô văn bản nhiều dòng. Cùng nhãn / lỗi / gợi ý như `Field` để hai loại ô nhìn
+ * giống hệt nhau, kèm bộ đếm ký tự vì các ô này đều có trần độ dài.
+ */
+export function TextAreaField({
+  label,
+  error,
+  hint,
+  maxLength,
+  ...props
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  label: string;
+  error?: string | undefined;
+  hint?: string;
+}) {
+  const id = props.id ?? props.name;
+  const errorId = error ? `${id}-error` : undefined;
+  const used = String(props.value ?? '').length;
+
+  return (
+    <div>
+      <div className="mb-1.5 flex items-baseline justify-between gap-2">
+        <label htmlFor={id} className="block text-[12.5px] font-bold text-ink-700">
+          {label}
+        </label>
+        {maxLength !== undefined && (
+          <span
+            className={`text-[11.5px] tabular-nums ${used > maxLength ? 'font-bold text-love-600' : 'text-ink-400'}`}
+          >
+            {used}/{maxLength}
+          </span>
+        )}
+      </div>
+      <textarea
+        {...props}
+        id={id}
+        // Cố ý KHÔNG đặt `maxLength` lên thẻ: trình duyệt sẽ lặng lẽ chặn phím
+        // khi chạm trần, người dùng không hiểu vì sao gõ mà không ra chữ. Để họ
+        // gõ quá rồi báo bằng bộ đếm đỏ và thông báo lỗi lúc lưu.
+        className="field-input min-h-20 resize-y"
+        aria-invalid={error ? 'true' : undefined}
+        aria-describedby={errorId}
+      />
+      {error ? (
+        <p id={errorId} role="alert" className="mt-1.5 text-[12px] font-semibold text-love-600">
+          {error}
+        </p>
+      ) : hint ? (
+        <p className="mt-1.5 text-[12px] text-ink-400">{hint}</p>
+      ) : null}
     </div>
   );
 }

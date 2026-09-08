@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MESSAGING_APPS } from './constants';
+import { ADDRESS_MAX_LENGTH, BIO_MAX_LENGTH, MESSAGING_APPS } from './constants';
 import { isFutureCalendarDay } from './datetime';
 import { displayNameSchema } from './auth.schema';
 
@@ -43,6 +43,31 @@ export const birthdaySchema = z
   });
 
 /**
+ * Ô văn bản tuỳ chọn, có thể xoá trắng.
+ *
+ * Ba trạng thái phải phân biệt cho rõ, vì chúng dẫn tới ba hành vi khác nhau
+ * ở tầng service:
+ *   `undefined` → không gửi lên ⇒ **giữ nguyên** giá trị đang lưu
+ *   `null` (hoặc chuỗi toàn khoảng trắng) → **xoá** giá trị đang lưu
+ *   chuỗi có nội dung → ghi đè
+ *
+ * Nếu gộp chuỗi rỗng vào cùng `undefined` thì người dùng sẽ không bao giờ xoá
+ * được thứ đã nhập — gõ trắng rồi lưu, nội dung cũ vẫn nằm đó.
+ */
+function optionalText(maxLength: number, tooLongMessage: string) {
+  return z
+    .union([z.string(), z.null()])
+    .optional()
+    .transform((v) => {
+      if (v === undefined) return undefined;
+      if (v === null) return null;
+      const trimmed = v.trim();
+      return trimmed === '' ? null : trimmed;
+    })
+    .refine((v) => v === undefined || v === null || v.length <= maxLength, tooLongMessage);
+}
+
+/**
  * Cập nhật hồ sơ cá nhân.
  * Mọi trường đều tuỳ chọn — chỉ gửi lên thứ thật sự thay đổi.
  *
@@ -55,19 +80,18 @@ export const updateProfileSchema = z
     displayName: displayNameSchema.optional(),
     birthday: birthdaySchema.optional(),
     messagingApp: z.enum(MESSAGING_APPS).optional(),
-    messagingHandle: z
-      .union([z.string(), z.null()])
-      .optional()
-      .transform((v) => {
-        if (v === undefined) return undefined;
-        if (v === null) return null;
-        const trimmed = v.trim();
-        return trimmed === '' ? null : trimmed;
-      })
-      .refine(
-        (v) => v === undefined || v === null || v.length <= 64,
-        'Thông tin liên hệ quá dài (tối đa 64 ký tự)',
-      ),
+    messagingHandle: optionalText(
+      64,
+      'Thông tin liên hệ quá dài (tối đa 64 ký tự)',
+    ),
+    bio: optionalText(
+      BIO_MAX_LENGTH,
+      `Lời giới thiệu quá dài (tối đa ${BIO_MAX_LENGTH} ký tự)`,
+    ),
+    address: optionalText(
+      ADDRESS_MAX_LENGTH,
+      `Địa chỉ quá dài (tối đa ${ADDRESS_MAX_LENGTH} ký tự)`,
+    ),
   })
   .refine(
     (o) => Object.values(o).some((v) => v !== undefined),

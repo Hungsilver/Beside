@@ -8,7 +8,7 @@ import {
   styleSourceFor,
   type MapStyleId,
 } from '@/lib/map-styles';
-import { fetchPhotoObjectUrl } from '@/lib/posts-api';
+import { fetchImageObjectUrl } from '@/lib/api-client';
 
 /** Trung tâm TP.HCM — chỉ dùng khi chưa biết vị trí ai cả. */
 const FALLBACK_CENTER: LngLatLike = [106.7009, 10.7769];
@@ -513,7 +513,7 @@ function buildPhotoPinElement(pin: MapPhotoPin): HTMLElement {
   el.appendChild(img);
 
   let objectUrl: string | null = null;
-  void fetchPhotoObjectUrl(pin.thumbPath)
+  void fetchImageObjectUrl(pin.thumbPath)
     .then((url) => {
       // Marker có thể đã bị gỡ trong lúc chờ mạng — kiểm trước khi gán.
       if (!el.isConnected) {

@@ -16,6 +16,21 @@ export const PASSWORD_MAX_LENGTH = 72;
 
 export const DISPLAY_NAME_MAX_LENGTH = 40;
 
+/** Vài dòng tự giới thiệu trên hồ sơ — cỡ một dòng trạng thái, không phải nhật ký. */
+export const BIO_MAX_LENGTH = 160;
+
+/**
+ * Địa chỉ ghi trên hồ sơ.
+ *
+ * Đây là chuỗi người dùng TỰ GÕ để người ấy biết nhà mình ở đâu — hoàn toàn
+ * tách khỏi hệ thống vị trí (§2) và hàng rào địa điểm (F6). Không geocode,
+ * không dùng để tính khoảng cách.
+ */
+export const ADDRESS_MAX_LENGTH = 120;
+
+/** Cạnh dài nhất của ảnh đại diện sau khi nén. Ảnh đại diện chỉ hiện ở cỡ nhỏ. */
+export const AVATAR_MAX_EDGE = 512;
+
 /** Múi giờ hiển thị. DB luôn lưu UTC. */
 export const DISPLAY_TIMEZONE = 'Asia/Ho_Chi_Minh';
 

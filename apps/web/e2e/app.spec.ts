@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import sharp from 'sharp';
 
 /**
  * E2E ở 390×844 trên bản build thật trong Docker, đi qua Caddy HTTPS.
@@ -431,5 +432,107 @@ test.describe('Đợt 1 — điều khiển bản đồ', () => {
     // Vùng chạm của thanh nắm phải đạt tối thiểu 44px theo R2.
     const box = (await handle.boundingBox())!;
     expect(box.height, `thanh nam cao ${box.height}px`).toBeGreaterThanOrEqual(44);
+  });
+});
+
+test.describe('Đợt 2 — hồ sơ cá nhân', () => {
+  test('PF-01 — màn Cài đặt có đủ ô ảnh, giới thiệu, địa chỉ', async () => {
+    await page.goto('/cai-dat');
+
+    const pick = page.getByRole('button', { name: /^(Chọn ảnh|Đổi ảnh)$/ });
+    await expect(pick).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByLabel('Vài dòng về bạn')).toBeVisible();
+    await expect(page.getByLabel('Địa chỉ')).toBeVisible();
+
+    // R2: mọi vùng chạm tối thiểu 44px.
+    const box = (await pick.boundingBox())!;
+    expect(box.height, `nut chon anh cao ${box.height}px`).toBeGreaterThanOrEqual(44);
+  });
+
+  test('PF-02 — tải ảnh đại diện lên rồi gỡ ra', async () => {
+    await page.goto('/cai-dat');
+    await expect(page.getByRole('button', { name: /^(Chọn ảnh|Đổi ảnh)$/ })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    /*
+     * Ảnh 600×600 thật, sinh tại chỗ. Cỡ ảnh có ý nghĩa với phép kiểm bên dưới:
+     * lớn hơn trần 512px nên server PHẢI thu nhỏ lại — nhờ đó `naturalWidth`
+     * chứng minh được ảnh đã đi qua đường ống nén, không phải chỉ được chép qua.
+     *
+     * (Lần đầu viết test này tôi nhét một ảnh 4×4 dựng bằng tay; Chromium từ
+     * chối giải mã nó ở `createImageBitmap` và test đỏ vì lý do không liên quan
+     * gì tới sản phẩm.)
+     */
+    const png = await sharp({
+      create: { width: 600, height: 600, channels: 3, background: { r: 240, g: 90, b: 140 } },
+    })
+      .png()
+      .toBuffer();
+
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'anh.png',
+      mimeType: 'image/png',
+      buffer: png,
+    });
+
+    // Tải lên xong thì nút đổi tên thành "Đổi ảnh" và hiện thêm nút gỡ.
+    const remove = page.getByRole('button', { name: 'Gỡ ảnh' });
+    await expect(remove).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('button', { name: 'Đổi ảnh' })).toBeVisible();
+
+    // Ảnh phải HIỆN RA thật, không chỉ là nút đổi chữ: `<img>` nằm sau lớp xác
+    // thực nên phải tải bằng fetch rồi đổi sang blob URL — kiểm luôn đường đó.
+    const img = page.getByRole('img', { name: /Ảnh đại diện của/ });
+    await expect(img).toBeVisible({ timeout: 20_000 });
+    await expect(img).toHaveJSProperty('naturalWidth', 512);
+
+    await remove.click();
+    await expect(page.getByRole('button', { name: 'Chọn ảnh' })).toBeVisible({ timeout: 20_000 });
+    await expect(img).toHaveCount(0);
+  });
+
+  test('PF-03 — lưu giới thiệu và địa chỉ, tải lại vẫn còn', async () => {
+    await page.goto('/cai-dat');
+
+    const bio = page.getByLabel('Vài dòng về bạn');
+    const address = page.getByLabel('Địa chỉ');
+    await expect(bio).toBeVisible({ timeout: 15_000 });
+
+    const stamp = `Thích cà phê sáng ${Date.now() % 100000}`;
+    await bio.fill(stamp);
+    await address.fill('Số 1 Đại Cồ Việt, Hà Nội');
+
+    // Bộ đếm ký tự phải chạy theo — nếu không, người dùng không biết còn bao nhiêu.
+    await expect(page.getByText(`${stamp.length}/160`)).toBeVisible();
+
+    await page
+      .locator('form')
+      .filter({ has: page.getByLabel('Vài dòng về bạn') })
+      .getByRole('button', { name: /Lưu/ })
+      .click();
+
+    await page.reload();
+    await expect(page.getByLabel('Vài dòng về bạn')).toHaveValue(stamp, { timeout: 15_000 });
+    await expect(page.getByLabel('Địa chỉ')).toHaveValue('Số 1 Đại Cồ Việt, Hà Nội');
+  });
+
+  test('PF-04 — xoá trắng ô giới thiệu thì nội dung cũ THỰC SỰ mất', async () => {
+    // Đây là chỗ dễ sai nhất: chuỗi rỗng phải được dịch thành `null` (xoá).
+    // Gửi nguyên chuỗi rỗng thì server hiểu là "không đổi" và nội dung cũ ở lại.
+    await page.goto('/cai-dat');
+    const bio = page.getByLabel('Vài dòng về bạn');
+    await expect(bio).toBeVisible({ timeout: 15_000 });
+    await expect(bio).not.toHaveValue('');
+
+    await bio.fill('');
+    await page
+      .locator('form')
+      .filter({ has: page.getByLabel('Vài dòng về bạn') })
+      .getByRole('button', { name: /Lưu/ })
+      .click();
+
+    await page.reload();
+    await expect(page.getByLabel('Vài dòng về bạn')).toHaveValue('', { timeout: 15_000 });
   });
 });

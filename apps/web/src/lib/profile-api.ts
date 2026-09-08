@@ -1,6 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { AVATAR_MAX_EDGE } from '@beside/shared';
 import type { Privacy, SelfUser, UpdateProfileInput } from '@beside/shared';
-import { api } from './api-client';
+import { compressImage } from './image-compress';
+import { api, apiRequest } from './api-client';
 import { coupleKeys } from './couple-api';
 
 export function useUpdateProfile(onUpdated?: (user: SelfUser) => void) {
@@ -38,6 +40,43 @@ export function useUpdateAnniversary() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: coupleKeys.me });
       void qc.invalidateQueries({ queryKey: coupleKeys.loveSummary });
+    },
+  });
+}
+
+/**
+ * Đổi ảnh đại diện.
+ *
+ * Ảnh được nén ở phía client trước khi gửi (`compressImage`): ảnh gốc từ điện
+ * thoại thường 4–12MB, mà hiển thị lớn nhất chỉ 512px. Gửi nguyên bản là bắt
+ * người dùng tốn data cho thứ server sẽ vứt đi ngay.
+ */
+export function useSetAvatar(onUpdated?: (user: SelfUser) => void) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const { blob } = await compressImage(file, AVATAR_MAX_EDGE);
+      const form = new FormData();
+      // Tên tệp phải có đuôi khớp kiểu thật — server đọc nội dung chứ không tin
+      // tên, nhưng để lệch thì log lẫn lộn lúc gỡ lỗi.
+      form.append('avatar', blob, 'avatar.webp');
+      return apiRequest<SelfUser>('/me/avatar', { method: 'POST', body: form });
+    },
+    onSuccess: (user) => {
+      onUpdated?.(user);
+      void qc.invalidateQueries({ queryKey: coupleKeys.me });
+    },
+  });
+}
+
+/** Gỡ ảnh đại diện, quay về chữ cái đầu của tên. */
+export function useRemoveAvatar(onUpdated?: (user: SelfUser) => void) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.delete<SelfUser>('/me/avatar'),
+    onSuccess: (user) => {
+      onUpdated?.(user);
+      void qc.invalidateQueries({ queryKey: coupleKeys.me });
     },
   });
 }

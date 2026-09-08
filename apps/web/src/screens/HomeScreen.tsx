@@ -11,6 +11,7 @@ import { usePartnerLatest } from '@/lib/location-api';
 import { useRealtime } from '@/lib/realtime';
 import { Screen, Spinner } from '@/components/ui';
 import TabBar from '@/components/TabBar';
+import Avatar from '@/components/Avatar';
 
 /**
  * Trang chủ — Phase 1 mới dựng phần đếm ngày yêu và thẻ người ấy.
@@ -62,9 +63,13 @@ export default function HomeScreen() {
           aria-label="Cài đặt"
           className="love-gradient flex size-11 items-center justify-center rounded-full p-[3px]"
         >
-          <span className="flex size-full items-center justify-center rounded-full border-2 border-white bg-gradient-to-br from-[#FF9BB3] to-[#FF4D7D] text-[14px] font-extrabold text-white">
-            {initial(user?.displayName ?? '?')}
-          </span>
+          <Avatar
+            url={user?.avatarUrl ?? null}
+            name={user?.displayName ?? '?'}
+            size={38}
+            className="border-2 border-white"
+            fallbackClassName="bg-gradient-to-br from-[#FF9BB3] to-[#FF4D7D] text-white"
+          />
         </Link>
       </header>
 
@@ -116,9 +121,12 @@ export default function HomeScreen() {
       {partner && (
         <section className="card mt-3.5">
           <div className="flex items-center gap-3">
-            <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#9BC4FF] to-[#6A7BFF] text-[18px] font-extrabold text-white">
-              {initial(partner.displayName)}
-            </div>
+            <Avatar
+              url={partner.avatarUrl}
+              name={partner.displayName}
+              size={48}
+              fallbackClassName="bg-gradient-to-br from-[#9BC4FF] to-[#6A7BFF] text-white"
+            />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <b className="truncate text-[15.5px]">{partner.displayName}</b>
@@ -217,10 +225,6 @@ function greeting(): string {
   if (hour < 14) return 'Buổi trưa vui vẻ 🍜';
   if (hour < 18) return 'Buổi chiều nhẹ nhàng 🌤️';
   return 'Tối muộn rồi ✨';
-}
-
-function initial(name: string): string {
-  return name.trim().charAt(0).toUpperCase() || '?';
 }
 
 function formatDate(iso: string): string {

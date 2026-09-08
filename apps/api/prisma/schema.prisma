@@ -60,8 +60,16 @@ model User {
   phone        String?   @unique
   passwordHash String?
   displayName  String
-  avatarUrl    String?
   birthday     DateTime? @db.Date
+
+  /// Định danh của ảnh đại diện đang dùng. Khoá lưu trữ suy ra từ đây:
+  /// `avatars/{avatarId}/{md|thumb}.webp`. Mỗi lần đổi ảnh sinh id mới nên
+  /// URL cũng đổi theo — nhờ vậy trình duyệt không giữ ảnh cũ trong cache.
+  avatarId String? @db.Uuid
+  /// Vài dòng tự giới thiệu.
+  bio      String?
+  /// Địa chỉ người dùng TỰ GÕ. Không geocode, không dính tới hệ thống vị trí.
+  address  String?
 
   // F9 — nút deep-link nhắn tin (không có chat trong app), xem §7.3
   messagingApp    MessagingApp @default(ZALO)

@@ -157,3 +157,22 @@ export const api = {
   delete: <T>(path: string, body?: unknown) =>
     apiRequest<T>(path, { method: 'DELETE', body }),
 };
+
+/**
+ * Tải một ảnh nằm sau lớp xác thực rồi đổi sang blob URL.
+ *
+ * `<img src="/api/v1/...">` thẳng sẽ bị 401: thẻ img không gửi được header
+ * Authorization. Dùng cho cả ảnh check-in lẫn ảnh đại diện.
+ *
+ * Nơi gọi chịu trách nhiệm `URL.revokeObjectURL()` khi không dùng nữa — không
+ * thu hồi thì mỗi lần vẽ lại là rò thêm một blob trong bộ nhớ.
+ */
+export async function fetchImageObjectUrl(path: string): Promise<string> {
+  const token = getAccessToken();
+  const res = await fetch(path, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: 'include',
+  });
+  if (!res.ok) throw new Error(`Không tải được ảnh (${res.status})`);
+  return URL.createObjectURL(await res.blob());
+}

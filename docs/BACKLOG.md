@@ -165,3 +165,8 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 | 08/09 | Ảnh vệ tinh dùng raster Esri: phóng quá zoom 19 là vỡ, và không có nhãn đường. Muốn đẹp hơn phải chồng thêm một lớp nhãn vector trong suốt | Thấp | `apps/web/src/lib/map-styles.ts` |
 | 08/09 | Bảng thông tin kéo được nhưng bản đồ **chưa căn lại khung nhìn** theo nấc — kéo lên nấc `full` thì hai ghim có thể bị bảng che. `DraggableSheet` đã có sẵn `onSnapChange` chờ nối | Trung bình | `apps/web/src/screens/MapScreen.tsx` |
 | 08/09 | Đổi loại bản đồ làm MapLibre tải lại toàn bộ tile — trên 3G thì trắng bản đồ vài giây, chưa có trạng thái chờ | Thấp | `apps/web/src/components/CoupleMap.tsx` |
+| 08/09 | Ảnh đại diện chưa hiện ở **dòng kỷ niệm** (`FeedScreen` vẫn vẽ chữ cái đầu) — `PostResponse` chưa mang `authorAvatarUrl` | Thấp | `apps/api/src/posts/posts.service.ts` |
+| 08/09 | Ghim người trên bản đồ (`CoupleMap`) vẫn là vòng tròn chữ cái đầu, chưa dùng ảnh đại diện — marker dựng bằng DOM thuần nên phải tự tải blob | Thấp | `apps/web/src/components/CoupleMap.tsx` |
+| 08/09 | Chưa cắt/xoay ảnh đại diện trước khi tải lên — ảnh ngang bị cắt giữa theo `object-cover`, người dùng không chọn được vùng | Trung bình | `apps/web/src/screens/SettingsScreen.tsx` |
+| 08/09 | `bio` / `address` của người ấy đã có trong `GET /couples/me` nhưng **chưa hiện ở đâu cả** — mới chỉ sửa được, chưa xem được | Trung bình | `apps/web/src/screens/HomeScreen.tsx` |
+| 08/09 | Ảnh đại diện cũ xoá hụt (kho lỗi) sẽ nằm lại vĩnh viễn — chưa có việc dọn rác định kỳ | Thấp | `apps/api/src/users/users.service.ts` |
