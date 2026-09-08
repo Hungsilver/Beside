@@ -15,7 +15,7 @@ Toàn bộ hệ thống chạy bằng `docker compose`. Không cần cài Node/P
 
 ```bash
 npm run docker:up
-npm run verify:local     # 28 mục, phải xanh hết
+npm run verify:local     # 38 mục, phải xanh hết
 ```
 
 Nó chạy đúng những gì máy chủ sẽ chạy — Docker, Caddy HTTPS, PostGIS, Redis —
@@ -116,7 +116,7 @@ Ba điều cần nhớ:
 
 ```bash
 docker compose up -d --build
-docker compose ps                 # cả 5 service phải "Up"/"healthy"
+docker compose ps                 # 6 service: db · redis · api · web · caddy · minio
 docker compose logs -f caddy      # xem Caddy xin chứng chỉ
 ```
 
