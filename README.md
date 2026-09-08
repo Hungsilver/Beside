@@ -1,191 +1,238 @@
-# Beside — App check-in & theo dõi lịch trình cho cặp đôi
+<div align="center">
 
-PWA cho 2 người: xem vị trí nhau theo thời gian thực, check-in bằng ảnh, lịch trình chung,
-đếm ngày yêu. Chạy trên iPhone & Android **không cần App Store / CH Play**.
-Self-host bằng Docker trên VPS riêng.
+# 💞 Beside
 
-- **Domain:** `easytech.io.vn` (tạm — sẽ đổi sang domain `beside`, chỉ cần sửa `.env`)
-- **Trạng thái:** Phase 2 xong — thêm bản đồ vị trí thời gian thực, vệt đường, quyền riêng tư
+**Ứng dụng cho hai người: thấy nhau trên bản đồ, chia sẻ lịch trình, lưu lại khoảnh khắc.**
+
+Cài từ trình duyệt lên iPhone và Android — *không qua App Store hay CH Play*.
+Tự chạy trên VPS của bạn, dữ liệu không đi đâu cả.
+
+<br>
+
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
+![NestJS](https://img.shields.io/badge/NestJS-11-E0234E?logo=nestjs&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL_17_·_PostGIS_3.5-4169E1?logo=postgresql&logoColor=white)
+![MapLibre](https://img.shields.io/badge/MapLibre_GL-000?logo=maplibre&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker_Compose-2496ED?logo=docker&logoColor=white)
+
+</div>
+
+---
+
+## Có gì
+
+<table>
+<tr><td width="50%" valign="top">
+
+**📍 Vị trí thời gian thực**
+
+Chấm vị trí, vòng sai số, vệt đường 12 giờ. Lọc nhiễu Kalman, lấy mẫu thích ứng
+(đứng yên 60s → đi xe 8s), giữ màn hình sáng, tự dừng sau 60 phút.
+
+**🏠 Địa điểm & hàng rào ảo**
+
+Lưu Nhà, Công ty, quán quen. Tự báo khi người ấy tới nơi hoặc rời đi — không cần
+nhắn *"về tới chưa"*.
+
+**📸 Check-in bằng ảnh**
+
+Tối đa 3 ảnh mỗi bài, nén hai lần, **xoá sạch EXIF** trước khi lưu. Dòng kỷ niệm
+cuộn vô hạn, thả cảm xúc, ghim lên bản đồ.
+
+</td><td width="50%" valign="top">
+
+**🗓️ Lịch trình chung**
+
+Sự kiện có giờ hoặc cả ngày, cảnh báo trùng giờ, việc riêng chỉ mình thấy.
+Nhắc trước qua thông báo đẩy.
+
+**💖 Đếm ngày yêu & mốc kỷ niệm**
+
+Mốc ngày (100 / 365 / 1000…), kỷ niệm hằng năm, sinh nhật — tự tính. Thêm được
+mốc riêng của hai người.
+
+**🔒 Quyền riêng tư là mặc định**
+
+Ẩn danh (không ghi, không phát, giấu cả khoảng cách) · tắt chia sẻ trực tiếp ·
+làm mờ vị trí 500m · lịch sử tự xoá theo thời gian.
+
+</td></tr>
+</table>
+
+> **Không có chat trong app.** Chỉ một nút deep-link mở Zalo / Messenger / gọi điện.
+> Hai người đã có sẵn chỗ để nhắn cho nhau rồi.
 
 ---
 
 ## Bắt đầu
 
-Dùng **PostgreSQL cài sẵn trên máy** — không cần Docker khi dev:
-
 ```bash
-# Tạo user + database, chạy MỘT LẦN bằng tài khoản superuser
-& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -f infra/postgres/local-setup.sql
-
-cp .env.example .env       # file mẫu dành cho MÁY DEV
+git clone https://github.com/Hungsilver/Beside.git beside && cd beside
+cp .env.example .env          # file mẫu cho MÁY DEV
 npm install
-npm run db:migrate         # tạo bảng
-npm run dev:api            # http://localhost:3000/api/v1
-npm run dev:web            # http://localhost:5173
+npm run docker:up             # dựng cả 6 service
+npm run seed:demo             # 2 tài khoản đã ghép đôi + dữ liệu mẫu
 ```
 
-> **PostGIS** không đi kèm bản cài PostgreSQL mặc định và chỉ cần từ Phase 2 —
-> script tự bỏ qua nếu chưa có.
->
-> Muốn dùng Docker cho tầng dữ liệu thì chạy `npm run infra:up`, nhớ đổi `DATABASE_URL`
-> sang cổng `55432` vì PostgreSQL cài sẵn đang giữ 5432.
->
-> **Lệnh Prisma phải chạy từ gốc repo** (`npm run db:*`), vì Prisma tìm `.env` theo
-> thư mục hiện tại.
-
-## Hai môi trường
-
-| | Dev trên máy | Dev qua Docker | Production |
-|---|---|---|---|
-| Lệnh | `npm run dev:api` + `dev:web` | `npm run docker:up` | `docker compose up -d --build` |
-| `NODE_ENV` | development | production | production |
-| Địa chỉ | `http://localhost:5173` | `https://localhost` | domain thật |
-| File cấu hình | `.env.example` | `.env.example` | **`.env.production.example`** |
-
-Hai file mẫu tách hẳn nhau. Nếu lỡ copy `.env` của máy dev lên máy chủ, API sẽ
-**từ chối khởi động** và in ra đúng biến nào còn là giá trị dev.
-
-## Tài khoản để bấm thử
-
-Dự án **không cắm sẵn tài khoản nào vào code** — hai người tự đăng ký trong app.
-Riêng ở máy dev, tạo nhanh 2 tài khoản đã ghép đôi bằng:
-
-```bash
-npm run seed:demo
-```
+Mở **https://localhost**. Caddy cấp chứng chỉ bằng CA nội bộ nên trình duyệt sẽ
+cảnh báo — bấm qua là được. Vẫn là HTTPS thật nên **Geolocation hoạt động**.
 
 | | Email | Mật khẩu |
 |---|---|---|
 | An | `an@beside.vn` | `beside2026` |
 | Bình | `binh@beside.vn` | `beside2026` |
 
-Đã ghép đôi sẵn, ngày yêu 14/02/2023. Bình có số Zalo (để thấy nút "Nhắn Zalo" hoạt động),
-An để trống (để thấy lời nhắc "còn thiếu một chút" ở trang chủ).
+Đăng nhập An ở cửa sổ thường, Bình ở cửa sổ ẩn danh, rồi mở tab **Bản đồ**.
 
-Script **từ chối chạy** nếu địa chỉ không phải `localhost`. Chạy lại nhiều lần không sao.
+<details>
+<summary>Chạy API/web trực tiếp trên máy (nạp lại nóng)</summary>
 
-## Kiểm tra trước khi lên production
+```bash
+npm run docker:up      # vẫn cần db + redis + minio
+npm run dev:api        # http://localhost:3000/api/v1
+npm run dev:web        # http://localhost:5173
+```
+
+Lệnh Prisma phải chạy **từ gốc repo** (`npm run db:*`) vì Prisma tìm `.env` theo
+thư mục hiện tại.
+
+</details>
+
+---
+
+## Kiểm thử
+
+Dự án này có một quy tắc bất di bất dịch (`CLAUDE.md` R1): **không tính năng nào
+được coi là xong** nếu chưa qua tự rà soát → trace bằng dữ liệu giả định → kiểm
+thử tự động.
 
 ```bash
 npm run verify:local
 ```
 
-Chạy 28 mục qua **đúng đường mà production sẽ chạy** (Docker + Caddy HTTPS + PostGIS +
-Redis thật, không mock): hạ tầng · HTTPS & header bảo mật · Socket.IO qua Caddy ·
-103 case nghiệp vụ · typecheck · 140 unit test. Kết thúc bằng kết luận rõ ràng
-"đã sẵn sàng hay còn thiếu gì", và tự dọn dữ liệu test.
+Một lệnh, **38 mục**, chạy qua đúng con đường production sẽ đi — Docker + Caddy
+HTTPS + PostGIS + Redis + MinIO thật, không mock gì cả:
 
-Ba thứ script không thay người được, phải bấm tay trên trình duyệt:
-quyền vị trí + chấm di chuyển (F12 › Sensors › Location) · Wake Lock · cài PWA.
+| Tầng | Nội dung |
+|---|---|
+| Hạ tầng | 6 container, PostGIS, Redis, migration, bucket MinIO |
+| HTTPS | header bảo mật, chuyển hướng, PWA manifest, Socket.IO qua Caddy |
+| Nghiệp vụ | **8 bộ trace · 247 case** — auth, ghép đôi, vị trí, ảnh, lịch, thông báo, địa điểm, mốc kỷ niệm |
+| Mã nguồn | typecheck · ESLint · **277 unit test** · **21 test E2E** trên trình duyệt thật ở 390×844 |
 
-## Kiểm thử lẻ
+Kết thúc bằng một kết luận rõ ràng, và tự dọn dữ liệu test.
 
-```bash
-npm run typecheck    # shared + api + web
-npm test             # 140 unit test
-npm run trace:phase1 # 53 case  — auth & ghép đôi
-npm run trace:phase2 # 29 case  — vị trí thời gian thực (REST + WebSocket)
-npm run trace:review # 21 case  — rà soát: cache Redis, biên, huỷ ghép đôi
-```
-
-Hai lệnh trace cần API + PostgreSQL đang chạy. Kết quả ghi ở `docs/traces/`.
-
-## Chạy toàn bộ bằng Docker trên máy
+<details>
+<summary>Chạy lẻ từng bộ</summary>
 
 ```bash
-npm run docker:up      # build + chạy cả 5 service
-npm run docker:ps      # xem trạng thái
-npm run docker:logs    # xem log
-npm run docker:down    # dừng
+npm run typecheck                 # shared + api + web
+npm run lint                      # ESLint cả 3 workspace
+npm test                          # 277 unit test
+npm run e2e                       # 21 test Playwright ở 390×844
+
+npm run trace:phase1              # 53 case — auth & ghép đôi
+npm run trace:phase2              # 29 case — vị trí thời gian thực (REST + WebSocket)
+npm run trace:review              # 21 case — cache Redis, biên, huỷ ghép đôi
+npm run trace:phase3              # 34 case — check-in ảnh & dòng kỷ niệm
+npm run trace:phase4              # 37 case — lịch trình chung
+npm run trace:push                # 21 case — thông báo đẩy & nhắc lịch
+npm run trace:places              # 27 case — địa điểm & hàng rào ảo
+npm run trace:milestones          # 25 case — mốc kỷ niệm
 ```
 
-Mở **https://localhost** — Caddy cấp chứng chỉ bằng CA nội bộ nên trình duyệt sẽ
-cảnh báo "không tin cậy", bấm qua là được. Vẫn là HTTPS thật nên **Geolocation API
-hoạt động**, thử được tính năng bản đồ.
+Bộ trace cần Docker đang chạy. Kết quả và phân tích lưu ở [`docs/traces/`](docs/traces).
 
-API cũng được mở ở `http://localhost:3001` (chỉ khi chạy local) để chạy kịch bản trace
-mà không phải xử lý chứng chỉ tự ký:
+</details>
 
-```bash
-TRACE_BASE_URL=http://localhost:3001/api/v1 TRACE_WS_ORIGIN=http://localhost:3001 npm run trace:phase2
-```
-
-## Triển khai lên VPS
-
-Hướng dẫn đầy đủ: **`docs/DEPLOY.md`**. Tóm tắt:
-
-```bash
-# Trên VPS, sau khi trỏ bản ghi A của easytech.io.vn về IP máy
-cp .env.production.example .env    # file mẫu dành cho MÁY CHỦ — khác với .env.example
-docker compose up -d --build
-```
-
-Caddy tự xin chứng chỉ Let's Encrypt. API tự chạy `prisma migrate deploy` khi khởi động.
+> **Mọi chốt kiểm thử đều đã được kiểm chứng là *đỏ được*.** Mỗi lần thêm một
+> phép kiểm mới, nó được thử trên một bản cố tình làm hỏng trước khi được tin.
+> Lý do: `npm run lint` từng chạy suốt bốn phase mà **không kiểm gì cả** —
+> xem [`docs/traces/fix-lint-khong-chay.md`](docs/traces/fix-lint-khong-chay.md).
 
 ---
 
-## Cấu trúc
+## Triển khai
+
+Hướng dẫn đầy đủ: **[`docs/DEPLOY.md`](docs/DEPLOY.md)**. Tóm tắt:
+
+```bash
+# Trên VPS, sau khi trỏ bản ghi A của domain về IP máy
+cp .env.production.example .env    # KHÔNG dùng .env.example
+docker compose up -d --build
+```
+
+Caddy tự xin chứng chỉ Let's Encrypt. API tự chạy `prisma migrate deploy` lúc
+khởi động.
+
+**Hai file mẫu `.env` tách hẳn nhau.** Lỡ mang `.env` của máy dev lên máy chủ thì
+API **từ chối khởi động** và in ra đúng biến nào còn là giá trị dev — thà chết
+lúc boot còn hơn chạy với secret ai cũng đoán được.
+
+Yêu cầu tối thiểu: **2 vCPU · 4 GB RAM · 40 GB SSD**.
+
+---
+
+## Kiến trúc
 
 ```
-ARCHITECTURE.md          ← kiến trúc đầy đủ (ĐỌC FILE NÀY TRƯỚC TIÊN)
-CLAUDE.md                ← quy tắc dự án (R1: bắt buộc review + trace sau khi code)
-docker-compose.yml       ← db · redis · api · web · caddy · minio
-docker-compose.local.yml ← lớp phủ chạy full stack trên máy (domain localhost)
+apps/
+  api/          NestJS 11 + Prisma 6 — auth · couples · locations (+WebSocket)
+                posts · events · push · places · milestones
+  web/          React 19 + Vite + Tailwind v4 + MapLibre GL + PWA
+packages/
+  shared/       Zod schema & logic ngày tháng dùng CHUNG cho cả hai phía
 infra/
-  caddy/Caddyfile        ← TLS tự động + reverse proxy + header bảo mật
-  nginx/web.conf         ← phục vụ file tĩnh PWA, SPA fallback
-  postgres/init/         ← bật PostGIS, unaccent, ép timezone UTC
-packages/shared/         ← Zod schema + logic ngày tháng dùng CHUNG cho API và web
-apps/api/                ← NestJS + Prisma  (auth, me, couples, locations, posts, events, push, places, milestones)
-apps/web/                ← React 19 + Vite + Tailwind v4 + PWA
-mockup/
-  index.html             ← phác thảo Phase 0 (9 màn, để duyệt hướng thiết kế)
-  app.html               ← giao diện CHỨC NĂNG đã dựng thật, bấm thử được
-  app-gallery.html       ← 11 màn chức năng xem cùng lúc
-docs/traces/             ← bảng trace bắt buộc cho từng feature
-docs/DEPLOY.md           ← hướng dẫn triển khai lên VPS
-docs/BACKLOG.md          ← ý tưởng & việc chờ quyết định
+  caddy/        TLS tự động + reverse proxy + header bảo mật
+  nginx/        phục vụ file tĩnh PWA, SPA fallback
+  postgres/     PostGIS, unaccent, ép timezone UTC
+mockup/         phác thảo giao diện Phase 0 — mở thẳng bằng trình duyệt, không cần build
+docs/
+  traces/       15 bảng trace — mỗi tính năng một bảng, kèm mọi lỗi đã tìm ra
+  DEPLOY.md     triển khai lên VPS
+  BACKLOG.md    ý tưởng & việc chờ quyết định
 ```
 
-## Đã có gì (Phase 1 → 4)
+| Tầng | Chọn gì | Vì sao |
+|---|---|---|
+| Bản đồ | **MapLibre GL + OpenFreeMap** | Miễn phí, không cần API key, tuỳ biến được theo chủ đề |
+| Vị trí | PostgreSQL + **PostGIS** | Khoảng cách và hàng rào tính bằng truy vấn không gian |
+| Thời gian thực | **Socket.IO** | Safari trên iOS hay rớt WebSocket thuần, cần fallback |
+| Ảnh | **MinIO** + sharp | Self-host; đổi sang S3 thật sau này không phải sửa code |
+| Thông báo | **web-push + VAPID** | Không cần Firebase, không cần tài khoản bên thứ ba |
+| Mật khẩu | **scrypt** của `node:crypto` | Không native addon → không vỡ khi cài, image Docker nhẹ |
 
-| | |
-|---|---|
-| Đăng ký / đăng nhập | scrypt (`node:crypto`), không dùng native addon |
-| Phiên đăng nhập | JWT 15 phút + refresh cookie httpOnly 30 ngày, xoay vòng + phát hiện token bị đánh cắp |
-| Ghép đôi | mã 6 ký tự (bỏ 0/1/O/I), hết hạn 24h, chống race khi 2 người bấm cùng lúc |
-| Đếm ngày yêu | tính theo ngày lịch giờ VN, có mốc kế tiếp + tiến độ |
-| **Mốc kỷ niệm** | mốc ngày (100/365/1000…), kỷ niệm hằng năm và sinh nhật tự tính từ hồ sơ; thêm được mốc riêng, lặp hằng năm hoặc một lần |
-| Huỷ ghép đôi | phải xác nhận, xoá couple + toàn bộ dữ liệu chung |
-| Nút nhắn tin | deep-link Zalo / Messenger / gọi / SMS — **không có chat trong app** |
-| Sửa hồ sơ | màn `/cai-dat`: tên, ngày sinh, app nhắn tin + số, ngày kỷ niệm, huỷ ghép đôi |
-| **Bản đồ thời gian thực** | MapLibre GL + tile OpenFreeMap. Chấm vị trí, vòng sai số, vệt đường 12 giờ, khoảng cách tính bằng PostGIS |
-| **Chia sẻ trực tiếp** | `watchPosition` + lọc nhiễu Kalman + lấy mẫu thích ứng (đứng yên 60s → đi xe 8s) + giữ màn hình sáng, tự dừng sau 60 phút |
-| **Quyền riêng tư** | Ẩn danh (không ghi, không phát, giấu cả khoảng cách) · tắt chia sẻ trực tiếp · làm mờ vị trí 500m |
-| Dọn lịch sử vị trí | 7 ngày đầy đủ → 90 ngày rút gọn → xoá. Chạy tự động 03:00 hằng ngày |
-| **Check-in bằng ảnh** | tối đa 3 ảnh/bài, nén ở trình duyệt rồi nén lại ở server thành 3 cỡ WebP, có lời nhắn + tâm trạng + ghim toạ độ |
-| **Xoá EXIF** | ảnh được xoay theo thẻ EXIF rồi **xoá sạch metadata** (toạ độ GPS, model máy) trước khi lưu |
-| **Dòng kỷ niệm** | cuộn vô hạn bằng con trỏ, lọc (tất cả / của tôi / của người ấy / có ghim), thả cảm xúc, xoá bài của chính mình |
-| Ảnh riêng tư | ảnh **không** phát bằng link công khai — mỗi lượt xem đều kiểm tra quyền theo cặp đôi |
-| **Lịch trình chung** | lịch tháng, sự kiện có giờ hoặc cả ngày, nhiều ngày, cảnh báo trùng giờ, việc riêng chỉ mình thấy |
-| Ai sửa được gì | sự kiện chung thì cả hai đều **thấy**, nhưng chỉ người tạo mới **sửa/xoá** |
-| **Thông báo đẩy** | nhắc trước mỗi cuộc hẹn, báo khi người ấy đăng khoảnh khắc mới. Tự dọn thiết bị đã gỡ app |
-| **Địa điểm & hàng rào ảo** | lưu Nhà / Công ty / quán quen; tự báo khi người ấy tới nơi hoặc rời đi |
-| **Tất cả trên một bản đồ** | hàng rào địa điểm vẽ theo bán kính thật, ảnh check-in hiện thành ghim bấm được, chọn chỗ mới bằng cách chạm lên bản đồ |
-| Chống báo sai | ba lớp lọc: bỏ qua điểm GPS kém, khoảng chênh vào/ra 30m, phải ở đủ 60 giây |
-| PWA | cài lên màn hình chính, manifest + icon + service worker tự viết, cache tile bản đồ |
+Toàn bộ quyết định kiến trúc, mô hình dữ liệu và hợp đồng API nằm ở
+**[`ARCHITECTURE.md`](ARCHITECTURE.md)** — đọc file đó trước khi viết code.
 
-## Chưa có
-
-Còn lại của Phase 5: giao diện PC (≥1024px), tối ưu hiệu năng, PWA offline.
-Xem lộ trình ở `ARCHITECTURE.md §9`.
-
-> Thông báo đẩy cần **khoá VAPID** trên server. Chưa cấu hình thì tính năng tự tắt
-> và app vẫn chạy bình thường — cách sinh khoá xem `docs/DEPLOY.md §3`.
+---
 
 ## Điều cần biết trước khi kỳ vọng
 
-Trình duyệt **không** lấy được vị trí khi app đã đóng hoặc màn hình đã khoá — nhất là trên
-iPhone. Vì vậy app dùng mô hình **“Chia sẻ trực tiếp” (khi app đang mở) + “vị trí lần cuối”**,
-chứ không phải theo dõi ngầm 24/7 như Life360. Muốn 24/7 thì cần bản Android APK
-(Phase 6, tuỳ chọn). Chi tiết ở `ARCHITECTURE.md §1.3` và `§2`.
+**Trình duyệt không lấy được vị trí khi app đã đóng hoặc màn hình đã khoá** — nhất
+là trên iPhone. Đây là giới hạn của nền tảng, không phải thiếu sót của app.
+
+Vì vậy Beside dùng mô hình **“Chia sẻ trực tiếp” (khi app đang mở) + “vị trí lần
+cuối”**, chứ không theo dõi ngầm 24/7 như Life360. Muốn 24/7 thì cần bản Android
+APK — nằm ở Phase 6 và là tuỳ chọn. Chi tiết: `ARCHITECTURE.md` §1.3 và §2.
+
+Thông báo đẩy cần **khoá VAPID** trên server. Chưa cấu hình thì tính năng tự tắt
+và app vẫn chạy bình thường.
+
+---
+
+## Trạng thái
+
+**Phase 1 → 4 đã xong** — ghép đôi, vị trí thời gian thực, check-in ảnh, lịch
+trình, thông báo đẩy, địa điểm & geofence, mốc kỷ niệm.
+
+**Phase 5 đang làm.** Đã có: địa điểm và ảnh check-in trên bản đồ · tách
+`socket.io-client` khỏi gói tải đầu · PWA offline mức 1 (mở được app khi mất mạng).
+
+Còn lại: giao diện PC, PWA offline mức 2, và nhóm việc chỉ kiểm được trên máy
+thật — thông báo đẩy tới khay hệ thống, chọn ảnh từ thư viện điện thoại, ô chọn
+ngày giờ trên iOS Safari.
+
+Lộ trình đầy đủ ở `ARCHITECTURE.md` §9; việc còn treo ở
+[`docs/BACKLOG.md`](docs/BACKLOG.md).
