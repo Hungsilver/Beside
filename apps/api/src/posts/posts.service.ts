@@ -15,6 +15,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { StorageService } from '../common/storage/storage.service';
 import { AppError } from '../common/errors/app-error';
 import { LocationsService } from '../locations/locations.service';
+import { PushService } from '../push/push.service';
 import { ImageProcessor } from './image.processor';
 
 type PostWithRelations = Post & { photos: Photo[]; author: Pick<User, 'id' | 'displayName'> };
@@ -38,6 +39,7 @@ export class PostsService {
     private readonly storage: StorageService,
     private readonly images: ImageProcessor,
     private readonly locations: LocationsService,
+    private readonly push: PushService,
   ) {}
 
   // ------------------------------------------------------------------
@@ -131,6 +133,20 @@ export class PostsService {
         LocSource.CHECKIN,
       );
     }
+
+    /*
+     * Báo cho người ấy biết. Cố tình KHÔNG await: gửi thông báo là việc phụ,
+     * không được để nó làm chậm — hay làm hỏng — câu trả lời cho người vừa đăng.
+     * PushService tự nuốt mọi lỗi bên trong.
+     */
+    void this.push.sendToPartner(userId, {
+      kind: 'PARTNER_CHECKIN',
+      title: `${post.author.displayName} vừa đăng khoảnh khắc mới`,
+      body: post.caption?.slice(0, 120) || 'Xem ngay nhé 💕',
+      url: '/ky-niem',
+      tag: `post:${post.id}`,
+      at: Date.now(),
+    });
 
     return this.toResponse(post, userId);
   }

@@ -70,9 +70,37 @@ REDIS_PASSWORD=<chuỗi ngẫu nhiên>
 JWT_ACCESS_SECRET=<openssl rand lần 1>
 JWT_REFRESH_SECRET=<openssl rand lần 2>
 
+MINIO_ROOT_PASSWORD=<chuỗi ngẫu nhiên>
+
 NODE_ENV=production
 POSTGRES_PORT=5432                    # trên VPS không có Postgres nào khác nên để 5432
 ```
+
+### Khoá VAPID cho thông báo đẩy
+
+Thông báo đẩy (nhắc lịch, báo khi người ấy check-in) cần một **cặp khoá VAPID**
+riêng của server. Sinh trực tiếp trên VPS:
+
+```bash
+docker compose run --rm --entrypoint node api -e "console.log(require('web-push').generateVAPIDKeys())"
+```
+
+Chép hai giá trị vào `.env`:
+
+```ini
+VAPID_PUBLIC_KEY=<publicKey vừa sinh>
+VAPID_PRIVATE_KEY=<privateKey vừa sinh>
+VAPID_SUBJECT=mailto:email-that-cua-ban@...
+```
+
+Ba điều cần nhớ:
+
+- **Sinh khoá RIÊNG cho production**, đừng dùng lại khoá của máy dev.
+- **Đổi khoá = mọi thiết bị đã bật thông báo phải bật lại.** Khoá công khai được
+  gắn vào đăng ký của trình duyệt; đổi khoá thì các đăng ký cũ thành vô dụng.
+- **Để trống cả hai = tắt hẳn thông báo đẩy**, app vẫn chạy bình thường và màn
+  Cài đặt sẽ nói "máy chủ chưa bật thông báo đẩy". Khai báo **một nửa** thì API
+  từ chối khởi động — nửa vời là cấu hình sai, không phải là tắt.
 
 > **API sẽ từ chối khởi động** nếu:
 > - `JWT_ACCESS_SECRET` trùng `JWT_REFRESH_SECRET`, hoặc ngắn hơn 32 ký tự

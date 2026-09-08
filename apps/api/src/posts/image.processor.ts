@@ -92,12 +92,31 @@ export class ImageProcessor {
     const displayHeight = rotated ? meta.width : meta.height;
 
     const id = randomUUID();
-    const [orig, md, thumb, placeholderBuf] = await Promise.all([
-      this.resize(file.buffer, SIZES.orig, 82),
-      this.resize(file.buffer, SIZES.md, 78),
-      this.resize(file.buffer, SIZES.thumb, 70),
-      this.resize(file.buffer, PLACEHOLDER_SIZE, 40),
-    ]);
+
+    /*
+     * `metadata()` ở trên chỉ đọc phần ĐẦU tệp, nên một tấm ảnh có header hợp lệ
+     * mà phần thân hỏng (upload dở dang, thẻ nhớ lỗi, tệp bị cắt) vẫn lọt qua và
+     * chỉ chết ở đây, lúc giải mã thật. Không bắt thì lỗi này thoát ra thành 500.
+     */
+    let orig: Buffer;
+    let md: Buffer;
+    let thumb: Buffer;
+    let placeholderBuf: Buffer;
+    try {
+      [orig, md, thumb, placeholderBuf] = await Promise.all([
+        this.resize(file.buffer, SIZES.orig, 82),
+        this.resize(file.buffer, SIZES.md, 78),
+        this.resize(file.buffer, SIZES.thumb, 70),
+        this.resize(file.buffer, PLACEHOLDER_SIZE, 40),
+      ]);
+    } catch (err) {
+      // Log nguyên nhân kỹ thuật cho mình, còn người dùng chỉ cần biết phải chọn ảnh khác.
+      this.logger.warn(`Giải mã ảnh thất bại (${meta.format}): ${(err as Error).message}`);
+      throw AppError.badRequest(
+        ERROR_CODES.VALIDATION_FAILED,
+        'Tệp ảnh bị hỏng hoặc tải lên chưa xong — thử chọn lại ảnh khác nhé',
+      );
+    }
 
     return {
       keyOrig: `photos/${id}/orig.webp`,

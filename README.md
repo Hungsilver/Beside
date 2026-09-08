@@ -136,7 +136,7 @@ infra/
   nginx/web.conf         ← phục vụ file tĩnh PWA, SPA fallback
   postgres/init/         ← bật PostGIS, unaccent, ép timezone UTC
 packages/shared/         ← Zod schema + logic ngày tháng dùng CHUNG cho API và web
-apps/api/                ← NestJS + Prisma  (auth, me, couples, locations + WebSocket, posts, events)
+apps/api/                ← NestJS + Prisma  (auth, me, couples, locations + WebSocket, posts, events, push)
 apps/web/                ← React 19 + Vite + Tailwind v4 + PWA
 mockup/
   index.html             ← phác thảo Phase 0 (9 màn, để duyệt hướng thiết kế)
@@ -168,13 +168,17 @@ docs/BACKLOG.md          ← ý tưởng & việc chờ quyết định
 | Ảnh riêng tư | ảnh **không** phát bằng link công khai — mỗi lượt xem đều kiểm tra quyền theo cặp đôi |
 | **Lịch trình chung** | lịch tháng, sự kiện có giờ hoặc cả ngày, nhiều ngày, cảnh báo trùng giờ, việc riêng chỉ mình thấy |
 | Ai sửa được gì | sự kiện chung thì cả hai đều **thấy**, nhưng chỉ người tạo mới **sửa/xoá** |
-| PWA | cài lên màn hình chính, manifest + icon + service worker, cache tile bản đồ |
+| **Thông báo đẩy** | nhắc trước mỗi cuộc hẹn, báo khi người ấy đăng khoảnh khắc mới. Tự dọn thiết bị đã gỡ app |
+| PWA | cài lên màn hình chính, manifest + icon + service worker tự viết, cache tile bản đồ |
 
 ## Chưa có
 
-Còn lại của Phase 4: thông báo đẩy, nhắc lịch, địa điểm + geofence, mốc kỷ niệm.
+Còn lại của Phase 4: địa điểm + geofence (báo khi người ấy tới nơi), mốc kỷ niệm.
 Giao diện PC ở Phase 5. Ảnh check-in đã lưu được toạ độ nhưng **chưa hiện lên bản đồ**.
 Xem lộ trình ở `ARCHITECTURE.md §9`.
+
+> Thông báo đẩy cần **khoá VAPID** trên server. Chưa cấu hình thì tính năng tự tắt
+> và app vẫn chạy bình thường — cách sinh khoá xem `docs/DEPLOY.md §3`.
 
 ## Điều cần biết trước khi kỳ vọng
 

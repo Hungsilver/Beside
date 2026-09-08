@@ -141,6 +141,10 @@ export class EventsService {
     const event = await this.prisma.event.update({
       where: { id: eventId },
       data: {
+        // Sửa sự kiện thì cho phép nhắc lại theo giờ mới. Đặt lại vô điều kiện
+        // (kể cả khi giờ không đổi) — đơn giản và không bao giờ bỏ sót; cái giá
+        // là người dùng có thể nhận lại một lời nhắc đã nhận, chấp nhận được.
+        reminderSentAt: null,
         title: input.title,
         note: input.note ?? null,
         emoji: input.emoji ?? DEFAULT_EMOJI,

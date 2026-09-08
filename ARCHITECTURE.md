@@ -8,14 +8,15 @@
 - **Domain:** `https://easytech.io.vn` (tạm dùng — đã mua). Sẽ đổi sang domain `beside` sau
   ⇒ **mọi URL phải lấy từ biến môi trường, không hardcode domain ở bất kỳ đâu**
 - **Cập nhật lần cuối:** 2026-09-08
-- **Trạng thái:** `PHASE 4 (F4) — Lịch trình chung` ✅ đã chạy & trace xong
+- **Trạng thái:** `PHASE 4` — F4 Lịch trình ✅ · F7 Thông báo đẩy ✅ · còn F6 Geofence, F5 Milestone
   - Phase 1: `docs/traces/phase-1-auth-pairing.md` — 53/53 case
   - Phase 2: `docs/traces/phase-2-realtime-location.md` — 29/29 case
   - Rà soát: `docs/traces/phase-2-review.md` — 21/21 case (bắt được 2 lỗi rò rỉ quyền riêng tư)
   - Phase 3: `docs/traces/phase-3-posts.md` — 34/34 case (bắt được 4 lỗi, xem L16–L19)
   - Phase 4 (F4): `docs/traces/phase-4-events.md` — 37/37 case (bắt được 2 lỗi, L22–L23)
-  - Tổng: **192 unit test** + **174 case trace**, typecheck sạch cả 3 workspace
-  - ✅ `npm run verify:local` → **33/33 mục đạt** trên Docker thật
+  - Phase 4 (F7): `docs/traces/phase-4-push.md` — 21/21 case (bắt được 3 lỗi, L24–L26)
+  - Tổng: **205 unit test** + **195 case trace**, typecheck + lint sạch cả 3 workspace
+  - ✅ `npm run verify:local` → **34/34 mục đạt** trên Docker thật
     (6/6 container healthy: db · redis · api · web · caddy · minio), đi qua Caddy HTTPS
 - **Triển khai:** chủ dự án tự deploy — hướng dẫn ở `docs/DEPLOY.md`
 
@@ -169,6 +170,8 @@ không "nhảy" khi tín hiệu yếu. Chạy ở client **trước khi** gửi 
 | **Database** | **PostgreSQL 17 + PostGIS 3.5** | Truy vấn không gian (geofence, khoảng cách) native |
 | Cache / PubSub | **Redis 7** (tuỳ chọn) | Cache vị trí gần nhất, hạn mức chia sẻ giữa nhiều instance. **Hỏng thì app vẫn chạy** — chỉ chậm hơn một nhịp |
 | Hạn mức vị trí | `SlidingWindowRateLimiter` trong tiến trình | Hàng rào CHÍNH, không phụ thuộc Redis (xem trace L10) |
+| Thông báo đẩy | **`web-push`** (giao thức Web Push + VAPID) | Không cần Firebase, không cần tài khoản bên thứ ba. Thiếu khoá VAPID = tắt tính năng, app vẫn chạy |
+| Service worker | `vite-plugin-pwa` chiến lược **`injectManifest`** + workbox runtime | Bản sinh tự động (`generateSW`) không chèn được `addEventListener('push')` của mình. Xem `apps/web/src/sw.ts` |
 | Job định kỳ | **`@nestjs/schedule`** cho việc lặp cố định | Dọn lịch sử vị trí chỉ cần một cron, không cần hàng đợi. BullMQ để dành Phase 4 (nhắc lịch theo từng sự kiện — mỗi sự kiện một job hẹn giờ) |
 | Lưu ảnh | **MinIO** (S3-compatible, `@aws-sdk/client-s3` với `forcePathStyle`) | Self-host; sau này đổi sang S3 thật không phải sửa code. **Không dùng URL ký sẵn** — xem §7.1b |
 | Nhận tệp tải lên | `multer` qua `FilesInterceptor` — bộ nhớ, ≤3 tệp, ≤15MB/tệp | Không ghi tệp tạm ra đĩa; ảnh đi thẳng vào sharp |
@@ -342,7 +345,9 @@ model Event {                            // F4 — lịch trình
   lng             Float?
   remindMinBefore Int?     @default(60)
   visibility      EventVisibility @default(SHARED)  // SHARED | PRIVATE
+  reminderSentAt  DateTime?                // đã nhắc lúc nào; NULL = chưa nhắc
   @@index([coupleId, startAt])
+  @@index([reminderSentAt, startAt])       // chỉ mục cho job quét nhắc lịch
 }
 
 model Milestone {                        // F5 — mốc kỷ niệm (tự sinh + tự thêm)
@@ -497,7 +502,11 @@ DELETE /events/:id                 chỉ người tạo                         
 GET    /love/summary               {daysTogether, nextMilestone, streak}
 GET|POST /milestones
 
-POST   /push/subscribe             {endpoint, keys}
+GET    /push/public-key            khoá công khai VAPID — endpoint PUBLIC        ✅
+POST   /push/subscribe             {endpoint, keys, userAgent?}                  ✅
+DELETE /push/subscribe             {endpoint} — chỉ gỡ được đăng ký của mình      ✅
+GET    /push/devices               ?endpoint= để đánh dấu "máy hiện tại"          ✅
+POST   /push/test                  gửi thử một thông báo cho chính mình           ✅
 ```
 
 **Xác thực WebSocket:** kiểm tra token bằng middleware `server.use()` ngay ở bước
@@ -591,7 +600,7 @@ Bắt buộc tối thiểu: 1 happy path + 3 edge case + 1 case lỗi.
 | **1** | ✅ Hạ tầng: docker compose, Caddy+TLS, Postgres+PostGIS, NestJS, Auth, Pairing, đếm ngày yêu | Đăng nhập & ghép đôi chạy thật · 39/39 trace · 56 unit test |
 | **2** | ✅ Vị trí realtime: Socket.IO, Kalman, MapLibre, trail, presence, ghost mode, làm mờ vị trí, dọn lịch sử | Xem nhau di chuyển trên bản đồ · 29/29 trace |
 | **3** | ✅ Check-in ảnh + dòng kỷ niệm + MinIO + sharp (xoay & xoá EXIF), phân trang con trỏ, cảm xúc | Đăng & xem kỷ niệm · 34/34 trace |
-| **4** | 🔸 F4 Lịch trình ✅ (37/37 trace) · còn Milestone, Web Push, Geofence, ghim ảnh check-in lên bản đồ *(đang làm)* | Đủ tính năng cốt lõi |
+| **4** | 🔸 F4 Lịch trình ✅ (37/37) · F7 Thông báo đẩy + nhắc lịch ✅ (21/21) · còn F6 Geofence, F5 Milestone, ghim ảnh check-in lên bản đồ *(đang làm)* | Đủ tính năng cốt lõi |
 | **5** | Giao diện PC (≥1024px), tối ưu hiệu năng, PWA offline | Bản 1.0 |
 | **6** | *(tuỳ chọn)* APK Android qua Capacitor cho tracking nền | File APK sideload |
 
@@ -637,6 +646,12 @@ Bắt buộc tối thiểu: 1 happy path + 3 edge case + 1 case lỗi.
 | 2026-09-08 | Ô nhập ngày/giờ đổi sang UTC bằng **offset `+07:00` ghép tay** | `new Date("…T19:00")` không offset được trình duyệt hiểu theo múi giờ của MÁY — người dùng đi nước ngoài là lệch giờ hẹn | Sẽ phải sửa nếu sau này hỗ trợ múi giờ khác |
 | 2026-09-08 | Sự kiện **chung** thì ai cũng THẤY nhưng chỉ người tạo mới SỬA/XOÁ | Lịch của hai người cần nhìn thấy nhau, nhưng sửa đồ của nhau thì dễ cãi nhau | Muốn sửa hộ thì phải nhắn nhau — chấp nhận được với 2 người |
 | 2026-09-08 | Việc riêng của người kia trả **404**, không phải 403 | 403 tự nó đã tiết lộ "id này có tồn tại" | Người dùng không phân biệt được "không có" với "không được xem" — đúng ý đồ |
+| 2026-09-08 | Khoá công khai VAPID trả qua **API** (`GET /push/public-key`), không nhúng lúc build | Web là file tĩnh; nhúng vào nghĩa là mỗi môi trường phải build một bản riêng. Khoá này công khai theo đúng thiết kế Web Push | Thêm một vòng gọi API trước khi bật thông báo |
+| 2026-09-08 | Nhắc lịch bằng **vòng quét mỗi phút**, không hẹn job riêng cho từng sự kiện | Server tắt rồi bật lại thì job hẹn giờ mất, vòng quét vẫn thấy; đổi giờ sự kiện không phải đi huỷ job cũ; không cần BullMQ | Độ chính xác chỉ tới từng phút |
+| 2026-09-08 | **Đánh dấu `reminderSentAt` TRƯỚC khi gửi**, bằng UPDATE có điều kiện | Đánh dấu sau thì hai tiến trình API cùng kịp gửi — người dùng nhận hai lần | Gửi hỏng thì mất lời nhắc đó; chấp nhận được, spam khó chịu hơn |
+| 2026-09-08 | Service worker chuyển từ `generateSW` sang **`injectManifest`** | Cần `addEventListener('push')` do mình viết, bản sinh tự động không chèn code riêng vào được | Phải tự viết luôn phần runtime caching (MapLibre, tile bản đồ) |
+| 2026-09-08 | Thiếu khoá VAPID = **tắt tính năng**, không phải lỗi boot; nhưng khai báo **một nửa** thì từ chối boot | Thông báo là tính năng phụ, không được làm sập API. Còn nửa vời là cấu hình sai rõ ràng | Người deploy có thể quên bật mà không biết — màn Cài đặt nói rõ "máy chủ chưa bật" |
+| 2026-09-08 | Đăng ký đẩy trùng `endpoint` thì **chuyển chủ**, không nhân đôi | Hai người dùng chung một máy: người đăng nhập sau sẽ nhận thông báo của người trước | Người trước im lặng mất thông báo trên máy đó — đúng ý đồ |
 | 2026-09-08 | Thêm migration `20260907000000_enable_postgis` chạy trước mọi migration khác | Shadow database của `migrate dev` là DB trắng, không có PostGIS nên migration cột `geog` chết (trace L22) | Trùng việc với `infra/postgres/init/01-extensions.sql`, nhưng mọi câu lệnh đều IF NOT EXISTS nên vô hại |
 
 ---

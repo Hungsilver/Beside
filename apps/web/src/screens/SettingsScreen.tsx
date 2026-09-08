@@ -9,6 +9,7 @@ import {
 } from '@beside/shared';
 import { useAuth } from '@/lib/auth-context';
 import { ApiRequestError } from '@/lib/api-client';
+import { usePush } from '@/lib/push-api';
 import { useCouple, useUnpair } from '@/lib/couple-api';
 import { useUpdateAnniversary, useUpdatePrivacy, useUpdateProfile } from '@/lib/profile-api';
 import { Field, FormError, Screen, Spinner } from '@/components/ui';
@@ -41,6 +42,8 @@ export default function SettingsScreen() {
       <ProfileSection />
 
       <MessagingSection />
+
+      <NotificationSection />
 
       <PrivacySection />
 
@@ -240,6 +243,74 @@ export default function SettingsScreen() {
 
         <SaveButton pending={updateProfile.isPending} saved={saved} />
       </form>
+    );
+  }
+
+  // ---------------------------------------------------------------- thong bao
+
+  function NotificationSection() {
+    const push = usePush();
+
+    // Ba thứ phải cùng đúng mới nhận được thông báo (hỗ trợ · quyền · đã đăng
+    // ký). Người dùng hay nhầm giữa chúng, nên mỗi trạng thái nói rõ đang thiếu
+    // cái nào và phải làm gì tiếp.
+    const COPY: Record<string, { desc: string; action: 'toggle' | 'none' }> = {
+      checking: { desc: 'Đang kiểm tra...', action: 'none' },
+      unsupported: {
+        desc: 'Trình duyệt này không hỗ trợ thông báo đẩy. Thử Chrome hoặc Safari bản mới.',
+        action: 'none',
+      },
+      'need-install': {
+        desc: 'Trên iPhone phải "Thêm vào màn hình chính" trước, rồi mở app từ đó mới bật được thông báo.',
+        action: 'none',
+      },
+      'server-off': {
+        desc: 'Máy chủ chưa bật thông báo đẩy (thiếu khoá VAPID).',
+        action: 'none',
+      },
+      denied: {
+        desc: 'Bạn đã chặn thông báo cho trang này. Mở lại trong phần cài đặt của trình duyệt.',
+        action: 'none',
+      },
+      off: {
+        desc: 'Nhắc trước mỗi cuộc hẹn, và báo khi người ấy tới nơi.',
+        action: 'toggle',
+      },
+      on: {
+        desc: 'Đang bật trên thiết bị này.',
+        action: 'toggle',
+      },
+    };
+
+    const copy = COPY[push.state] ?? COPY.checking!;
+
+    return (
+      <section className="card mt-3.5">
+        <SectionTitle emoji="🔔" title="Thông báo" />
+        <FormError message={push.error} />
+
+        <div className="mt-1">
+          <Toggle
+            emoji="📣"
+            title="Thông báo đẩy"
+            desc={copy.desc}
+            on={push.state === 'on'}
+            pending={push.busy || copy.action === 'none'}
+            onChange={(v) => void (v ? push.enable() : push.disable())}
+          />
+        </div>
+
+        {push.state === 'on' && (
+          <button
+            type="button"
+            disabled={push.busy}
+            onClick={() => void push.sendTest()}
+            className="mt-2 min-h-11 w-full rounded-2xl bg-ink-100 text-[13.5px] font-bold text-ink-700 disabled:opacity-50"
+          >
+            Gửi thử một thông báo
+          </button>
+        )}
+      </section>
     );
   }
 

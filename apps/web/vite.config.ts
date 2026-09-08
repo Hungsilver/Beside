@@ -15,38 +15,22 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      /*
+       * injectManifest thay vì generateSW: thông báo đẩy cần
+       * addEventListener('push') do mình viết, mà bản service worker sinh tự
+       * động thì không chèn code riêng vào được. Giờ plugin chỉ chèn danh sách
+       * file nạp sẵn vào self.__WB_MANIFEST, phần còn lại nằm ở src/sw.ts.
+       */
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       registerType: 'prompt', // Không tự nạp lại giữa chừng khi người dùng đang xem bản đồ
       injectRegister: 'auto',
-      workbox: {
-        // KHÔNG cache API: dữ liệu vị trí phải luôn là mới nhất.
-        navigateFallbackDenylist: [/^\/api/, /^\/socket\.io/],
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         // KHÔNG nạp sẵn MapLibre khi cài app: gần 1MB mà đa số lần mở app
         // người dùng chỉ xem trang chủ. Nó được cache ở lần mở bản đồ đầu tiên.
         globIgnores: ['**/maplibre-*.js', '**/MapScreen-*.css'],
-        runtimeCaching: [
-          {
-            urlPattern: /\/assets\/(maplibre|MapScreen)-[^/]+\.(js|css)$/,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'beside-maplibre',
-              expiration: { maxEntries: 4, maxAgeSeconds: 60 * 60 * 24 * 60 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-          {
-            // Tile bản đồ: dùng bản cache trước cho nhanh, đồng thời tải bản mới
-            // ở nền. Mạng yếu vẫn thấy bản đồ thay vì ô trắng.
-            urlPattern: /^https:\/\/tiles\.openfreemap\.org\/.*/,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'beside-map-tiles',
-              expiration: { maxEntries: 600, maxAgeSeconds: 60 * 60 * 24 * 14 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-        ],
-        cleanupOutdatedCaches: true,
       },
       manifest: {
         name: 'Beside — Bên cạnh nhau',

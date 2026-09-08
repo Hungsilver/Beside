@@ -67,6 +67,16 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 - [x] Truy vấn lịch dùng điều kiện **giao khoảng**, không lọc theo mỗi `startAt`
 - [x] Thêm migration bật PostGIS chạy đầu tiên, để shadow DB replay được
 
+## Đã chốt (08/09/2026 — Phase 4, F7 Thông báo đẩy)
+
+- [x] Dùng **`web-push` + VAPID** trực tiếp, không qua Firebase hay dịch vụ bên thứ ba
+- [x] Khoá công khai trả qua `GET /push/public-key`, **không nhúng lúc build**
+- [x] Service worker chuyển sang **`injectManifest`** để tự viết được handler `push`
+- [x] Nhắc lịch bằng **vòng quét mỗi phút**, đánh dấu `reminderSentAt` TRƯỚC khi gửi
+- [x] Thiếu khoá VAPID = tắt tính năng (app vẫn chạy); khai báo nửa vời = từ chối boot
+- [x] Đăng ký đẩy trùng endpoint thì **chuyển chủ** — chống việc hai người dùng
+      chung một máy nhận thông báo của nhau
+
 ## Nợ kỹ thuật (ghi khi phát sinh)
 
 | Ngày | Mô tả | Mức độ | File |
@@ -92,3 +102,8 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 | 08/09 | Chưa gắn được địa điểm vào sự kiện — `placeId` đã có và đã kiểm quyền, nhưng chưa có màn quản lý Địa điểm (F6) | Trung bình | `apps/web/src/screens/CalendarScreen.tsx` |
 | 08/09 | Lịch mới có chế độ xem tháng + danh sách theo ngày; chưa có xem tuần / xem danh sách dài | Thấp | `apps/web/src/screens/CalendarScreen.tsx` |
 | 08/09 | `<input type="date">` và `type="time"` hiển thị rất khác nhau giữa iOS Safari và Chrome Android — chưa bấm thử trên máy thật | Cao | `apps/web/src/components/EventSheet.tsx` |
+| 08/09 | **Chưa bấm thử thông báo trên máy thật.** Trace và unit test phủ hết phần server, nhưng "thông báo có hiện lên khay hay không" thì chỉ bấm tay mới biết. Trên iPhone phải cài lên màn hình chính trước | Cao | `apps/web/src/sw.ts` |
+| 08/09 | Chưa có màn quản lý thiết bị nhận thông báo — API `/push/devices` đã có nhưng giao diện mới chỉ bật/tắt cho máy hiện tại | Thấp | `apps/web/src/screens/SettingsScreen.tsx` |
+| 08/09 | Chưa tách được từng loại thông báo (nhắc lịch / check-in / geofence) — hiện bật là nhận hết | Trung bình | `apps/api/src/push/` |
+| 08/09 | Job nhắc lịch chưa chạy thật qua một mốc thời gian thật, mới kiểm bằng unit test với đồng hồ giả | Trung bình | `apps/api/src/events/event-reminder.job.ts` |
+| 08/09 | `PARTNER_ARRIVED` / `PARTNER_LEFT` đã khai báo trong `PUSH_KINDS` nhưng chưa có nơi nào gửi — chờ F6 Geofence | Trung bình | `packages/shared/src/push.schema.ts` |

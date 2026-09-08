@@ -75,8 +75,11 @@ export function timeLabel(event: EventResponse): string {
   if (event.allDay) return 'Cả ngày';
   const start = new Date(event.startAt);
   if (Number.isNaN(start.getTime())) return '';
+  // en-GB cho ra đúng "HH:mm" 24 giờ ở mọi bộ dữ liệu ICU — giống hệt cách
+  // job nhắc lịch ở API định dạng, để chữ trên màn hình và chữ trong thông báo
+  // không lệch nhau.
   const fmt = (d: Date) =>
-    d.toLocaleTimeString('vi-VN', {
+    d.toLocaleTimeString('en-GB', {
       timeZone: DISPLAY_TIMEZONE,
       hour: '2-digit',
       minute: '2-digit',

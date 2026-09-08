@@ -264,6 +264,16 @@ async function checkFlows() {
     TRACE_BASE_URL: `${HTTPS}/api/v1`,
     TRACE_INSECURE_TLS: '1',
   });
+
+  sh(`${COMPOSE} restart api`, { allowFail: true });
+  await waitHealthy();
+
+  // Bộ này gọi ra FCM thật (bằng token không tồn tại) để kiểm nhánh dọn đăng ký
+  // chết — nên nó cần máy có Internet. Không có mạng thì case PU-13 sẽ hỏng.
+  runTrace('apps/api/test/trace-phase4-push.mjs', 'Phase 4 — thông báo đẩy & nhắc lịch', {
+    TRACE_BASE_URL: `${HTTPS}/api/v1`,
+    TRACE_INSECURE_TLS: '1',
+  });
 }
 
 async function waitHealthy() {
@@ -326,6 +336,7 @@ const run = async () => {
     console.log('  3. Cài PWA lên màn hình chính     → cần thiết bị thật');
     console.log('  4. Chọn ảnh & đăng khoảnh khắc    → nén ảnh chỉ chạy trong trình duyệt');
     console.log('  5. Thêm/sửa sự kiện trên lịch     → ô chọn ngày giờ của trình duyệt');
+    console.log('  6. Bật thông báo & bấm "Gửi thử"  → khay thông báo của máy thật');
     console.log('');
     console.log('Xong mấy mục đó là đủ tự tin lên production. Hướng dẫn: docs/DEPLOY.md');
   } else {

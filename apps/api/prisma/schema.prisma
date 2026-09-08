@@ -292,10 +292,15 @@ model Event {
   lng             Float?
   remindMinBefore Int?            @default(60)
   visibility      EventVisibility @default(SHARED)
+  /// Đã gửi nhắc lịch lúc nào. NULL = chưa gửi.
+  /// Đổi giờ sự kiện thì đặt lại về NULL để được nhắc theo giờ mới.
+  reminderSentAt  DateTime?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
   @@index([coupleId, startAt])
+  /// Chỉ mục cho job nhắc lịch: quét theo startAt trong đám chưa gửi.
+  @@index([reminderSentAt, startAt])
   @@map("events")
 }
 

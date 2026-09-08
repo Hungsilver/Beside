@@ -29,6 +29,15 @@ export const envSchema = z
     MINIO_ROOT_USER: z.string().min(1).default('beside'),
     MINIO_ROOT_PASSWORD: z.string().min(1).default('beside'),
 
+    /**
+     * Web Push (F7). Để trống cả hai = tắt hẳn thông báo đẩy; app vẫn chạy.
+     * Không bắt buộc vì đây là tính năng phụ — thiếu khoá thì không được làm
+     * sập cả API.
+     */
+    VAPID_PUBLIC_KEY: z.string().optional(),
+    VAPID_PRIVATE_KEY: z.string().optional(),
+    VAPID_SUBJECT: z.string().default('mailto:admin@example.com'),
+
     APP_ORIGIN: z.string().url('APP_ORIGIN phải là URL đầy đủ, ví dụ https://easytech.io.vn'),
     COOKIE_DOMAIN: z.string().optional(),
     /** Các origin được phép gọi API khi dev (ngăn cách bằng dấu phẩy). */
@@ -44,6 +53,20 @@ export const envSchema = z
           'có thể được dùng làm refresh token.',
       });
     }
+    // Có một nửa cặp khoá là cấu hình sai rõ ràng — chết ngay lúc boot còn hơn
+    // để người dùng bật thông báo rồi không bao giờ nhận được gì.
+    const hasPub = Boolean(env.VAPID_PUBLIC_KEY);
+    const hasPriv = Boolean(env.VAPID_PRIVATE_KEY);
+    if (hasPub !== hasPriv) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [hasPub ? 'VAPID_PRIVATE_KEY' : 'VAPID_PUBLIC_KEY'],
+        message:
+          'VAPID_PUBLIC_KEY và VAPID_PRIVATE_KEY phải khai báo cùng nhau ' +
+          '(hoặc để trống cả hai để tắt thông báo đẩy).',
+      });
+    }
+
     if (env.NODE_ENV === 'production' && !env.APP_ORIGIN.startsWith('https://')) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
