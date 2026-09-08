@@ -113,7 +113,7 @@ export async function apiRequest<T>(
         ...(body !== undefined && !isForm ? { 'Content-Type': 'application/json' } : {}),
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
-      ...(body !== undefined ? { body: isForm ? (body as FormData) : JSON.stringify(body) } : {}),
+      ...(body !== undefined ? { body: isForm ? body : JSON.stringify(body) } : {}),
       ...(signal ? { signal } : {}),
     });
 

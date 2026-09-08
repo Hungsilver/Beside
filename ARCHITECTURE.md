@@ -17,9 +17,10 @@
   - Phase 4 (F7): `docs/traces/phase-4-push.md` — 21/21 case (bắt được 3 lỗi, L24–L26)
   - Phase 4 (F6): `docs/traces/phase-4-places.md` — 27/27 case (bắt được 3 lỗi, L27–L29)
   - Sửa lỗi: `docs/traces/fix-ban-do-khong-hien.md` — khung bản đồ cao 0px do cascade layer của Tailwind v4 (L30), 7/7 case
+  - Sửa lỗi: `docs/traces/fix-lint-khong-chay.md` — `npm run lint` không kiểm gì suốt 4 phase (L31), 9/9 case
   - Phase 4 (F5): `docs/traces/phase-4-milestones.md` — 25/25 case (không lỗi mới)
   - Tổng: **270 unit test** + **247 case trace**, typecheck + lint sạch cả 3 workspace
-  - ✅ `npm run verify:local` → **36/36 mục đạt** trên Docker thật
+  - ✅ `npm run verify:local` → **37/37 mục đạt** trên Docker thật (đã gồm chốt ESLint)
     (6/6 container healthy: db · redis · api · web · caddy · minio), đi qua Caddy HTTPS
 - **Triển khai:** chủ dự án tự deploy — hướng dẫn ở `docs/DEPLOY.md`
 
@@ -628,6 +629,29 @@ Mỗi feature phải kèm **bảng trace** trong `docs/traces/<feature>.md`:
 đầu vào giả định → từng bước xử lý → đầu ra kỳ vọng → đầu ra thực tế → kết luận.
 Bắt buộc tối thiểu: 1 happy path + 3 edge case + 1 case lỗi.
 
+### 8.1 Ba chốt tự động — và điều kiện để chúng có nghĩa
+
+| Lệnh | Chạy cái gì | Chốt lại ở đâu |
+|---|---|---|
+| `npm run typecheck` | `tsc --noEmit` cho cả 3 workspace, **bao gồm file `*.spec.ts`** | `verify:local` mục 4 |
+| `npm run lint` | **ESLint thật** (`eslint.config.mjs` ở gốc) cho cả 3 workspace | `verify:local` mục 4 |
+| `npm run test` | Vitest — hiện 270 unit test | `verify:local` mục 4 |
+
+> ⚠️ **Bài học đắt nhất của dự án này (L31).** Từ Phase 1 tới Phase 4,
+> `npm run lint` chạy `--workspaces --if-present` mà **không workspace nào có
+> script `lint`** — nó luôn thoát 0 và không kiểm gì cả. Bốn báo cáo "lint sạch"
+> là vô căn cứ. Cùng khoảng đó, `tsconfig.json` của `packages/shared` **loại trừ**
+> `*.spec.ts`, nên hơn 100 unit test chưa từng được kiểm kiểu.
+>
+> **Một mã thoát 0 không có nghĩa là phép kiểm đã chạy.** Mỗi khi thêm một chốt
+> tự động, phải kiểm chứng nó **thất bại được** trên một trường hợp cố ý sai —
+> nếu không nó chỉ là một dòng chữ xanh vô nghĩa. Nguyên tắc này cũng chính là
+> thứ đã bắt được L18, L25 và L27 trong các bộ trace.
+
+Bộ quy tắc ESLint **không chọn theo mặc định** mà chọn theo đúng những lỗi dự án
+này đã thật sự mắc phải: `no-floating-promises` (L11),
+`react-hooks/exhaustive-deps` (L20, L21), `no-explicit-any` và `no-console` (R2).
+
 **Bộ dữ liệu giả định chuẩn** (`packages/fixtures/`) — dùng lại cho mọi trace:
 - Couple `An ❤ Bình`, anniversary `2023-02-14`
 - Tuyến đường thật Quận 1 → Thủ Đức (42 điểm GPS, trong đó 3 điểm nhiễu accuracy > 200m)
@@ -707,6 +731,9 @@ Bắt buộc tối thiểu: 1 happy path + 3 edge case + 1 case lỗi.
 | 2026-09-08 | Dùng `haversineMeters` trong RAM, chưa dùng `ST_DWithin` của PostGIS | Tối đa 20 địa điểm mỗi couple — chênh lệch không đáng kể, và hàm thuần thì unit test được | Nếu số địa điểm tăng nhiều thì phải chuyển sang truy vấn không gian |
 | 2026-09-08 | Dùng lại hằng số `GEOFENCE_EXIT_HYSTERESIS_M`/`PLACE_RADIUS_*` của Phase 0 thay vì đặt núm mới | R0: bản kế hoạch là nguồn sự thật; hai núm cùng điều khiển một thứ là mầm lệch (trace L29) | Khoảng chênh là cộng 30 m cố định, không co giãn theo bán kính |
 | 2026-09-08 | Thêm migration `20260907000000_enable_postgis` chạy trước mọi migration khác | Shadow database của `migrate dev` là DB trắng, không có PostGIS nên migration cột `geog` chết (trace L22) | Trùng việc với `infra/postgres/init/01-extensions.sql`, nhưng mọi câu lệnh đều IF NOT EXISTS nên vô hại |
+| 2026-09-08 | Mỗi chốt tự động phải được kiểm chứng là **thất bại được** trước khi tin nó | `npm run lint` thoát 0 suốt 4 phase mà không chạy gì; `tsconfig` của shared loại trừ file test nên 100+ test chưa từng được typecheck (L31) | Thêm một bước xác minh mỗi lần dựng chốt mới |
+| 2026-09-08 | ESLint dùng **một file cấu hình ở gốc** cho cả 3 workspace | Ba workspace dùng chung `packages/shared` và chung quy ước R2; ba file cấu hình là ba chỗ để lệch nhau | File cấu hình dài hơn, phải phân nhánh theo `files:` |
+| 2026-09-08 | `packages/shared` tách `tsconfig.build.json` khỏi `tsconfig.json` | Bản build phải bỏ `*.spec.ts` khỏi `dist`, nhưng typecheck và ESLint thì phải thấy chúng — một file không phục vụ được cả hai | Thêm một file cấu hình phải giữ đồng bộ |
 | 2026-09-08 | Không đặt utility bố cục của Tailwind lên thẻ DOM mà thư viện ngoài tự gắn class vào — bọc thêm một thẻ ngoài | Tailwind v4 gói utility vào `@layer utilities`; CSS thư viện ngoài nhập thẳng thì không-layer nên **thắng tuyệt đối** bất kể độ đặc hiệu. `.maplibregl-map{position:relative}` đè `absolute` làm khung bản đồ co còn cao 0px (trace L30) | Thêm một thẻ bọc; đổi lại không phải kéo 70KB CSS của MapLibre vào bundle khởi động chỉ để đưa nó vào layer |
 
 ---

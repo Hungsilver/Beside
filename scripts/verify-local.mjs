@@ -34,6 +34,7 @@ function section(title) {
 
 
 /** Bỏ mã màu ANSI trước khi so khớp — nếu không regex sẽ trượt hết. */
+// eslint-disable-next-line no-control-regex -- ESC (\x1B) chính là thứ cần khớp
 const stripAnsi = (s) => s.replace(/\x1B\[[0-9;]*m/g, '');
 
 /** Dòng đầu tiên có nội dung, để hiển thị gọn trong bảng kết quả. */
@@ -310,6 +311,17 @@ function checkCode() {
 
   const tc = stripAnsi(sh('npm run typecheck', { allowFail: true }));
   check('code', 'typecheck 3 workspace', !/error TS/.test(tc));
+
+  /*
+   * Lint được thêm vào đây ngày 08/09. Trước đó `npm run lint` chạy
+   * `--workspaces --if-present` mà KHÔNG workspace nào có script `lint`, nên nó
+   * luôn thoát 0 và bước 3 của R1 xanh một cách giả suốt bốn phase.
+   * Giờ nó chạy ESLint thật, và verify:local là nơi chốt lại điều đó.
+   */
+  const lint = stripAnsi(sh('npm run lint', { allowFail: true }));
+  const problems = /(\d+) problems? \((\d+) errors?/.exec(lint);
+  const lintErrors = problems ? Number(problems[2]) : 0;
+  check('code', 'ESLint 3 workspace', lintErrors === 0, problems ? problems[0] : 'sạch');
 
   const t = stripAnsi(sh('npm test', { allowFail: true }));
   const totals = [...t.matchAll(/Tests\s+(\d+) passed/g)].map((m) => Number(m[1]));

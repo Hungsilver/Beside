@@ -191,7 +191,7 @@ export class PostsService {
     const last = page[page.length - 1];
 
     return {
-      items: await Promise.all(page.map((p) => this.toResponse(p, userId))),
+      items: page.map((p) => this.toResponse(p, userId)),
       nextCursor: hasMore && last ? `${last.createdAt.getTime()}_${last.id}` : null,
     };
   }
@@ -310,7 +310,7 @@ export class PostsService {
 
   // ------------------------------------------------------------------
 
-  private async toResponse(post: PostWithRelations, viewerId: string): Promise<PostResponse> {
+  private toResponse(post: PostWithRelations, viewerId: string): PostResponse {
     // Đường dẫn TƯƠNG ĐỐI, đi qua API. Không phụ thuộc domain nên đổi tên miền
     // không cần sửa gì; và mỗi lượt xem đều bị kiểm tra quyền thật.
     const photos: PhotoResponse[] = [...post.photos]

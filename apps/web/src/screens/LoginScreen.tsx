@@ -37,7 +37,7 @@ export default function LoginScreen() {
     setSubmitting(true);
     try {
       await login(parsed.data);
-      navigate('/', { replace: true });
+      void navigate('/', { replace: true });
     } catch (err) {
       if (err instanceof ApiRequestError) {
         setFormError(err.message);

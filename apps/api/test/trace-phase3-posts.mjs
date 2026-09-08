@@ -288,7 +288,6 @@ const run = async () => {
   // ================================================================
   // D · GHIM LÊN BẢN ĐỒ + QUYỀN RIÊNG TƯ
   // ================================================================
-  let pinnedId = null;
   {
     const r = await call('POST', '/posts', {
       token: an,
@@ -299,7 +298,6 @@ const run = async () => {
         placeName: 'Quan 1',
       }),
     });
-    pinnedId = r.body?.id;
     rec('P3-14', 'Check-in co ghim toa do',
       '201 + luu dung lat/lng/placeName',
       `${r.status} · ${r.body?.lat},${r.body?.lng} · ${r.body?.placeName}`,

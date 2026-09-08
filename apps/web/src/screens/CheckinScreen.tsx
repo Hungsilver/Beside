@@ -123,7 +123,8 @@ export default function CheckinScreen() {
 
     try {
       await createPost.mutateAsync(form);
-      navigate('/ky-niem', { replace: true });
+      // navigate() cua react-router v7 tra ve Promise; ta co y khong cho.
+      void navigate('/ky-niem', { replace: true });
     } catch (err) {
       setError(
         err instanceof ApiRequestError ? err.message : 'Không đăng được, thử lại nhé',

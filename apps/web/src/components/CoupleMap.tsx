@@ -50,6 +50,12 @@ export default function CoupleMap({ markers, trail, recenterToken, onMapReady }:
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
+    // Chép ref ra biến cục bộ NGAY TẠI ĐÂY, không phải trong hàm dọn dẹp: tới
+    // lúc dọn dẹp chạy, `markersRef.current` có thể đã trỏ sang đối tượng khác.
+    // Ở đây Map chỉ tạo một lần nên thực tế không đổi, nhưng viết đúng mẫu để
+    // lần sau sửa không dính bẫy — và đây chính là quy tắc react-hooks bắt.
+    const markers = markersRef.current;
+
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: STYLE_URL,
@@ -88,8 +94,8 @@ export default function CoupleMap({ markers, trail, recenterToken, onMapReady }:
     });
 
     return () => {
-      markersRef.current.forEach((m) => m.remove());
-      markersRef.current.clear();
+      markers.forEach((m) => m.remove());
+      markers.clear();
       map.remove();
       mapRef.current = null;
       readyRef.current = false;
@@ -152,6 +158,14 @@ export default function CoupleMap({ markers, trail, recenterToken, onMapReady }:
     const map = mapRef.current;
     if (!map || !readyRef.current) return;
 
+    /*
+     * `getSource()` khai báo trả về `Source` — kiểu cha không có `setData`.
+     * Phải ép về `GeoJSONSource` mới gọi được.
+     *
+     * ESLint `no-unnecessary-type-assertion` tưởng phép ép này thừa và `--fix`
+     * đã gỡ nó, làm vỡ typecheck. Giữ lại và tắt quy tắc ngay tại đây, kèm lý do.
+     */
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     const source = map.getSource('trail') as maplibregl.GeoJSONSource | undefined;
     if (!source) return;
 

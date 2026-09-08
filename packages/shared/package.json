@@ -17,7 +17,7 @@
   },
   "files": ["dist"],
   "scripts": {
-    "build": "npm run clean && tsc -p tsconfig.json && tsc -p tsconfig.esm.json && node scripts/finalize-esm.mjs",
+    "build": "npm run clean && tsc -p tsconfig.build.json && tsc -p tsconfig.esm.json && node scripts/finalize-esm.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

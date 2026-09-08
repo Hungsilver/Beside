@@ -135,5 +135,8 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 | 08/09 | **Chưa cho chọn mốc nào muốn được nhắc** — hiện mọi mốc đều nhắc như nhau | Thấp | `apps/api/src/milestones/` |
 | 08/09 | Mốc tự sinh **không tắt được** — ai không muốn thấy "1460 ngày bên nhau" thì đành chịu | Thấp | `packages/shared/src/milestone.schema.ts` |
 | 08/09 | Chưa gắn được ảnh cho mốc kỷ niệm — dữ liệu đã có sẵn ở `posts`, chỉ thiếu phần nối | Thấp | `apps/web/src/screens/MilestonesScreen.tsx` |
-| 08/09 | **`npm run lint` không kiểm gì cả** — không workspace nào có script `lint`, nên bước 3 của R1 luôn "xanh" một cách giả. Cần thêm ESLint thật cho cả 3 workspace | Cao | `package.json` (3 workspace) |
+| ~~08/09~~ | ~~`npm run lint` không kiểm gì cả~~ → **ĐÃ SỬA** cùng ngày: dựng ESLint thật ở `eslint.config.mjs`, tìm ra 27 lỗi, đã sửa hết. Xem `docs/traces/fix-lint-khong-chay.md` | ~~Cao~~ | — |
 | 08/09 | Lỗi khung bản đồ cao 0px **không test tự động nào bắt được** — typecheck/unit test đều xanh vì đây là lỗi cascade CSS chỉ lộ ra khi render thật. Cần E2E Playwright ở 390×844 khẳng định khung bản đồ có chiều cao > 0 | Cao | `apps/web/src/components/CoupleMap.tsx` |
+| 08/09 | Hai cảnh báo `react-refresh/only-export-components` (`auth-context.tsx`, `realtime.tsx` vừa xuất component vừa xuất hook) — chỉ ảnh hưởng tốc độ hot-reload lúc dev | Thấp | `apps/web/src/lib/` |
+| 08/09 | **Chưa có Prettier** — định dạng code dựa vào thói quen, không có công cụ chốt lại | Thấp | gốc dự án |
+| 08/09 | **Chưa có CI** — `verify:local` là chốt chặn duy nhất và phải chạy bằng tay. Một lần quên là một lần lọt | Trung bình | gốc dự án |

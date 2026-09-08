@@ -449,7 +449,7 @@ export default function SettingsScreen() {
       setError(null);
       try {
         await unpair.mutateAsync();
-        navigate('/ghep-doi', { replace: true });
+        void navigate('/ghep-doi', { replace: true });
       } catch (err) {
         setError(err instanceof ApiRequestError ? err.message : 'Không huỷ được');
       }

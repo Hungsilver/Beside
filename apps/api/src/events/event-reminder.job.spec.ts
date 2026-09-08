@@ -122,9 +122,9 @@ describe('EventReminderJob.sweep', () => {
     const { prisma, push, updateMany } = fakeDeps([makeEvent()]);
     await new EventReminderJob(prisma, push).sweep(NOW);
 
-    const order = (updateMany.mock.invocationCallOrder[0] ?? 0) as number;
+    const order = (updateMany.mock.invocationCallOrder[0] ?? 0);
     const pushOrder = ((push.sendToUser as unknown as { mock: { invocationCallOrder: number[] } })
-      .mock.invocationCallOrder[0] ?? 0) as number;
+      .mock.invocationCallOrder[0] ?? 0);
     expect(order).toBeLessThan(pushOrder);
   });
 

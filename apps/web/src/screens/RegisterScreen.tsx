@@ -38,7 +38,7 @@ export default function RegisterScreen() {
     try {
       await register(parsed.data);
       // Đăng ký xong thì chưa có couple → router sẽ tự đưa sang màn ghép đôi.
-      navigate('/', { replace: true });
+      void navigate('/', { replace: true });
     } catch (err) {
       if (err instanceof ApiRequestError) {
         setFormError(err.message);
