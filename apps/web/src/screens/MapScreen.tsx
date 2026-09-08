@@ -15,6 +15,15 @@ import CoupleMap, {
   type MapPlace,
 } from '@/components/CoupleMap';
 import { usePlaces } from '@/lib/places-api';
+import DraggableSheet from '@/components/DraggableSheet';
+import MapControls from '@/components/MapControls';
+import {
+  readSavedPhotoPins,
+  readSavedStyle,
+  savePhotoPins,
+  saveStyle,
+  type MapStyleId,
+} from '@/lib/map-styles';
 import { useFeed } from '@/lib/posts-api';
 import TabBar from '@/components/TabBar';
 
@@ -22,6 +31,8 @@ export default function MapScreen() {
   const coupleQuery = useCouple();
   const partnerQuery = usePartnerLatest();
   const navigate = useNavigate();
+  const [styleId, setStyleId] = useState<MapStyleId>(readSavedStyle);
+  const [photoPinsOn, setPhotoPinsOn] = useState(readSavedPhotoPins);
   const trailQuery = usePartnerTrail();
   const placesQuery = usePlaces();
   /*
@@ -128,9 +139,10 @@ export default function MapScreen() {
     <div className="relative h-dvh w-full overflow-hidden bg-canvas">
       <CoupleMap
         markers={markers}
+        styleId={styleId}
         trail={trailQuery.data?.points}
         places={places}
-        photoPins={photoPins}
+        photoPins={photoPinsOn ? photoPins : []}
         onPhotoPinClick={() => void navigate('/ky-niem')}
         recenterToken={recenterToken}
       />
@@ -173,21 +185,32 @@ export default function MapScreen() {
       </div>
 
       {/* Nút nổi */}
-      <div className="absolute bottom-[300px] right-4 z-20 flex flex-col gap-2.5">
-        <button
-          type="button"
-          onClick={() => setRecenterToken((n) => n + 1)}
-          aria-label="Căn lại bản đồ"
-          className="flex size-11 items-center justify-center rounded-2xl bg-white text-[17px] shadow-[0_2px_8px_rgba(35,19,32,0.14)]"
-        >
-          🧭
-        </button>
+      {/*
+        Cụm nút nổi. Bám mép PHẢI và cách đáy một khoảng cố định, không bám theo
+        bảng thông tin — bảng giờ kéo được nên chiều cao của nó thay đổi liên tục.
+      */}
+      <div className="pointer-events-none absolute bottom-[120px] right-4 z-30">
+        <MapControls
+          styleId={styleId}
+          onStyleChange={(id) => {
+            setStyleId(id);
+            saveStyle(id);
+          }}
+          photoPinsOn={photoPinsOn}
+          onTogglePhotoPins={() => {
+            setPhotoPinsOn((v) => {
+              savePhotoPins(!v);
+              return !v;
+            });
+          }}
+          photoPinCount={photoPins.length}
+          onFitBoth={() => setRecenterToken((n) => n + 1)}
+          canFitBoth={markers.length > 0}
+        />
       </div>
 
-      {/* Bảng thông tin */}
-      <div className="absolute inset-x-0 bottom-0 z-20 rounded-t-[34px] bg-white px-5 pb-[112px] pt-2.5 shadow-[0_-10px_40px_rgba(35,19,32,0.16)]">
-        <div className="mx-auto mb-3 h-[4.5px] w-9 rounded-full bg-ink-200" />
-
+      {/* Bảng thông tin — vuốt lên/xuống để đổi nấc */}
+      <DraggableSheet>
         <div className="flex items-center gap-3">
           <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#9BC4FF] to-[#6A7BFF] text-[18px] font-extrabold text-white">
             {(partner?.displayName ?? '?').charAt(0).toUpperCase()}
@@ -248,7 +271,7 @@ export default function MapScreen() {
             ? `Đang chia sẻ${live.screenAwake ? ' · màn hình được giữ sáng' : ''} · tự dừng sau 60 phút`
             : 'Chia sẻ trực tiếp chỉ chạy khi app đang mở trên màn hình'}
         </p>
-      </div>
+      </DraggableSheet>
 
       <TabBar />
     </div>

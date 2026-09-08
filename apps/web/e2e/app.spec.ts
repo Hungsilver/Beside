@@ -366,3 +366,70 @@ test.describe('Hiệu năng — nạp socket.io theo kiểu động', () => {
     }
   });
 });
+
+test.describe('Đợt 1 — điều khiển bản đồ', () => {
+  test('MC-01 — đổi loại bản đồ, hàng rào địa điểm KHÔNG biến mất', async () => {
+    /*
+     * Đây là cái bẫy chính của tính năng này: `map.setStyle()` xoá sạch mọi
+     * nguồn và lớp mình đã thêm. Không dựng lại thì đổi sang Vệ tinh là hàng
+     * rào biến mất — im lặng, không lỗi.
+     */
+    await page.goto('/ban-do');
+    const container = page.locator('[aria-label="Bản đồ"]');
+    await expect(container).toHaveAttribute('data-places', /[1-9]/, { timeout: 15_000 });
+
+    await page.getByRole('button', { name: /^Loại bản đồ/ }).click();
+    await page.getByRole('button', { name: 'Vệ tinh' }).click();
+
+    // Style mới phải tải xong rồi lớp của mình mới được dựng lại.
+    await expect(page.locator('canvas.maplibregl-canvas')).toBeVisible();
+    await expect(container).toHaveAttribute('data-places', /[1-9]/, { timeout: 15_000 });
+
+    const layers = await page.evaluate(() => {
+      const el = document.querySelector('[aria-label="Bản đồ"]');
+      return el?.getAttribute('data-places');
+    });
+    expect(Number(layers)).toBeGreaterThan(0);
+  });
+
+  test('MC-02 — lựa chọn loại bản đồ được nhớ sau khi tải lại', async () => {
+    await page.goto('/ban-do');
+    await expect(page.getByRole('button', { name: /Loại bản đồ: Vệ tinh/ })).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
+  test('MC-03 — ẩn/hiện ghim ảnh check-in', async () => {
+    await page.goto('/ban-do');
+    const container = page.locator('[aria-label="Bản đồ"]');
+    await expect(container).not.toHaveAttribute('data-photo-pins', '0', { timeout: 15_000 });
+
+    await page.getByRole('button', { name: /Ẩn ảnh check-in/ }).click();
+    await expect(container).toHaveAttribute('data-photo-pins', '0');
+    // Marker ảnh phải biến mất khỏi DOM, không chỉ là con số thay đổi.
+    await expect(page.locator('button.maplibregl-marker')).toHaveCount(0);
+
+    await page.getByRole('button', { name: /Hiện ảnh check-in/ }).click();
+    await expect(container).not.toHaveAttribute('data-photo-pins', '0');
+  });
+
+  test('MC-04 — vuốt bảng thông tin để thu gọn và mở rộng', async () => {
+    await page.goto('/ban-do');
+    const handle = page.getByRole('button', { name: /Kéo để thay đổi kích thước bảng/ });
+    await expect(handle).toBeVisible({ timeout: 15_000 });
+
+    const sheet = page.locator('[aria-label*="Kéo để thay đổi"]').locator('..');
+    const before = (await sheet.boundingBox())!.height;
+
+    // Chạm vào thanh nắm để nhảy sang nấc kế tiếp (mở rộng).
+    await handle.click();
+    await page.waitForTimeout(400);
+    const after = (await sheet.boundingBox())!.height;
+
+    expect(after, `trước ${before}px → sau ${after}px`).not.toBe(before);
+
+    // Vùng chạm của thanh nắm phải đạt tối thiểu 44px theo R2.
+    const box = (await handle.boundingBox())!;
+    expect(box.height, `thanh nam cao ${box.height}px`).toBeGreaterThanOrEqual(44);
+  });
+});

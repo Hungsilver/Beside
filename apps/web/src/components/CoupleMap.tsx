@@ -2,10 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import maplibregl, { type LngLatLike, type Map as MapLibreMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { circlePolygon, type LatLng, type TrailPoint } from '@beside/shared';
+import {
+  DEFAULT_MAP_STYLE,
+  isDarkStyle,
+  styleSourceFor,
+  type MapStyleId,
+} from '@/lib/map-styles';
 import { fetchPhotoObjectUrl } from '@/lib/posts-api';
-
-const STYLE_URL =
-  import.meta.env.VITE_MAP_STYLE_URL ?? 'https://tiles.openfreemap.org/styles/liberty';
 
 /** Trung tâm TP.HCM — chỉ dùng khi chưa biết vị trí ai cả. */
 const FALLBACK_CENTER: LngLatLike = [106.7009, 10.7769];
@@ -45,6 +48,8 @@ export interface MapPhotoPin {
 
 interface Props {
   markers: MapMarker[];
+  /** Loại bản đồ đang chọn (đường phố / tối giản / ban đêm / vệ tinh). */
+  styleId?: MapStyleId;
   trail?: TrailPoint[];
   places?: MapPlace[];
   photoPins?: MapPhotoPin[];
@@ -74,6 +79,7 @@ const COLORS = {
  */
 export default function CoupleMap({
   markers,
+  styleId = DEFAULT_MAP_STYLE,
   trail,
   places,
   photoPins,
@@ -99,6 +105,8 @@ export default function CoupleMap({
   onPickPointRef.current = onPickPoint;
   const onPhotoPinClickRef = useRef(onPhotoPinClick);
   onPhotoPinClickRef.current = onPhotoPinClick;
+  const styleIdRef = useRef(styleId);
+  styleIdRef.current = styleId;
 
   /*
    * Đếm số lần bản đồ sẵn sàng.
@@ -108,6 +116,17 @@ export default function CoupleMap({
    * rào không bao giờ hiện. Tăng số này lúc `load` để effect chạy lại.
    */
   const [mapReadyTick, setMapReadyTick] = useState(0);
+
+  /*
+   * Số hình hàng rào và số ghim ảnh ĐANG THỰC SỰ nằm trên bản đồ.
+   *
+   * Trước đây hai thuộc tính data-* lấy thẳng độ dài của prop. Như thế chúng
+   * chỉ nói "API trả về mấy địa điểm", chứ không nói "bản đồ có vẽ không" —
+   * và test dựa vào chúng vẫn xanh cả khi lớp đã biến mất khỏi bản đồ. Giờ hai
+   * con số này chỉ được đặt sau khi đã sờ vào nguồn dữ liệu / marker thật.
+   */
+  const [paintedPlaces, setPaintedPlaces] = useState(0);
+  const [paintedPins, setPaintedPins] = useState(0);
 
   // ---------------------------------------------------------------- khởi tạo
   useEffect(() => {
@@ -121,7 +140,7 @@ export default function CoupleMap({
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: STYLE_URL,
+      style: styleSourceFor(styleIdRef.current),
       center: FALLBACK_CENTER,
       zoom: 13,
       attributionControl: { compact: true },
@@ -133,86 +152,25 @@ export default function CoupleMap({
 
     map.on('load', () => {
       readyRef.current = true;
+      installLayers(map, styleIdRef.current);
       setMapReadyTick((n) => n + 1);
-
-      // Nguồn + lớp cho vệt đường, tạo sẵn rỗng rồi cập nhật dữ liệu sau.
-      map.addSource('trail', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-      map.addLayer({
-        id: 'trail-line',
-        type: 'line',
-        source: 'trail',
-        layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: {
-          'line-color': '#FF4D7D',
-          'line-width': 4,
-          'line-opacity': 0.75,
-          // Nét đứt cho thấy đây là đường ĐÃ ĐI QUA, không phải chỉ đường
-          'line-dasharray': [0.4, 2],
-        },
-      });
-
-      /*
-       * Hàng rào địa điểm.
-       *
-       * Vẽ bằng đa giác toạ độ chứ KHÔNG dùng lớp `circle` của MapLibre: lớp đó
-       * nhận bán kính tính bằng pixel, nên phóng to thu nhỏ là vòng tròn sai
-       * hoàn toàn — trong khi đây là một khoảng cách thật ngoài đời.
-       * `circlePolygon` ở packages/shared lo phần hình học (có 7 unit test).
-       *
-       * Chèn NGAY DƯỚI lớp vệt đường để đường đi không bị nền hàng rào che.
-       */
-      map.addSource('places', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-      map.addLayer(
-        {
-          id: 'place-fill',
-          type: 'fill',
-          source: 'places',
-          paint: {
-            'fill-color': ['case', ['get', 'active'], '#03A47B', '#8B5CF6'],
-            'fill-opacity': ['case', ['get', 'active'], 0.18, 0.08],
-          },
-        },
-        'trail-line',
-      );
-      map.addLayer(
-        {
-          id: 'place-outline',
-          type: 'line',
-          source: 'places',
-          paint: {
-            'line-color': ['case', ['get', 'active'], '#03A47B', '#8B5CF6'],
-            'line-width': 1.5,
-            'line-opacity': 0.55,
-          },
-        },
-        'trail-line',
-      );
-      map.addLayer({
-        id: 'place-label',
-        type: 'symbol',
-        source: 'places',
-        layout: {
-          'text-field': ['concat', ['get', 'emoji'], ' ', ['get', 'name']],
-          'text-size': 12,
-          'text-anchor': 'top',
-          // Đẩy chữ xuống dưới tâm để không đè lên chấm vị trí của người.
-          'text-offset': [0, 0.6],
-          'text-allow-overlap': false,
-        },
-        paint: {
-          'text-color': '#4A2540',
-          'text-halo-color': 'rgba(255,255,255,0.9)',
-          'text-halo-width': 1.4,
-        },
-      });
-
       onMapReady?.();
+    });
+
+    /*
+     * Đổi loại bản đồ: `setStyle()` XOÁ SẠCH mọi nguồn và lớp mình đã thêm —
+     * hàng rào địa điểm và vệt đường biến mất không báo trước. Phải dựng lại
+     * sau mỗi lần style mới tải xong, rồi tăng `mapReadyTick` để các effect
+     * nạp lại dữ liệu vào nguồn vừa dựng.
+     */
+    map.on('styledata', () => {
+      if (!readyRef.current) return;
+      // Style mới chưa có lớp của mình thì dựng lại. Nếu đã có (styledata còn
+      // bắn cả khi chỉ dữ liệu nguồn thay đổi) thì thôi, tránh addSource trùng.
+      if (!map.getSource('places')) installLayers(map, styleIdRef.current);
+      // Tăng tick trong MỌI trường hợp, kể cả khi không dựng lại: các effect
+      // phải chạy lại để soi nguồn dữ liệu và báo ra con số thật.
+      setMapReadyTick((n) => n + 1);
     });
 
     // Chọn toạ độ bằng cách bấm lên bản đồ (dùng ở màn Địa điểm).
@@ -284,6 +242,14 @@ export default function CoupleMap({
     };
   }, [markers]);
 
+  // ---------------------------------------------------------------- đổi loại bản đồ
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !readyRef.current) return;
+    // Nguồn/lớp riêng của mình sẽ được dựng lại ở listener `styledata`.
+    map.setStyle(styleSourceFor(styleId));
+  }, [styleId]);
+
   // ---------------------------------------------------------------- địa điểm
   useEffect(() => {
     const map = mapRef.current;
@@ -291,10 +257,13 @@ export default function CoupleMap({
 
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     const source = map.getSource('places') as maplibregl.GeoJSONSource | undefined;
-    if (!source) return;
+    if (!source) {
+      setPaintedPlaces(0);
+      return;
+    }
 
-    source.setData({
-      type: 'FeatureCollection',
+    const collection = {
+      type: 'FeatureCollection' as const,
       features: (places ?? [])
         .map((place) => {
           const ring = circlePolygon(place.point, place.radiusM);
@@ -306,7 +275,10 @@ export default function CoupleMap({
           };
         })
         .filter((f) => f !== null),
-    });
+    };
+
+    source.setData(collection);
+    setPaintedPlaces(collection.features.length);
   }, [places, mapReadyTick]);
 
   // ---------------------------------------------------------------- ghim ảnh
@@ -344,6 +316,8 @@ export default function CoupleMap({
         photoMarkersRef.current.delete(id);
       }
     }
+
+    setPaintedPins(photoMarkersRef.current.size);
   }, [photoPins]);
 
   // Con trỏ chữ thập khi đang ở chế độ chọn toạ độ.
@@ -418,14 +392,18 @@ export default function CoupleMap({
         Hai thuộc tính data-* nói ra thứ MapLibre vẽ vào canvas — mà canvas thì
         không dò được từ bên ngoài. Nhờ chúng, E2E khẳng định được "hàng rào có
         thật sự lên bản đồ không", chứ không chỉ "khung bản đồ có tồn tại không".
+
+        Giá trị lấy từ state đã sờ vào nguồn dữ liệu / marker thật, KHÔNG lấy từ
+        độ dài prop — lấy từ prop thì lớp có biến mất khỏi bản đồ chúng vẫn báo
+        con số cũ, và test dựa vào chúng sẽ xanh giả.
         Cũng tiện lúc gỡ lỗi bằng công cụ dành cho nhà phát triển.
       */}
       <div
         ref={containerRef}
         className="size-full"
         aria-label="Bản đồ"
-        data-places={places?.length ?? 0}
-        data-photo-pins={photoPins?.length ?? 0}
+        data-places={paintedPlaces}
+        data-photo-pins={paintedPins}
       />
     </div>
   );
@@ -560,4 +538,95 @@ function buildPhotoPinElement(pin: MapPhotoPin): HTMLElement {
   observer.observe(document.body, { childList: true, subtree: true });
 
   return el;
+}
+
+/**
+ * Dựng nguồn + lớp riêng của app lên bản đồ.
+ *
+ * Phải tách thành hàm vì gọi ở HAI chỗ: lúc `load` đầu tiên, và mỗi lần
+ * `setStyle()` nạp xong một loại bản đồ mới — `setStyle` xoá sạch mọi thứ
+ * không thuộc về style, kể cả nguồn dữ liệu của mình.
+ *
+ * `dark` đổi màu chữ nhãn địa điểm: nền vệ tinh và nền ban đêm mà vẫn dùng chữ
+ * tím trên viền trắng thì đọc không ra.
+ */
+function installLayers(map: MapLibreMap, styleId: MapStyleId): void {
+  const dark = isDarkStyle(styleId);
+
+  // Nguồn + lớp cho vệt đường, tạo sẵn rỗng rồi cập nhật dữ liệu sau.
+  map.addSource('trail', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+  });
+  map.addLayer({
+    id: 'trail-line',
+    type: 'line',
+    source: 'trail',
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': dark ? '#FF9BB3' : '#FF4D7D',
+      'line-width': 4,
+      'line-opacity': 0.75,
+      // Nét đứt cho thấy đây là đường ĐÃ ĐI QUA, không phải chỉ đường
+      'line-dasharray': [0.4, 2],
+    },
+  });
+
+  /*
+   * Hàng rào địa điểm.
+   *
+   * Vẽ bằng đa giác toạ độ chứ KHÔNG dùng lớp `circle` của MapLibre: lớp đó
+   * nhận bán kính tính bằng pixel, nên phóng to thu nhỏ là vòng tròn sai
+   * hoàn toàn — trong khi đây là một khoảng cách thật ngoài đời.
+   * `circlePolygon` ở packages/shared lo phần hình học (có 7 unit test).
+   *
+   * Chèn NGAY DƯỚI lớp vệt đường để đường đi không bị nền hàng rào che.
+   */
+  map.addSource('places', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: [] },
+  });
+  map.addLayer(
+    {
+      id: 'place-fill',
+      type: 'fill',
+      source: 'places',
+      paint: {
+        'fill-color': ['case', ['get', 'active'], '#03A47B', '#8B5CF6'],
+        'fill-opacity': ['case', ['get', 'active'], 0.18, 0.08],
+      },
+    },
+    'trail-line',
+  );
+  map.addLayer(
+    {
+      id: 'place-outline',
+      type: 'line',
+      source: 'places',
+      paint: {
+        'line-color': ['case', ['get', 'active'], '#03A47B', '#8B5CF6'],
+        'line-width': 1.5,
+        'line-opacity': 0.55,
+      },
+    },
+    'trail-line',
+  );
+  map.addLayer({
+    id: 'place-label',
+    type: 'symbol',
+    source: 'places',
+    layout: {
+      'text-field': ['concat', ['get', 'emoji'], ' ', ['get', 'name']],
+      'text-size': 12,
+      'text-anchor': 'top',
+      // Đẩy chữ xuống dưới tâm để không đè lên chấm vị trí của người.
+      'text-offset': [0, 0.6],
+      'text-allow-overlap': false,
+    },
+    paint: {
+      'text-color': dark ? '#FFFFFF' : '#4A2540',
+      'text-halo-color': dark ? 'rgba(0,0,0,0.65)' : 'rgba(255,255,255,0.9)',
+      'text-halo-width': 1.4,
+    },
+  });
 }

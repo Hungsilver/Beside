@@ -164,6 +164,29 @@ không "nhảy" khi tín hiệu yếu. Chạy ở client **trước khi** gửi 
 
 ---
 
+### 3.3 Bốn loại bản đồ (đã triển khai & trace)
+
+Khai báo ở `apps/web/src/lib/map-styles.ts`. Lựa chọn được nhớ trong `localStorage`.
+
+| Loại | Nguồn | Dạng | Cần khoá API |
+|---|---|---|---|
+| Đường phố 🗺️ | OpenFreeMap Liberty (`VITE_MAP_STYLE_URL` đè được) | vector | không |
+| Tối giản 🤍 | OpenFreeMap Positron | vector | không |
+| Ban đêm 🌙 | OpenFreeMap Dark Matter | vector | không |
+| Vệ tinh 🛰️ | Esri World Imagery | raster, viết tay `StyleSpecification` | không |
+
+Ràng buộc giữ nguyên từ §3.2: **không nguồn nào cần thẻ tín dụng hay khoá API.**
+
+**Lớp giao thông thì không có.** Dữ liệu tình trạng giao thông thời gian thực
+không tồn tại ở dạng miễn phí — Google/TomTom/HERE đều bắt gắn thẻ tín dụng.
+Chủ dự án đã chốt bỏ qua; xem `docs/BACKLOG.md`.
+
+> **Bẫy `setStyle()`:** đổi loại bản đồ **xoá sạch** mọi nguồn và lớp do app thêm
+> vào (hàng rào địa điểm, vệt đường). Phải dựng lại trong listener `styledata`.
+> Chi tiết ở `docs/traces/phase-5-ban-do-nang-cao.md` TC-01 và TC-03.
+
+---
+
 ## 4. Technology Stack
 
 | Tầng | Công nghệ | Lý do chọn |
@@ -760,6 +783,11 @@ Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L
 | 2026-09-08 | TLS ở production đi bằng **Cloudflare Origin Certificate**, không phải Let's Encrypt | DNS đang bật proxy Cloudflare (mây cam) nên ACME HTTP-01 không tới được origin. Cert sẵn có phủ `*.easytech.io.vn`, hạn 2041 | Trái với mặc định "Caddy tự lo TLS" của §4; đổi domain sau này phải xin cert origin mới, và `curl -k https://127.0.0.1` ở origin báo lỗi SSL vì thiếu SNI |
 | 2026-09-08 | `POSTGRES_PORT=5433` trên VPS đó | 5432 đã bị Postgres của dự án kia chiếm, và nó bind `0.0.0.0` | Lệnh Prisma chạy tay trên máy chủ phải nhớ cổng khác |
 | 2026-09-08 | Mọi thứ neo theo KHUNG NHÌN — thanh tab, nút nổi, lớp phủ modal — phải dùng `fixed` (thứ neo đáy thì đi qua `<BottomLayer>`); **cấm** `absolute bottom-0` / `absolute inset-0` | `<Screen>` là `min-h-dvh` và không được định vị, nên `absolute` neo vào khối chứa ban đầu ở đầu tài liệu: cuộn 259px thì thanh tab trôi lên 259px, cuộn 170px thì bảng modal lệch xuống −170..494 (trace `fix-thanh-tab-troi-khi-cuon.md`) | Thêm một lớp bọc và phải nhớ `pointer-events-auto` cho từng phần tử con; trên PC thanh tab và bảng modal thu về đúng cột 430px thay vì kéo hết bề ngang |
+| 2026-09-08 | Bốn loại bản đồ, ảnh vệ tinh lấy từ **Esri World Imagery** dạng raster viết tay | Ba style vector của OpenFreeMap không có ảnh vệ tinh; Esri là nguồn ảnh vệ tinh duy nhất dùng được mà không cần khoá API — giữ đúng ràng buộc §3.2 | Raster nên không có nhãn vector, phóng to bị vỡ sớm hơn; điều khoản của Esri bắt buộc ghi nguồn, đã đặt trong `attribution` của style |
+| 2026-09-08 | Nguồn + lớp riêng của app tách thành `installLayers()`, gọi ở **cả** `load` lẫn `styledata` | `map.setStyle()` xoá sạch mọi source/layer không thuộc về style. Không dựng lại thì đổi sang Vệ tinh là hàng rào và vệt đường biến mất — **im lặng, không ném lỗi** | `styledata` bắn nhiều lần nên phải tự chặn `addSource` trùng bằng `if (!map.getSource('places'))` |
+| 2026-09-08 | `data-places` / `data-photo-pins` lấy từ trạng thái **đã sờ vào bản đồ**, cấm lấy từ độ dài prop | Bản đầu lấy `places?.length`: nó nói "API trả về mấy địa điểm", không nói "bản đồ có vẽ không". Phá `installLayers` để thử, lớp mất sạch mà test **vẫn xanh** — cái chốt đó vô dụng ngay từ đầu | Thêm hai state và `styledata` phải tăng `mapReadyTick` trong mọi trường hợp để effect chạy lại soi nguồn thật |
+| 2026-09-08 | Bảng thông tin ở màn bản đồ **kéo được**, ba nấc 84px / 46% / 82% | Trên khung 390×844 bảng cố định ăn gần nửa màn hình, mà bản đồ mới là thứ người ta mở app để nhìn | Tự xử lý `pointerdown/move/up` thay vì kéo thư viện gesture về; phải đặt `touch-action: none` cho thanh nắm |
+| 2026-09-08 | **Bỏ qua** lớp giao thông và chỉ đường thời gian thực | Giao thông: không có nguồn miễn phí, làm là vi phạm ràng buộc §3.2. Chỉ đường: phải chọn engine định tuyến (OSRM tự host / dịch vụ ngoài) — quyết định của chủ dự án. Chủ dự án chốt: "2 chỗ vướng thì bỏ qua" | Hai tính năng nằm ở `docs/BACKLOG.md`, chưa làm |
 
 ---
 
