@@ -187,7 +187,22 @@ export default function CoupleMap({ markers, trail, recenterToken, onMapReady }:
     });
   }, [markers, recenterToken]);
 
-  return <div ref={containerRef} className="absolute inset-0" aria-label="Bản đồ" />;
+  /*
+   * Thẻ bọc giữ bố cục, thẻ trong mới giao cho MapLibre.
+   *
+   * KHÔNG đặt `absolute inset-0` thẳng lên thẻ của MapLibre: nó tự gắn class
+   * `.maplibregl-map { position: relative }` từ maplibre-gl.css — file này
+   * KHÔNG nằm trong cascade layer nào, còn utility của Tailwind v4 thì nằm
+   * trong `@layer utilities`. Luật CSS cho rule không-layer thắng rule trong
+   * layer bất kể thứ tự hay độ đặc hiệu ⇒ `absolute` bị đè thành `relative`,
+   * `inset-0` mất tác dụng, thẻ co còn cao 0px và bản đồ biến mất hoàn toàn.
+   * `size-full` thì an toàn vì maplibre-gl.css không đụng tới width/height.
+   */
+  return (
+    <div className="absolute inset-0">
+      <div ref={containerRef} className="size-full" aria-label="Bản đồ" />
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
