@@ -344,7 +344,31 @@ async function checkCode() {
   const totals = [...t.matchAll(/Tests\s+(\d+) passed/g)].map((m) => Number(m[1]));
   const sum = totals.reduce((a, b) => a + b, 0);
   const anyFailed = /\d+ failed/.test(t);
-  check('code', 'unit test', !anyFailed && sum > 0, `${sum} test`);
+  const ok = !anyFailed && sum > 0;
+
+  /*
+   * Khi hỏng thì phải nói RÕ hỏng vì cái gì.
+   *
+   * Trước đây mục này chỉ in "0 test" — đúng nhưng vô dụng. Lần đầu gặp
+   * `ERR_IPC_CHANNEL_CLOSED` (một worker của Vitest chết vì tranh tài nguyên
+   * với Playwright chạy ngay trước đó), tôi phải chạy tay lại mới biết nguyên
+   * nhân. Ba workspace mà một cái chết thì `sum` vẫn > 0 của hai cái kia, nên
+   * cũng phải kiểm cả mã thoát.
+   */
+  let detail = `${sum} test`;
+  if (!ok) {
+    const clue =
+      /ERR_IPC_CHANNEL_CLOSED/.test(t)
+        ? 'worker của Vitest chết (ERR_IPC_CHANNEL_CLOSED) — thử chạy lại `npm test`'
+        : t
+            .split(String.fromCharCode(10))
+            .filter((l) => /error|failed|✗|×/i.test(l))
+            .slice(0, 2)
+            .join(' · ')
+            .slice(0, 120);
+    detail = clue || detail;
+  }
+  check('code', 'unit test', ok, detail);
 }
 
 // ---------------------------------------------------------------- 5. DỌN DẸP
