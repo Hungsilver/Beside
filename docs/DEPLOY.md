@@ -152,18 +152,42 @@ Downtime vài giây. Migration chạy tự động khi container `api` khởi đ
 
 ## Sao lưu
 
+Phải sao lưu **hai** thứ. Chỉ dump database là mất sạch ảnh check-in.
+
+### 1. Database
+
 ```bash
 # Đặt vào crontab, chạy hằng ngày
 docker compose exec -T db pg_dump -U beside beside | gzip > backup-$(date +%F).sql.gz
 ```
 
-Giữ 14 bản gần nhất. Từ Phase 3 nhớ sao lưu thêm volume `minio_data` (ảnh check-in).
+### 2. Ảnh check-in (volume `minio_data`)
 
-Phục hồi:
+Bảng `photos` chỉ lưu **khoá** trỏ vào MinIO, không lưu ảnh. Mất volume này thì
+mọi khoảnh khắc thành ô ảnh vỡ, và không có cách nào dựng lại.
 
 ```bash
-gunzip -c backup-2026-09-07.sql.gz | docker compose exec -T db psql -U beside beside
+docker run --rm   -v beside_minio_data:/data:ro   -v "$PWD":/backup   alpine tar czf /backup/minio-$(date +%F).tar.gz -C /data .
 ```
+
+> Tên volume có tiền tố là tên thư mục dự án. Kiểm bằng `docker volume ls`.
+
+Giữ 14 bản gần nhất của **cả hai**.
+
+### Phục hồi
+
+```bash
+# Database
+gunzip -c backup-2026-09-07.sql.gz | docker compose exec -T db psql -U beside beside
+
+# Ảnh — dừng MinIO trước để không ghi đè lên file đang mở
+docker compose stop minio
+docker run --rm   -v beside_minio_data:/data   -v "$PWD":/backup   alpine sh -c "rm -rf /data/* && tar xzf /backup/minio-2026-09-07.tar.gz -C /data"
+docker compose start minio
+```
+
+> **Hai bản sao lưu phải cùng thời điểm.** Phục hồi DB mới với ảnh cũ sẽ cho ra
+> những bản ghi trỏ vào tệp không tồn tại. Chạy cả hai lệnh trong cùng một cron job.
 
 ## Đổi sang domain mới (khi mua domain `beside`)
 
