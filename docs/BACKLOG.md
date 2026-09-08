@@ -135,3 +135,5 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 | 08/09 | **Chưa cho chọn mốc nào muốn được nhắc** — hiện mọi mốc đều nhắc như nhau | Thấp | `apps/api/src/milestones/` |
 | 08/09 | Mốc tự sinh **không tắt được** — ai không muốn thấy "1460 ngày bên nhau" thì đành chịu | Thấp | `packages/shared/src/milestone.schema.ts` |
 | 08/09 | Chưa gắn được ảnh cho mốc kỷ niệm — dữ liệu đã có sẵn ở `posts`, chỉ thiếu phần nối | Thấp | `apps/web/src/screens/MilestonesScreen.tsx` |
+| 08/09 | **`npm run lint` không kiểm gì cả** — không workspace nào có script `lint`, nên bước 3 của R1 luôn "xanh" một cách giả. Cần thêm ESLint thật cho cả 3 workspace | Cao | `package.json` (3 workspace) |
+| 08/09 | Lỗi khung bản đồ cao 0px **không test tự động nào bắt được** — typecheck/unit test đều xanh vì đây là lỗi cascade CSS chỉ lộ ra khi render thật. Cần E2E Playwright ở 390×844 khẳng định khung bản đồ có chiều cao > 0 | Cao | `apps/web/src/components/CoupleMap.tsx` |

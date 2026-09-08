@@ -16,6 +16,7 @@
   - Phase 4 (F4): `docs/traces/phase-4-events.md` — 37/37 case (bắt được 2 lỗi, L22–L23)
   - Phase 4 (F7): `docs/traces/phase-4-push.md` — 21/21 case (bắt được 3 lỗi, L24–L26)
   - Phase 4 (F6): `docs/traces/phase-4-places.md` — 27/27 case (bắt được 3 lỗi, L27–L29)
+  - Sửa lỗi: `docs/traces/fix-ban-do-khong-hien.md` — khung bản đồ cao 0px do cascade layer của Tailwind v4 (L30), 7/7 case
   - Phase 4 (F5): `docs/traces/phase-4-milestones.md` — 25/25 case (không lỗi mới)
   - Tổng: **270 unit test** + **247 case trace**, typecheck + lint sạch cả 3 workspace
   - ✅ `npm run verify:local` → **36/36 mục đạt** trên Docker thật
@@ -706,6 +707,7 @@ Bắt buộc tối thiểu: 1 happy path + 3 edge case + 1 case lỗi.
 | 2026-09-08 | Dùng `haversineMeters` trong RAM, chưa dùng `ST_DWithin` của PostGIS | Tối đa 20 địa điểm mỗi couple — chênh lệch không đáng kể, và hàm thuần thì unit test được | Nếu số địa điểm tăng nhiều thì phải chuyển sang truy vấn không gian |
 | 2026-09-08 | Dùng lại hằng số `GEOFENCE_EXIT_HYSTERESIS_M`/`PLACE_RADIUS_*` của Phase 0 thay vì đặt núm mới | R0: bản kế hoạch là nguồn sự thật; hai núm cùng điều khiển một thứ là mầm lệch (trace L29) | Khoảng chênh là cộng 30 m cố định, không co giãn theo bán kính |
 | 2026-09-08 | Thêm migration `20260907000000_enable_postgis` chạy trước mọi migration khác | Shadow database của `migrate dev` là DB trắng, không có PostGIS nên migration cột `geog` chết (trace L22) | Trùng việc với `infra/postgres/init/01-extensions.sql`, nhưng mọi câu lệnh đều IF NOT EXISTS nên vô hại |
+| 2026-09-08 | Không đặt utility bố cục của Tailwind lên thẻ DOM mà thư viện ngoài tự gắn class vào — bọc thêm một thẻ ngoài | Tailwind v4 gói utility vào `@layer utilities`; CSS thư viện ngoài nhập thẳng thì không-layer nên **thắng tuyệt đối** bất kể độ đặc hiệu. `.maplibregl-map{position:relative}` đè `absolute` làm khung bản đồ co còn cao 0px (trace L30) | Thêm một thẻ bọc; đổi lại không phải kéo 70KB CSS của MapLibre vào bundle khởi động chỉ để đưa nó vào layer |
 
 ---
 
