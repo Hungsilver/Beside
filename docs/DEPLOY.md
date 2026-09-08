@@ -141,6 +141,69 @@ Rồi mở `https://easytech.io.vn` trên điện thoại → đăng ký → gh�
 
 ---
 
+## Triển khai chung máy với dự án khác
+
+Mấy mục trên giả định VPS chỉ có mình Beside. Máy đang chạy thật (`easytech.io.vn`)
+**không** như vậy: nó đã có sẵn stack `hungsilver` ở `/opt/hungsilver` giữ cổng
+80/443 (Caddy riêng của dự án đó) và 5432 (Postgres của dự án đó). Làm y theo mục 4
+sẽ chết ngay ở lệnh `up` đầu tiên với `port is already allocated`.
+
+Ba va chạm, né gọn trong `docker-compose.vps.yml` (có sẵn trong repo):
+
+| Va chạm | Cách né |
+|---|---|
+| 80/443 do `hungsilver-caddy` giữ | Beside **không chạy Caddy riêng** — service `caddy` bị đẩy vào profile `standalone-tls` nên không khởi động cùng stack |
+| Caddy ở stack khác, không chung mạng Docker | `api`/`web` mở cổng trên **IP gateway của mạng bridge mà Caddy đang nối** (`172.18.0.1:3003` và `:3002`) — không phơi ra Internet |
+| 5432 do `hungsilver-postgres` giữ | `POSTGRES_PORT=5433` trong `.env`, vẫn chỉ bind loopback |
+
+Đừng tin sẵn con số `172.18.0.1` — hỏi lại máy:
+
+```bash
+docker inspect <container-caddy> \
+  --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} gw={{$v.Gateway}}{{println}}{{end}}'
+```
+
+### Các bước
+
+```bash
+# 1. .env như mục 3, chỉ khác một dòng
+POSTGRES_PORT=5433
+
+# 2. Dựng kèm lớp phủ
+docker compose -f docker-compose.yml -f docker-compose.vps.yml up -d --build
+
+# 3. Dán site block của Beside vào Caddyfile của máy chủ — SAO LƯU TRƯỚC
+cp /opt/hungsilver/Caddyfile /opt/hungsilver/Caddyfile.bak-$(date +%F-%H%M%S)
+#    nội dung lấy từ: infra/caddy/shared-host.Caddyfile
+docker exec <container-caddy> caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+docker exec <container-caddy> caddy reload   --config /etc/caddy/Caddyfile --adapter caddyfile
+```
+
+`caddy reload` **không** khởi động lại container — dự án kia không gián đoạn một
+nhịp nào. Hỏng thì chép bản `.bak` đè lại rồi `reload` lần nữa, mất 5 giây.
+
+### TLS đi bằng Cloudflare, không phải Let's Encrypt
+
+DNS của `easytech.io.vn` đang bật proxy Cloudflare (mây cam) nên Caddy **không** xin
+được chứng chỉ qua ACME HTTP-01. Máy chủ dùng **Cloudflare Origin Certificate** sẵn có
+(phủ `*.easytech.io.vn`, hạn 2041) — đó là lý do khối cấu hình có dòng `tls` trỏ thẳng
+vào hai tệp cert thay vì để Caddy tự lo. Cloudflare phải để SSL/TLS mode = **Full (strict)**.
+
+Hệ quả dễ làm người ta hoảng: **`curl -k https://127.0.0.1` ngay trên máy chủ sẽ báo
+lỗi SSL** — không phải hỏng, mà vì curl không gửi SNI nên Caddy không biết chọn cert
+nào. Thử ở origin thì phải ép SNI:
+
+```bash
+curl -k --resolve easytech.io.vn:443:127.0.0.1 https://easytech.io.vn/api/v1/health
+```
+
+### Khi nào quay về cấu hình đứng một mình
+
+Khi Beside có VPS riêng: bỏ `-f docker-compose.vps.yml`, trỏ DNS thẳng về IP (mây xám),
+Caddy của Beside tự xin Let's Encrypt như mục 4. Không phải sửa một dòng code nào.
+
+---
+
 ## Cập nhật phiên bản mới
 
 ```bash
@@ -150,9 +213,27 @@ docker compose up -d --build
 
 Downtime vài giây. Migration chạy tự động khi container `api` khởi động lại.
 
+> Trên máy **dùng chung với dự án khác** (mục trên) phải kèm lớp phủ, nếu không
+> Compose sẽ dựng lại cả service `caddy` và đâm vào cổng 80/443 của dự án kia:
+>
+> ```bash
+> docker compose -f docker-compose.yml -f docker-compose.vps.yml up -d --build
+> ```
+
 ## Sao lưu
 
 Phải sao lưu **hai** thứ. Chỉ dump database là mất sạch ảnh check-in.
+
+Có sẵn `scripts/backup-vps.sh` làm cả hai việc trong một lần chạy (giữ 14 bản, tự
+dọn bản cũ). Chép lên máy chủ rồi đặt vào cron:
+
+```bash
+chmod +x /opt/beside/backup.sh
+/opt/beside/backup.sh                                  # chạy thử một lần
+(crontab -l 2>/dev/null; echo '20 3 * * * /opt/beside/backup.sh >> /var/log/beside-backup.log 2>&1') | crontab -
+```
+
+Phần dưới là hai việc đó tách ra, để hiểu script đang làm gì.
 
 ### 1. Database
 

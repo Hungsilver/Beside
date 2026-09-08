@@ -1,0 +1,27 @@
+# =========================================================
+# Lớp phủ cho VPS 14.225.222.216.
+#
+# Máy này ĐÃ có stack "hungsilver" giữ cổng 80/443 (hungsilver-caddy) và 5432
+# (hungsilver-postgres). Vì vậy:
+#   - Beside KHÔNG chạy Caddy riêng. TLS và định tuyến do hungsilver-caddy lo,
+#     site block cho easytech.io.vn nằm ở /opt/hungsilver/Caddyfile.
+#   - api và web chỉ mở cổng trên gateway của mạng bridge mà caddy đang nối
+#     (172.18.0.1) — KHÔNG phơi ra Internet, đúng cách mà stack cũ vẫn dùng.
+#   - Postgres đẩy sang 5433 (khai trong .env), vẫn chỉ bind loopback.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.vps.yml up -d --build
+# =========================================================
+
+services:
+  caddy:
+    # Không khởi động cùng stack. Muốn bật lại (khi máy chỉ còn mình Beside):
+    #   docker compose --profile standalone-tls up -d caddy
+    profiles: ["standalone-tls"]
+
+  web:
+    ports:
+      - "172.18.0.1:3002:80"
+
+  api:
+    ports:
+      - "172.18.0.1:3003:3000"

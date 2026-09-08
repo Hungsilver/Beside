@@ -1,0 +1,50 @@
+# =========================================================
+# Beside — site block dùng khi VPS ĐÃ CÓ Caddy của dự án khác giữ cổng 80/443.
+#
+# KHÔNG phải file Caddy tự nạp. Đây là bản gốc trong repo của đoạn cấu hình phải
+# DÁN TAY vào Caddyfile của Caddy đang chạy trên máy đó. Sửa ở đây thì phải dán
+# lại và `caddy reload` — xem docs/DEPLOY.md §"Triển khai chung máy với dự án khác".
+#
+# Khác `infra/caddy/Caddyfile` (bản đứng một mình) ở ba điểm:
+#   - `tls` dùng Cloudflare Origin Certificate có sẵn của máy chủ, không xin
+#     Let's Encrypt (DNS đang bật proxy Cloudflare nên ACME HTTP-01 không tới được).
+#   - reverse_proxy trỏ tới IP gateway của mạng bridge (172.18.0.1) thay vì tên
+#     container, vì Caddy nằm ở stack khác, không cùng mạng Docker với Beside.
+#   - Cổng 3002/3003 do docker-compose.vps.yml mở, chỉ bind trên gateway đó.
+#
+# Header bảo mật và luật cache sao y bản đứng một mình. Đặc biệt
+# `Permissions-Policy: geolocation=(self)` là BẮT BUỘC — thiếu nó thì trình duyệt
+# chặn xin quyền vị trí và toàn bộ tính năng bản đồ chết.
+# =========================================================
+
+easytech.io.vn, www.easytech.io.vn {
+	tls /etc/caddy/certs/easytech-origin-cert.pem /etc/caddy/certs/easytech-origin-key.pem
+	encode gzip zstd
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(self), camera=(self), microphone=(), interest-cohort=()"
+		-Server
+	}
+
+	handle /api/* {
+		reverse_proxy 172.18.0.1:3003
+	}
+
+	handle /socket.io/* {
+		reverse_proxy 172.18.0.1:3003
+	}
+
+	handle {
+		@sw path /sw.js /service-worker.js /registerSW.js
+		header @sw Cache-Control "no-cache, no-store, must-revalidate"
+
+		@immutable path /assets/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+		reverse_proxy 172.18.0.1:3002
+	}
+}

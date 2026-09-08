@@ -755,6 +755,10 @@ Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L
 | 2026-09-08 | ESLint dùng **một file cấu hình ở gốc** cho cả 3 workspace | Ba workspace dùng chung `packages/shared` và chung quy ước R2; ba file cấu hình là ba chỗ để lệch nhau | File cấu hình dài hơn, phải phân nhánh theo `files:` |
 | 2026-09-08 | `packages/shared` tách `tsconfig.build.json` khỏi `tsconfig.json` | Bản build phải bỏ `*.spec.ts` khỏi `dist`, nhưng typecheck và ESLint thì phải thấy chúng — một file không phục vụ được cả hai | Thêm một file cấu hình phải giữ đồng bộ |
 | 2026-09-08 | Không đặt utility bố cục của Tailwind lên thẻ DOM mà thư viện ngoài tự gắn class vào — bọc thêm một thẻ ngoài | Tailwind v4 gói utility vào `@layer utilities`; CSS thư viện ngoài nhập thẳng thì không-layer nên **thắng tuyệt đối** bất kể độ đặc hiệu. `.maplibregl-map{position:relative}` đè `absolute` làm khung bản đồ co còn cao 0px (trace L30) | Thêm một thẻ bọc; đổi lại không phải kéo 70KB CSS của MapLibre vào bundle khởi động chỉ để đưa nó vào layer |
+| 2026-09-08 | Trên VPS thật, Beside **không chạy Caddy riêng** — dùng chung Caddy của dự án `hungsilver` đã ở sẵn trên máy | Máy đã có stack khác giữ cổng 80/443; dựng Caddy thứ hai là không thể. `caddy` bị đẩy vào profile `standalone-tls` trong `docker-compose.vps.yml` nên không khởi động | Site block của Beside sống ở `/opt/hungsilver/Caddyfile` — ngoài repo. Bản gốc giữ ở `infra/caddy/shared-host.Caddyfile`, sửa một chỗ phải nhớ chỗ kia |
+| 2026-09-08 | `api`/`web` mở cổng trên **IP gateway của mạng bridge** (`172.18.0.1:3003`/`:3002`), không dùng tên container | Caddy nằm ở stack khác nên không cùng mạng Docker, không phân giải được `api:3000`. Đây cũng là cách stack cũ vẫn dùng | Phụ thuộc vào IP gateway; mạng bridge bị dựng lại thì IP có thể đổi và phải sửa Caddyfile |
+| 2026-09-08 | TLS ở production đi bằng **Cloudflare Origin Certificate**, không phải Let's Encrypt | DNS đang bật proxy Cloudflare (mây cam) nên ACME HTTP-01 không tới được origin. Cert sẵn có phủ `*.easytech.io.vn`, hạn 2041 | Trái với mặc định "Caddy tự lo TLS" của §4; đổi domain sau này phải xin cert origin mới, và `curl -k https://127.0.0.1` ở origin báo lỗi SSL vì thiếu SNI |
+| 2026-09-08 | `POSTGRES_PORT=5433` trên VPS đó | 5432 đã bị Postgres của dự án kia chiếm, và nó bind `0.0.0.0` | Lệnh Prisma chạy tay trên máy chủ phải nhớ cổng khác |
 
 ---
 
@@ -771,6 +775,23 @@ Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L
 - **Backup:** `pg_dump` hằng ngày + `mc mirror` MinIO → thư mục backup, giữ 14 bản.
 - **Biến môi trường nhạy cảm** trong `.env` (không commit):
   `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `VAPID_*`, `MINIO_ROOT_PASSWORD`, `POSTGRES_PASSWORD`.
+
+> ⚠️ Dòng "Caddy tự xin Let's Encrypt" ở trên mô tả **cấu hình chuẩn khi Beside có
+> VPS riêng**. Máy chủ đang chạy thật KHÔNG như vậy — xem 11.0a ngay dưới.
+
+### 11.0a Máy chủ đang chạy thật (từ 2026-09-08)
+
+| | |
+|---|---|
+| Máy | `14.225.222.216` · Ubuntu 24.04 · 2 vCPU · 3.9 GB RAM (+2 GB swap) |
+| Thư mục | `/opt/beside`, `.env` chmod 600 (secret sinh tại chỗ, không có bản nào ở máy dev) |
+| Lệnh dựng | `docker compose -f docker-compose.yml -f docker-compose.vps.yml up -d --build` |
+| Chung máy với | stack `hungsilver` ở `/opt/hungsilver` — giữ cổng 80/443 và 5432, phục vụ `h-edutech.io.vn` |
+| TLS & định tuyến | do `hungsilver-caddy` lo, bằng Cloudflare Origin Certificate. Site block: `infra/caddy/shared-host.Caddyfile` |
+| Cổng nội bộ | `beside-web` `172.18.0.1:3002` · `beside-api` `172.18.0.1:3003` · Postgres `127.0.0.1:5433` · MinIO `127.0.0.1:9000/9001` — **không cổng nào phơi ra Internet** |
+
+Ba lệch so với thiết kế gốc (Caddy riêng, cổng 5432, Let's Encrypt) đều đã ghi ở
+§10 kèm lý do. Hướng dẫn đầy đủ: `docs/DEPLOY.md` §"Triển khai chung máy với dự án khác".
 
 ### 11.0b Tách môi trường development / production
 
