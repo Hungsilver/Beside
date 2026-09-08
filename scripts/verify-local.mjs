@@ -274,6 +274,17 @@ async function checkFlows() {
     TRACE_BASE_URL: `${HTTPS}/api/v1`,
     TRACE_INSECURE_TLS: '1',
   });
+
+  sh(`${COMPOSE} restart api`, { allowFail: true });
+  await waitHealthy();
+
+  // Bộ này CHỜ THẬT hai lần 65 giây: ngưỡng "ở đủ lâu" của hàng rào là 60 giây
+  // và server không cho tua thời gian bằng mốc `ts` do client gửi. Vì vậy nó là
+  // bộ trace chậm nhất — khoảng 2,5 phút.
+  runTrace('apps/api/test/trace-phase4-places.mjs', 'Phase 4 — địa điểm & hàng rào ảo', {
+    TRACE_BASE_URL: `${HTTPS}/api/v1`,
+    TRACE_INSECURE_TLS: '1',
+  });
 }
 
 async function waitHealthy() {

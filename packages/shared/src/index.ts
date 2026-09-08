@@ -10,6 +10,7 @@ export * from './location.schema';
 export * from './post.schema';
 export * from './event.schema';
 export * from './push.schema';
+export * from './place.schema';
 export * from './love';
 export * from './messaging';
 

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   buildMessagingUrl,
   MESSAGING_APP_LABELS,
@@ -42,6 +42,19 @@ export default function SettingsScreen() {
       <ProfileSection />
 
       <MessagingSection />
+
+      <Link to="/dia-diem" className="card mt-3.5 flex items-center gap-3">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-plum-100 text-[20px]">
+          🗺️
+        </span>
+        <span className="min-w-0 flex-1">
+          <b className="block text-[15px]">Địa điểm quen</b>
+          <span className="mt-0.5 block text-[12px] text-ink-400">
+            Lưu Nhà, Công ty… để được báo khi người ấy tới nơi
+          </span>
+        </span>
+        <span className="shrink-0 text-[16px] text-ink-300">›</span>
+      </Link>
 
       <NotificationSection />
 

@@ -8,15 +8,16 @@
 - **Domain:** `https://easytech.io.vn` (tạm dùng — đã mua). Sẽ đổi sang domain `beside` sau
   ⇒ **mọi URL phải lấy từ biến môi trường, không hardcode domain ở bất kỳ đâu**
 - **Cập nhật lần cuối:** 2026-09-08
-- **Trạng thái:** `PHASE 4` — F4 Lịch trình ✅ · F7 Thông báo đẩy ✅ · còn F6 Geofence, F5 Milestone
+- **Trạng thái:** `PHASE 4` — F4 Lịch trình ✅ · F7 Thông báo đẩy ✅ · F6 Địa điểm & Geofence ✅ · còn F5 Milestone
   - Phase 1: `docs/traces/phase-1-auth-pairing.md` — 53/53 case
   - Phase 2: `docs/traces/phase-2-realtime-location.md` — 29/29 case
   - Rà soát: `docs/traces/phase-2-review.md` — 21/21 case (bắt được 2 lỗi rò rỉ quyền riêng tư)
   - Phase 3: `docs/traces/phase-3-posts.md` — 34/34 case (bắt được 4 lỗi, xem L16–L19)
   - Phase 4 (F4): `docs/traces/phase-4-events.md` — 37/37 case (bắt được 2 lỗi, L22–L23)
   - Phase 4 (F7): `docs/traces/phase-4-push.md` — 21/21 case (bắt được 3 lỗi, L24–L26)
-  - Tổng: **205 unit test** + **195 case trace**, typecheck + lint sạch cả 3 workspace
-  - ✅ `npm run verify:local` → **34/34 mục đạt** trên Docker thật
+  - Phase 4 (F6): `docs/traces/phase-4-places.md` — 27/27 case (bắt được 3 lỗi, L27–L29)
+  - Tổng: **227 unit test** + **222 case trace**, typecheck + lint sạch cả 3 workspace
+  - ✅ `npm run verify:local` → **35/35 mục đạt** trên Docker thật
     (6/6 container healthy: db · redis · api · web · caddy · minio), đi qua Caddy HTTPS
 - **Triển khai:** chủ dự án tự deploy — hướng dẫn ở `docs/DEPLOY.md`
 
@@ -86,10 +87,16 @@
 │ Hiển thị : "Đang ở Quận 1 · 12 phút trước"                          │
 │ Nền tảng : iOS ✅  Android ✅                                        │
 └────────────────────────────────────────────────────────────────────┘
-┌─ L3 · GEOFENCE PHÍA SERVER ────────────────────────────────────────┐
-│ Mỗi điểm nhận được → so với các Place đã lưu (PostGIS ST_DWithin)   │
+┌─ L3 · GEOFENCE PHÍA SERVER ✅ đã triển khai ────────────────────────┐
+│ Mỗi điểm nhận được → so với các Place đã lưu (haversine trong RAM)  │
 │ → sinh event ARRIVED / LEFT → Web Push cho đối phương               │
 │ Ưu điểm: không tốn pin client, logic tập trung, dễ viết test        │
+│                                                                     │
+│ BA CHỐT CHẶN chống báo sai (§6.4) — thông báo vị trí SAI tệ hơn     │
+│ hẳn không có thông báo:                                             │
+│   1. sai số GPS > bán kính → bỏ qua điểm                            │
+│   2. khoảng chênh vào/ra 30 m → không bắn tràng thông báo ở mép     │
+│   3. phải ở đủ 60 giây → đi ngang qua nhà không tính là về tới nhà  │
 └────────────────────────────────────────────────────────────────────┘
 ┌─ L4 · (TÙY CHỌN, PHASE 6) BỌC NATIVE ──────────────────────────────┐
 │ Capacitor bọc chính codebase web + plugin background-geolocation    │
@@ -378,6 +385,30 @@ CREATE TRIGGER location_points_set_geog
   bao giờ lệch với lat/lng kể cả khi ghi bằng Prisma Client.
 - Kiểm chứng: `prisma migrate diff` trả về "empty migration".
 
+### 6.4 Hàng rào ảo — ba chốt chặn chống báo sai (đã triển khai & trace)
+
+Một thông báo vị trí **sai** tệ hơn hẳn không có thông báo: nó làm người ta mất
+lòng tin vào cả tính năng. Ba lớp lọc, theo thứ tự quan trọng:
+
+| Lớp | Quy tắc | Hằng số |
+|---|---|---|
+| 1. Sai số GPS | điểm có `accuracyM > radiusM` thì **bỏ qua**, giữ nguyên trạng thái | — |
+| 2. Khoảng chênh vào/ra | vào khi `d ≤ radiusM`, ra khi `d > radiusM + 30` | `GEOFENCE_EXIT_HYSTERESIS_M` |
+| 3. Ở đủ lâu | phải ở trong **60 giây** mới tính là ARRIVED | `GEOFENCE_MIN_DWELL_MS` |
+
+Trạng thái nằm ở bảng riêng `GeofenceState` (khoá chính `[userId, placeId]`),
+**không** suy từ `GeofenceEvent` gần nhất: mỗi điểm vị trí gửi lên đều phải trả
+lời "đang ở trong hay ngoài", mà "sự kiện mới nhất theo từng địa điểm" là một
+câu truy vấn khó và tốn.
+
+Phần quyết định được tách thành hai **hàm thuần** trong
+`packages/shared/src/place.schema.ts` (`accuracyUsableFor`, `decideTransition`)
+để kiểm mọi biên bằng unit test, không cần DB hay GPS.
+
+Việc đối chiếu chạy **không chờ** (`void geofence.evaluate(...)`) trong
+`LocationsService.ingest` — địa điểm là việc phụ, không được làm chậm đường vị
+trí thời gian thực.
+
 ### 6.3 Hai loại thời gian trên lịch (đã triển khai & trace)
 
 Một cái lịch có hai loại "thời gian" khác hẳn nhau. Trộn chúng vào một kiểu dữ
@@ -403,6 +434,12 @@ chuyến đi 3 ngày bắt đầu từ hôm qua sẽ biến mất khỏi lịch 
 thấy nó nhất.
 
 ### 6.2 Quy tắc quyền riêng tư — áp dụng ở MỌI đường ra
+
+> **Bổ sung Phase 4 (F6):** khi bán kính làm mờ vị trí **rộng bằng hoặc hơn**
+> bán kính một hàng rào, server vẫn ghi sự kiện ra/vào cho chính chủ nhưng
+> **không** báo cho người kia. Lý do: tên một địa điểm cụ thể ("vừa tới Nhà")
+> còn tiết lộ chính xác hơn cả một toạ độ đã làm mờ — báo đi là tiết lộ nhiều
+> hơn mức người dùng đã đồng ý chia sẻ.
 
 | Cài đặt | Hiệu lực |
 |---|---|
@@ -485,7 +522,10 @@ POST   /locations                  L2 — ping bị động khi mở app        
 GET    /locations/partner/latest   vị trí gần nhất + khoảng cách          ✅
 GET    /locations/partner/trail    ?from&to&limit → mảng [lng,lat,ts]     ✅
 
-GET|POST /places     PATCH|DELETE /places/:id
+GET    /places                     kèm `peopleInside` — ai đang trong hàng rào   ✅
+POST   /places                     {name, emoji, lat, lng, radiusM, notify*}     ✅
+PATCH  /places/:id                 dời/đổi bán kính thì XOÁ trạng thái cũ        ✅
+DELETE /places/:id                                                              ✅
 
 POST   /posts                      multipart: photos[] + caption + mood + toạ độ  ✅
 GET    /posts                      ?cursor&limit&filter=all|mine|partner|pinned   ✅
@@ -600,7 +640,7 @@ Bắt buộc tối thiểu: 1 happy path + 3 edge case + 1 case lỗi.
 | **1** | ✅ Hạ tầng: docker compose, Caddy+TLS, Postgres+PostGIS, NestJS, Auth, Pairing, đếm ngày yêu | Đăng nhập & ghép đôi chạy thật · 39/39 trace · 56 unit test |
 | **2** | ✅ Vị trí realtime: Socket.IO, Kalman, MapLibre, trail, presence, ghost mode, làm mờ vị trí, dọn lịch sử | Xem nhau di chuyển trên bản đồ · 29/29 trace |
 | **3** | ✅ Check-in ảnh + dòng kỷ niệm + MinIO + sharp (xoay & xoá EXIF), phân trang con trỏ, cảm xúc | Đăng & xem kỷ niệm · 34/34 trace |
-| **4** | 🔸 F4 Lịch trình ✅ (37/37) · F7 Thông báo đẩy + nhắc lịch ✅ (21/21) · còn F6 Geofence, F5 Milestone, ghim ảnh check-in lên bản đồ *(đang làm)* | Đủ tính năng cốt lõi |
+| **4** | 🔸 F4 Lịch trình ✅ (37/37) · F7 Thông báo đẩy + nhắc lịch ✅ (21/21) · F6 Địa điểm & Geofence ✅ (27/27) · còn F5 Milestone, vẽ địa điểm + ảnh check-in lên bản đồ *(đang làm)* | Đủ tính năng cốt lõi |
 | **5** | Giao diện PC (≥1024px), tối ưu hiệu năng, PWA offline | Bản 1.0 |
 | **6** | *(tuỳ chọn)* APK Android qua Capacitor cho tracking nền | File APK sideload |
 
@@ -652,6 +692,12 @@ Bắt buộc tối thiểu: 1 happy path + 3 edge case + 1 case lỗi.
 | 2026-09-08 | Service worker chuyển từ `generateSW` sang **`injectManifest`** | Cần `addEventListener('push')` do mình viết, bản sinh tự động không chèn code riêng vào được | Phải tự viết luôn phần runtime caching (MapLibre, tile bản đồ) |
 | 2026-09-08 | Thiếu khoá VAPID = **tắt tính năng**, không phải lỗi boot; nhưng khai báo **một nửa** thì từ chối boot | Thông báo là tính năng phụ, không được làm sập API. Còn nửa vời là cấu hình sai rõ ràng | Người deploy có thể quên bật mà không biết — màn Cài đặt nói rõ "máy chủ chưa bật" |
 | 2026-09-08 | Đăng ký đẩy trùng `endpoint` thì **chuyển chủ**, không nhân đôi | Hai người dùng chung một máy: người đăng nhập sau sẽ nhận thông báo của người trước | Người trước im lặng mất thông báo trên máy đó — đúng ý đồ |
+| 2026-09-08 | Hàng rào ảo có **ba chốt chặn** chống báo sai (§6.4) | Thông báo vị trí sai tệ hơn hẳn không có thông báo — mất lòng tin vào cả tính năng | Báo chậm hơn tối đa 60 giây so với lúc thật sự tới nơi |
+| 2026-09-08 | Trạng thái hàng rào để ở **bảng riêng** `GeofenceState`, không suy từ sự kiện gần nhất | Mỗi điểm vị trí đều phải hỏi "trong hay ngoài"; truy vấn "sự kiện mới nhất theo từng địa điểm" là câu khó và tốn | Thêm một bảng phải giữ đồng bộ khi dời/xoá địa điểm |
+| 2026-09-08 | Đối chiếu hàng rào chạy **không chờ** trong luồng nhận vị trí | Địa điểm là việc phụ, không được làm chậm đường thời gian thực | Đọc `/places` ngay sau khi gửi điểm có thể thấy trạng thái cũ |
+| 2026-09-08 | **Làm mờ vị trí rộng hơn hàng rào ⇒ không báo cho người kia** | "Vừa tới Nhà" tiết lộ chính xác hơn một toạ độ đã làm mờ (§6.2) | Bật làm mờ 500 m là mất thông báo địa điểm với hàng rào mặc định 150 m |
+| 2026-09-08 | Dùng `haversineMeters` trong RAM, chưa dùng `ST_DWithin` của PostGIS | Tối đa 20 địa điểm mỗi couple — chênh lệch không đáng kể, và hàm thuần thì unit test được | Nếu số địa điểm tăng nhiều thì phải chuyển sang truy vấn không gian |
+| 2026-09-08 | Dùng lại hằng số `GEOFENCE_EXIT_HYSTERESIS_M`/`PLACE_RADIUS_*` của Phase 0 thay vì đặt núm mới | R0: bản kế hoạch là nguồn sự thật; hai núm cùng điều khiển một thứ là mầm lệch (trace L29) | Khoảng chênh là cộng 30 m cố định, không co giãn theo bán kính |
 | 2026-09-08 | Thêm migration `20260907000000_enable_postgis` chạy trước mọi migration khác | Shadow database của `migrate dev` là DB trắng, không có PostGIS nên migration cột `geog` chết (trace L22) | Trùng việc với `infra/postgres/init/01-extensions.sql`, nhưng mọi câu lệnh đều IF NOT EXISTS nên vô hại |
 
 ---

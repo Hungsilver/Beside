@@ -14,6 +14,7 @@ import { LocationsModule } from './locations/locations.module';
 import { PostsModule } from './posts/posts.module';
 import { EventsModule } from './events/events.module';
 import { PushModule } from './push/push.module';
+import { PlacesModule } from './places/places.module';
 import { UsersModule } from './users/users.module';
 import { HealthController } from './health/health.controller';
 
@@ -39,6 +40,7 @@ import { HealthController } from './health/health.controller';
     PostsModule,
     EventsModule,
     PushModule,
+    PlacesModule,
   ],
   controllers: [HealthController],
   providers: [

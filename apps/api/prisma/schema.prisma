@@ -79,6 +79,7 @@ model User {
   createdEvents  Event[]
   locationPoints LocationPoint[]
   geofenceEvents GeofenceEvent[]
+  geofenceStates GeofenceState[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -205,12 +206,34 @@ model Place {
   notifyOnLeave  Boolean @default(false)
 
   geofenceEvents GeofenceEvent[]
+  geofenceStates GeofenceState[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([coupleId])
   @@map("places")
+}
+
+/// Trạng thái hiện tại của một người với một hàng rào.
+///
+/// Cần bảng riêng chứ không suy từ GeofenceEvent gần nhất: mỗi điểm vị trí gửi
+/// lên đều phải trả lời "đang ở trong hay ngoài", mà truy vấn "sự kiện mới nhất
+/// theo từng địa điểm" là một câu khó và tốn. Bảng này chỉ vài dòng mỗi người.
+model GeofenceState {
+  userId  String
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  placeId String
+  place   Place   @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  inside  Boolean @default(false)
+  /// Lần đầu thấy điểm nằm trong hàng rào của lượt vào này.
+  /// Phải ở đủ lâu (GEOFENCE_MIN_DWELL_MS) mới tính là đã tới nơi — đi xe ngang
+  /// qua nhà thì không phải là về tới nhà.
+  candidateSince DateTime?
+  updatedAt      DateTime @updatedAt
+
+  @@id([userId, placeId])
+  @@map("geofence_states")
 }
 
 model GeofenceEvent {

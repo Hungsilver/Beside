@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { LocSource, Prisma } from '@prisma/client';
 import {
   ERROR_CODES,
@@ -16,10 +16,13 @@ import {
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import { AppError } from '../common/errors/app-error';
+import { GeofenceService } from '../places/geofence.service';
 import { SlidingWindowRateLimiter } from './rate-limiter';
 
 export interface CoupleContext {
   userId: string;
+  /** Tên hiển thị — hàng rào ảo cần nó để viết "An vừa tới Nhà". */
+  displayName: string;
   coupleId: string;
   partnerId: string | null;
   privacy: Privacy;
@@ -73,6 +76,10 @@ export class LocationsService implements OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    // forwardRef: PlacesService cũng cần LocationsService.getContext(), nên hai
+    // module tham chiếu vòng. Nest gỡ được nếu cả hai phía đều khai báo.
+    @Inject(forwardRef(() => GeofenceService))
+    private readonly geofence: GeofenceService,
   ) {}
 
   async onModuleDestroy(): Promise<void> {
@@ -97,6 +104,7 @@ export class LocationsService implements OnModuleDestroy {
       where: { id: userId },
       select: {
         id: true,
+        displayName: true,
         coupleId: true,
         privacy: true,
         couple: { select: { members: { select: { id: true } } } },
@@ -112,6 +120,7 @@ export class LocationsService implements OnModuleDestroy {
 
     return {
       userId: user.id,
+      displayName: user.displayName,
       coupleId: user.coupleId,
       partnerId: user.couple.members.find((m) => m.id !== userId)?.id ?? null,
       privacy: parsePrivacy(user.privacy),
@@ -183,6 +192,22 @@ export class LocationsService implements OnModuleDestroy {
       ts: recordedAt.getTime(),
       source,
     });
+
+    /*
+     * Hàng rào ảo (L3). Cố tình KHÔNG await: đối chiếu địa điểm là việc phụ,
+     * không được làm chậm đường vị trí thời gian thực. GeofenceService tự nuốt
+     * mọi lỗi bên trong nên `void` ở đây là an toàn.
+     */
+    void this.geofence.evaluate(
+      {
+        userId: ctx.userId,
+        coupleId: ctx.coupleId,
+        partnerId: ctx.partnerId,
+        displayName: ctx.displayName,
+        fuzzRadiusM: ctx.privacy.fuzzRadiusM,
+      },
+      { lat: point.lat, lng: point.lng, accuracyM: point.accuracyM, at: recordedAt },
+    );
 
     return { accepted: true, event, partnerId: ctx.partnerId, coupleId: ctx.coupleId };
   }

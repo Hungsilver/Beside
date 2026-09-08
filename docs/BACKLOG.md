@@ -77,6 +77,15 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 - [x] Đăng ký đẩy trùng endpoint thì **chuyển chủ** — chống việc hai người dùng
       chung một máy nhận thông báo của nhau
 
+## Đã chốt (08/09/2026 — Phase 4, F6 Địa điểm & Geofence)
+
+- [x] Geofence chạy ở **server** (lớp L3), không tốn pin máy người dùng
+- [x] **Ba chốt chặn** chống báo sai: sai số GPS · khoảng chênh 30m · ở đủ 60 giây
+- [x] Trạng thái để ở bảng riêng `GeofenceState`, không suy từ sự kiện gần nhất
+- [x] Địa điểm là của **cả cặp đôi** — khác sự kiện trên lịch (chỉ người tạo mới sửa)
+- [x] Làm mờ vị trí rộng hơn hàng rào ⇒ vẫn ghi cho chính chủ nhưng **không báo** cho người kia
+- [x] Dùng lại hằng số Phase 0 (`GEOFENCE_EXIT_HYSTERESIS_M`, `PLACE_RADIUS_*`)
+
 ## Nợ kỹ thuật (ghi khi phát sinh)
 
 | Ngày | Mô tả | Mức độ | File |
@@ -107,3 +116,9 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 | 08/09 | Chưa tách được từng loại thông báo (nhắc lịch / check-in / geofence) — hiện bật là nhận hết | Trung bình | `apps/api/src/push/` |
 | 08/09 | Job nhắc lịch chưa chạy thật qua một mốc thời gian thật, mới kiểm bằng unit test với đồng hồ giả | Trung bình | `apps/api/src/events/event-reminder.job.ts` |
 | 08/09 | `PARTNER_ARRIVED` / `PARTNER_LEFT` đã khai báo trong `PUSH_KINDS` nhưng chưa có nơi nào gửi — chờ F6 Geofence | Trung bình | `packages/shared/src/push.schema.ts` |
+| 08/09 | **Chưa chọn được địa điểm trên bản đồ** — mới lưu được "chỗ tôi đang đứng". Muốn lưu nhà người yêu khi đang ngồi ở quán thì chưa làm được | Cao | `apps/web/src/screens/PlacesScreen.tsx` |
+| 08/09 | Hàng rào và ghim địa điểm **chưa vẽ lên `MapScreen`** | Trung bình | `apps/web/src/screens/MapScreen.tsx` |
+| 08/09 | Bảng `geofence_events` ghi đầy đủ nhưng **chưa có API đọc** — chưa hiện được "hôm nay người ấy tới những đâu" | Trung bình | `apps/api/src/places/` |
+| 08/09 | Chưa có case hai người cùng ở trong một hàng rào (logic tách theo `userId` nên về lý là đúng) | Thấp | `apps/api/test/trace-phase4-places.mjs` |
+| 08/09 | Geofence dùng `haversineMeters` trong RAM, chưa dùng `ST_DWithin` của PostGIS — đủ cho 20 địa điểm, cần đổi nếu tăng nhiều | Thấp | `apps/api/src/places/geofence.service.ts` |
+| 08/09 | `npm run verify:local` giờ mất ~2,5 phút chỉ riêng bộ trace địa điểm (phải chờ thật 2×65 giây vì ngưỡng "ở đủ lâu") | Thấp | `apps/api/test/trace-phase4-places.mjs` |
