@@ -85,6 +85,8 @@ export interface PostResponse {
   placeName: string | null;
   photos: PhotoResponse[];
   reactions: PostReaction[];
+  /** Số bình luận. Đếm sẵn ở server để dòng kỷ niệm không phải gọi thêm một vòng. */
+  commentCount: number;
   createdAt: string;
   /** Người đang xem có xoá được bài này không (chỉ tác giả). */
   canDelete: boolean;

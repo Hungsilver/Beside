@@ -5,7 +5,9 @@ import { useAuth } from '@/lib/auth-context';
 import { useCouple } from '@/lib/couple-api';
 import { useDeletePost, useFeed, useReact, type FeedFilter } from '@/lib/posts-api';
 import { ApiRequestError } from '@/lib/api-client';
+import { formatWhen } from '@/lib/relative-time';
 import AuthedImage from '@/components/AuthedImage';
+import CommentSheet from '@/components/CommentSheet';
 import TabBar from '@/components/TabBar';
 import { Screen, Spinner } from '@/components/ui';
 
@@ -140,6 +142,7 @@ function PostCard({
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [photoIndex, setPhotoIndex] = useState(0);
+  const [showComments, setShowComments] = useState(false);
 
   const myReaction = post.reactions.find((r) => r.userId === myId)?.emoji;
   const photo = post.photos[photoIndex];
@@ -221,6 +224,22 @@ function PostCard({
             );
           })}
 
+          <button
+            type="button"
+            onClick={() => setShowComments(true)}
+            aria-label={
+              post.commentCount > 0
+                ? `Xem ${post.commentCount} bình luận`
+                : 'Viết bình luận'
+            }
+            className="flex h-8 items-center gap-1 rounded-full bg-ink-100 px-2.5 text-[14px]"
+          >
+            💬
+            {post.commentCount > 0 && (
+              <span className="text-[11px] font-bold text-ink-600">{post.commentCount}</span>
+            )}
+          </button>
+
           <div className="flex-1" />
 
           {post.canDelete &&
@@ -260,24 +279,13 @@ function PostCard({
           </p>
         )}
       </div>
+
+      {/* Chỉ gắn vào cây khi thật sự mở: mỗi tấm trượt kéo theo một truy vấn
+          bình luận riêng, dựng sẵn cho cả 10 bài trong danh sách là 10 request
+          không ai cần. */}
+      {showComments && (
+        <CommentSheet post={post} myId={myId} onClose={() => setShowComments(false)} />
+      )}
     </article>
   );
-}
-
-function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-
-  const diffMin = Math.round((Date.now() - d.getTime()) / 60_000);
-  if (diffMin < 1) return 'vừa xong';
-  if (diffMin < 60) return `${diffMin} phút trước`;
-  if (diffMin < 60 * 24) return `${Math.round(diffMin / 60)} giờ trước`;
-  if (diffMin < 60 * 24 * 7) return `${Math.round(diffMin / 60 / 24)} ngày trước`;
-
-  return d.toLocaleDateString('vi-VN', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
 }

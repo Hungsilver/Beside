@@ -536,3 +536,250 @@ test.describe('Đợt 2 — hồ sơ cá nhân', () => {
     await expect(page.getByLabel('Vài dòng về bạn')).toHaveValue('', { timeout: 15_000 });
   });
 });
+
+test.describe('Bình luận trong khoảnh khắc', () => {
+  /*
+   * Cần dữ liệu demo có ít nhất một khoảnh khắc: `npm run seed:demo`.
+   *
+   * Bộ này chạy trên CÙNG một tài khoản nên chỉ kiểm được nửa "người viết".
+   * Nửa còn lại — người ấy thấy bình luận của mình, chủ bài xoá được bình luận
+   * của người ấy — thuộc về kiểm thử hai tài khoản, chưa có trong bộ E2E này.
+   */
+  test('CM-01 — mở tấm trượt, gửi bình luận, số đếm tăng theo', async () => {
+    await page.goto('/ky-niem');
+
+    const openers = page.getByRole('button', { name: /bình luận/i });
+    await expect(openers.first()).toBeVisible({ timeout: 15_000 });
+    await openers.first().click();
+
+    const sheet = page.getByRole('dialog', { name: 'Bình luận' });
+    await expect(sheet).toBeVisible();
+
+    // Tấm trượt không được tràn ra ngoài khung nhìn 390px.
+    const box = await sheet.boundingBox();
+    expect(box!.width).toBeLessThanOrEqual(390);
+
+    const stamp = `Nhớ buổi này ghê ${Date.now() % 100000}`;
+    await sheet.getByLabel('Nội dung bình luận').fill(stamp);
+    await sheet.getByRole('button', { name: 'Gửi bình luận' }).click();
+
+    // Dòng vừa gửi phải hiện ra trong danh sách...
+    await expect(sheet.getByText(stamp)).toBeVisible({ timeout: 15_000 });
+    // ...và ô nhập phải được dọn sạch, chỉ SAU khi gửi xong.
+    await expect(sheet.getByLabel('Nội dung bình luận')).toHaveValue('');
+
+    await sheet.getByRole('button', { name: 'Xong' }).click();
+    await expect(sheet).toHaveCount(0);
+
+    // Số trên nút ở dòng kỷ niệm phải nhích lên, không phải chờ tải lại trang.
+    await expect(page.getByRole('button', { name: /Xem \d+ bình luận/ }).first()).toBeVisible();
+    expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
+  });
+
+  test('CM-02 — bình luận rỗng không gửi được, nội dung quá dài bị chặn', async () => {
+    await page.goto('/ky-niem');
+    const openers = page.getByRole('button', { name: /bình luận/i });
+    await expect(openers.first()).toBeVisible({ timeout: 15_000 });
+    await openers.first().click();
+
+    const sheet = page.getByRole('dialog', { name: 'Bình luận' });
+    const input = sheet.getByLabel('Nội dung bình luận');
+    const send = sheet.getByRole('button', { name: 'Gửi bình luận' });
+
+    // Chưa gõ gì → nút gửi tắt.
+    await expect(send).toBeDisabled();
+
+    // Toàn khoảng trắng cũng vậy: cắt xong là rỗng.
+    await input.fill('    ');
+    await expect(send).toBeDisabled();
+
+    // Quá 300 ký tự: bộ đếm hiện ra và server không bao giờ được gọi tới.
+    await input.fill('a'.repeat(301));
+    await expect(sheet.getByText('301/300')).toBeVisible();
+    await send.click();
+    await expect(sheet.getByRole('alert')).toContainText(/300 ký tự/);
+  });
+
+  test('CM-03 — xoá bình luận vừa viết', async () => {
+    await page.goto('/ky-niem');
+    const openers = page.getByRole('button', { name: /bình luận/i });
+    await expect(openers.first()).toBeVisible({ timeout: 15_000 });
+    await openers.first().click();
+
+    const sheet = page.getByRole('dialog', { name: 'Bình luận' });
+    const stamp = `Xoá thử ${Date.now() % 100000}`;
+    await sheet.getByLabel('Nội dung bình luận').fill(stamp);
+    await sheet.getByRole('button', { name: 'Gửi bình luận' }).click();
+
+    const row = sheet.locator('li').filter({ hasText: stamp });
+    await expect(row).toBeVisible({ timeout: 15_000 });
+
+    // Xoá phải qua một bước xác nhận — không để chạm nhầm là mất luôn.
+    await row.getByRole('button', { name: 'Xoá', exact: true }).click();
+    await row.getByRole('button', { name: 'Xoá hẳn' }).click();
+
+    await expect(sheet.getByText(stamp)).toHaveCount(0, { timeout: 15_000 });
+  });
+});
+
+test.describe('Trò chơi — cờ caro', () => {
+  /*
+   * Bộ này chạy trên MỘT tài khoản nên không mô phỏng được ván thật giữa hai
+   * người. Nó kiểm đúng thứ chỉ trình duyệt trả lời được: bàn 15×15 có dựng ra
+   * đủ 225 ô không, có tràn ngang khổ 390px không, và cơ chế chạm hai bước có
+   * chặn được nước đi khi chưa xác nhận không.
+   *
+   * Ván tạo ra ở đây sẽ tự huỷ sau 30 phút không ai đi, nên không cần dọn.
+   */
+  test('CR-01 — sảnh trò chơi mở được từ màn Nhà', async () => {
+    await page.goto('/');
+    await page.getByRole('link', { name: /Chơi cùng nhau/ }).click();
+    await expect(page.getByRole('heading', { name: 'Trò chơi' })).toBeVisible();
+
+    // Cả hai game đều chơi được.
+    await expect(page.getByText('Cờ caro')).toBeVisible();
+    await expect(page.getByText('Tiến lên miền Nam')).toBeVisible();
+    expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
+  });
+
+  test('CR-02 — mở ván caro, bàn 15×15 dựng đủ ô và không tràn ngang', async () => {
+    await page.goto('/tro-choi');
+
+    // Có ván dở thì vào tiếp, chưa có thì tạo mới — cả hai nút đều dẫn vào ván.
+    const caro = page.locator('section').filter({ hasText: 'Cờ caro' });
+    await caro
+      .getByRole('button', { name: /Ván mới/ })
+      .or(caro.getByRole('link', { name: /Chơi tiếp ván đang dở/ }))
+      .first()
+      .click();
+
+    const board = page.getByRole('grid', { name: 'Bàn cờ caro' });
+    await expect(board).toBeVisible({ timeout: 15_000 });
+    await expect(board.getByRole('gridcell')).toHaveCount(225);
+
+    // Bàn phải vuông và nằm gọn trong khổ 390px.
+    const box = await board.boundingBox();
+    expect(box!.width).toBeLessThanOrEqual(390);
+    expect(Math.abs(box!.width - box!.height)).toBeLessThan(2);
+
+    // Cả trang không được cuộn ngang.
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow, 'trang bị tràn ngang').toBeLessThanOrEqual(0);
+  });
+
+  test('CR-03 — chạm hai bước: ngắm rồi mới đặt được quân', async () => {
+    await page.goto('/tro-choi');
+    const caro = page.locator('section').filter({ hasText: 'Cờ caro' });
+    await caro
+      .getByRole('button', { name: /Ván mới/ })
+      .or(caro.getByRole('link', { name: /Chơi tiếp ván đang dở/ }))
+      .first()
+      .click();
+
+    const board = page.getByRole('grid', { name: 'Bàn cờ caro' });
+    await expect(board).toBeVisible({ timeout: 15_000 });
+
+    // Chưa ngắm ô nào → nút xác nhận phải tắt.
+    const confirm = page.getByRole('button', { name: /Đặt quân|Chạm vào bàn|Chờ người ấy/ });
+    await expect(confirm).toBeDisabled();
+
+    // Vùng chạm của nút xác nhận phải đạt 44px — đây chính là thứ bù lại cho
+    // ô cờ 23px (ARCHITECTURE.md ADR 09/09).
+    const confirmBox = await confirm.boundingBox();
+    expect(confirmBox!.height).toBeGreaterThanOrEqual(44);
+
+    await board.getByRole('gridcell', { name: 'Hàng 8 cột 8' }).click();
+    await expect(page.getByRole('button', { name: /Đặt quân ở 8·8/ })).toBeEnabled();
+  });
+
+  test('CR-04 — đồng hồ đếm ngược và ván nói rõ hạn tự huỷ', async () => {
+    await page.goto('/tro-choi');
+    const caro = page.locator('section').filter({ hasText: 'Cờ caro' });
+    await caro
+      .getByRole('button', { name: /Ván mới/ })
+      .or(caro.getByRole('link', { name: /Chơi tiếp ván đang dở/ }))
+      .first()
+      .click();
+
+    await expect(page.getByRole('grid', { name: 'Bàn cờ caro' })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Đồng hồ hiện dạng "27s" — hoặc ván đang tạm dừng vì không ai xem.
+    const clock = page.getByText(/^\d{1,2}s$/).or(page.getByText(/Đồng hồ đang tạm dừng/));
+    await expect(clock.first()).toBeVisible();
+
+    // Mất ván mà không biết vì sao là chuyện khó chịu hơn hẳn bản thân việc mất ván.
+    await expect(page.getByText(/Ván tự huỷ nếu 30 phút không ai đi/)).toBeVisible();
+    expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
+  });
+});
+
+test.describe('Trò chơi — tiến lên miền Nam', () => {
+  /*
+   * Một tài khoản nên không đánh hết được một ván. Bộ này kiểm phần chỉ trình
+   * duyệt trả lời được: chia đúng 13 lá, bài đối phương KHÔNG lộ, và nút "Đánh"
+   * chỉ sáng khi bộ đang chọn thật sự hợp lệ.
+   */
+  const openTienLen = async () => {
+    await page.goto('/tro-choi');
+    const card = page.locator('section').filter({ hasText: 'Tiến lên miền Nam' });
+    await card
+      .getByRole('button', { name: /Ván mới/ })
+      .or(card.getByRole('link', { name: /Chơi tiếp ván đang dở/ }))
+      .first()
+      .click();
+    await expect(page.getByRole('group', { name: 'Bài trên tay' })).toBeVisible({
+      timeout: 15_000,
+    });
+  };
+
+  test('TL-01 — chia đúng 13 lá và bài người ấy không lộ', async () => {
+    await openTienLen();
+
+    const hand = page.getByRole('group', { name: 'Bài trên tay' }).getByRole('button');
+    await expect(hand).toHaveCount(13);
+
+    // Đối phương chỉ hiện SỐ lá — đây là hàng rào quan trọng nhất của tính năng.
+    await expect(page.getByText(/còn 13 lá/)).toBeVisible();
+
+    // Không được có chỗ nào vô tình vẽ bài của người ấy ra.
+    const backs = page.locator('[aria-label^="Lá "]');
+    await expect(backs).toHaveCount(13);
+
+    expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
+  });
+
+  test('TL-02 — nút Đánh chỉ sáng khi bộ hợp lệ, và nói rõ lý do khi không', async () => {
+    await openTienLen();
+
+    const play = page.getByRole('button', { name: /Đánh \d+ lá|Chọn bài để đánh|Chờ người ấy/ });
+    await expect(play).toBeDisabled();
+
+    // Bỏ lượt phải TẮT khi bàn trống — bỏ lượt lúc đó thì ván đứng im mãi.
+    await expect(page.getByRole('button', { name: 'Bỏ lượt' })).toBeDisabled();
+
+    // Ván đầu bắt buộc có lá nhỏ nhất — màn hình phải nói ra.
+    await expect(page.getByText(/Nước đầu phải có/)).toBeVisible();
+  });
+
+  test('TL-03 — bài trên tay không làm tràn ngang khổ 390px', async () => {
+    await openTienLen();
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow, 'trang bị tràn ngang').toBeLessThanOrEqual(0);
+
+    // Vùng chạm mỗi lá phải đạt 44px dù chỉ lộ ra ~24px vì chồng mép (R2).
+    const firstCard = page
+      .getByRole('group', { name: 'Bài trên tay' })
+      .getByRole('button')
+      .first();
+    const box = await firstCard.boundingBox();
+    expect(box!.width).toBeGreaterThanOrEqual(44);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  });
+});

@@ -19,6 +19,9 @@ const FeedScreen = lazy(() => import('@/screens/FeedScreen'));
 const CalendarScreen = lazy(() => import('@/screens/CalendarScreen'));
 const PlacesScreen = lazy(() => import('@/screens/PlacesScreen'));
 const MilestonesScreen = lazy(() => import('@/screens/MilestonesScreen'));
+const GamesScreen = lazy(() => import('@/screens/GamesScreen'));
+// Màn ván kéo theo socket riêng của trò chơi — chỉ tải khi thật sự mở một ván.
+const GameScreen = lazy(() => import('@/screens/GameScreen'));
 
 export default function App() {
   const { user, isRestoring } = useAuth();
@@ -100,6 +103,26 @@ export default function App() {
             <RequireCouple>
               <Suspense fallback={<Spinner label="Đang tính ngày yêu..." />}>
                 <MilestonesScreen />
+              </Suspense>
+            </RequireCouple>
+          }
+        />
+        <Route
+          path="/tro-choi"
+          element={
+            <RequireCouple>
+              <Suspense fallback={<Spinner label="Đang mở sảnh trò chơi..." />}>
+                <GamesScreen />
+              </Suspense>
+            </RequireCouple>
+          }
+        />
+        <Route
+          path="/tro-choi/:gameId"
+          element={
+            <RequireCouple>
+              <Suspense fallback={<Spinner label="Đang mở ván..." />}>
+                <GameScreen />
               </Suspense>
             </RequireCouple>
           }

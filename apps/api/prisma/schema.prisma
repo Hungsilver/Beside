@@ -50,6 +50,17 @@ enum GeofenceEventType {
   LEFT
 }
 
+enum GameKind {
+  TIEN_LEN
+  CARO
+}
+
+enum GameStatus {
+  PLAYING
+  FINISHED
+  ABANDONED // bỏ dở quá lâu, xem ABANDON_AFTER_MS
+}
+
 // ---------------------------------------------------------
 // Người dùng & ghép đôi
 // ---------------------------------------------------------
@@ -84,7 +95,11 @@ model User {
   refreshTokens  RefreshToken[]
   pushSubs       PushSubscription[]
   posts          Post[]
+  comments       Comment[]
   createdEvents  Event[]
+  gameTurns      Game[]     @relation("GameTurn")
+  gameWins       Game[]     @relation("GameWinner")
+  gameMoves      GameMove[]
   locationPoints LocationPoint[]
   geofenceEvents GeofenceEvent[]
   geofenceStates GeofenceState[]
@@ -116,6 +131,7 @@ model Couple {
   posts          Post[]
   events         Event[]
   milestones     Milestone[]
+  games          Game[]
   locationPoints LocationPoint[]
   geofenceEvents GeofenceEvent[]
 
@@ -274,9 +290,10 @@ model Post {
   lat       Float?
   lng       Float?
   placeName String?
-  reactions Json     @default("[]")
+  reactions Json      @default("[]")
   photos    Photo[]
-  createdAt DateTime @default(now())
+  comments  Comment[]
+  createdAt DateTime  @default(now())
 
   @@index([coupleId, createdAt])
   @@map("posts")
@@ -299,6 +316,27 @@ model Photo {
 
   @@index([postId])
   @@map("photos")
+}
+
+/// Bình luận trong một khoảnh khắc.
+///
+/// Không phải chat (F9): mỗi dòng luôn gắn với đúng một `Post`, không có phòng
+/// riêng, không có trạng thái đã xem. Quyền đọc/ghi suy ra từ `post.coupleId`
+/// nên bảng này KHÔNG lặp lại cột `coupleId` — một nguồn sự thật duy nhất,
+/// không có chỗ để hai cột lệch nhau.
+model Comment {
+  id       String @id @default(uuid())
+  postId   String
+  post     Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body     String
+
+  createdAt DateTime @default(now())
+
+  /// Luôn đọc theo bài, sắp xếp cũ → mới.
+  @@index([postId, createdAt])
+  @@map("comments")
 }
 
 // ---------------------------------------------------------
@@ -352,4 +390,84 @@ model Milestone {
 
   @@index([coupleId, date])
   @@map("milestones")
+}
+
+// ---------------------------------------------------------
+// Trò chơi cho hai người (Phase 6) — docs/thiet-ke-games.md
+// ---------------------------------------------------------
+
+/// Một ván chơi. Toàn bộ diễn biến nằm trong `state` (JSON).
+///
+/// Cố tình KHÔNG tách bảng riêng cho bài và bàn cờ: hai game có hình dạng dữ
+/// liệu khác hẳn nhau, ép chung một lược đồ quan hệ chỉ đẻ ra một bảng đầy cột
+/// NULL mà không truy vấn nào dùng tới.
+model Game {
+  id       String     @id @default(uuid())
+  coupleId String
+  couple   Couple     @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  kind     GameKind
+  status   GameStatus @default(PLAYING)
+
+  /// Trạng thái ván. Với Tiến lên, cột này CHỨA BÀI TRÊN TAY CẢ HAI NGƯỜI —
+  /// không bao giờ được trả thẳng ra client, phải đi qua bộ lọc theo người xem.
+  state Json
+
+  turnUserId String?
+  turnUser   User?   @relation("GameTurn", fields: [turnUserId], references: [id], onDelete: SetNull)
+
+  /// Mốc hết giờ của lượt hiện tại. NULL = đồng hồ đang TẠM DỪNG vì người tới
+  /// lượt không mở app (iOS treo JS khi khoá màn hình — ARCHITECTURE.md §1.3).
+  turnDeadlineAt DateTime?
+  /// Còn lại bao nhiêu mili-giây khi tạm dừng; chạy tiếp thì cộng từ đây.
+  turnRemainingMs Int @default(30000)
+
+  /// Nước đi gần nhất. Quá ABANDON_AFTER_MS không ai đi thì cron huỷ ván.
+  /// KHÔNG dùng `updatedAt` thay: tạm dừng đồng hồ cũng là một lần ghi, nên
+  /// `updatedAt` sẽ tự đẩy hạn huỷ ra xa mỗi lần người dùng khoá màn hình.
+  lastMoveAt DateTime @default(now())
+  /// Nước đi gần nhất do đồng hồ tự sinh, không phải người bấm.
+  lastMoveAuto Boolean @default(false)
+
+  winnerId String?
+  winner   User?   @relation("GameWinner", fields: [winnerId], references: [id], onDelete: SetNull)
+  /// HET_BAI | DU_QUAN | HET_GIO | DAU_HANG | HOA | BO_DO
+  endReason String?
+
+  /// Khoá lạc quan chống hai người bấm cùng lúc. Mỗi nước đi ghi kèm
+  /// `WHERE version = <giá trị vừa đọc>`; không đổi được dòng nào nghĩa là có
+  /// người đi trước rồi. Dùng lại bài học của ADR ghép đôi: KHÔNG dùng
+  /// transaction Serializable, nó làm bên thua cuộc trả 500 vì hết maxWait.
+  version Int @default(0)
+
+  moves      GameMove[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  finishedAt DateTime?
+
+  @@index([coupleId, kind, status])
+  /// Cho cron quét ván hết giờ.
+  @@index([status, turnDeadlineAt])
+  /// Cho cron huỷ ván bỏ dở.
+  @@index([status, lastMoveAt])
+  @@map("games")
+}
+
+/// Lịch sử nước đi. KHÔNG dùng để dựng lại ván (cột `state` đã đủ), mà để hiện
+/// "nước vừa đánh", gỡ lỗi khi luật xử sai, và sau này làm màn phát lại.
+model GameMove {
+  id     BigInt @id @default(autoincrement())
+  gameId String
+  game   Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Số thứ tự trong ván, bắt đầu từ 1.
+  no Int
+  /// Tiến lên: {cards:[...]} hoặc {pass:true}. Caro: {r,c}.
+  payload Json
+  /// Do đồng hồ tự sinh chứ không phải người bấm — giao diện nói rõ "hết giờ".
+  auto      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([gameId, no])
+  @@map("game_moves")
 }

@@ -8,12 +8,17 @@ export * from './kalman';
 export * from './sampling';
 export * from './location.schema';
 export * from './post.schema';
+export * from './comment.schema';
 export * from './event.schema';
 export * from './push.schema';
 export * from './place.schema';
 export * from './milestone.schema';
 export * from './love';
 export * from './messaging';
+export * from './caro';
+export * from './tien-len';
+export * from './tien-len-flow';
+export * from './game.schema';
 
 /** Khuôn lỗi thống nhất do API trả về (khớp với AllExceptionsFilter ở apps/api). */
 export interface ApiError {

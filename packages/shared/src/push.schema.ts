@@ -13,7 +13,9 @@ export const PUSH_KINDS = [
   'PARTNER_ARRIVED', // người ấy vừa tới một địa điểm đã lưu
   'PARTNER_LEFT', // người ấy vừa rời một địa điểm đã lưu
   'PARTNER_CHECKIN', // người ấy vừa đăng khoảnh khắc mới
+  'PARTNER_COMMENT', // người ấy vừa bình luận vào một khoảnh khắc
   'MILESTONE', // sắp tới mốc kỷ niệm
+  'GAME_TURN', // tới lượt bạn trong ván đang chơi
   'TEST', // bấm "gửi thử" trong màn Cài đặt
 ] as const;
 export type PushKind = (typeof PUSH_KINDS)[number];

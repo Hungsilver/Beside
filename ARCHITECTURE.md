@@ -23,9 +23,11 @@
   - Phase 5: `docs/traces/phase-5-hieu-nang.md` — tách socket.io khỏi gói tải đầu
   - Phase 5: `docs/traces/phase-5-pwa-offline.md` — PWA offline mức 1, 4/4 case (mức 2 chưa làm được)
   - Phase 4 (F5): `docs/traces/phase-4-milestones.md` — 25/25 case (không lỗi mới)
-  - Tổng: **270 unit test** + **247 case trace**, typecheck + lint sạch cả 3 workspace
-  - ✅ `npm run verify:local` → **38/38 mục đạt** trên Docker thật (gồm chốt ESLint và E2E trình duyệt)
+  - Tổng: **421 unit test** + **314 case trace** + **41 E2E**, typecheck + lint sạch cả 3 workspace
+  - Phase 6: F11 Cờ caro + F10 Tiến lên — `docs/thiet-ke-games.md`, **45/45 case trace** (`trace:games`), 84 unit test luật, 7 E2E
+  - ✅ `npm run verify:local` → **40/40 mục đạt** trên Docker thật (gồm chốt ESLint và E2E trình duyệt)
     (6/6 container healthy: db · redis · api · web · caddy · minio), đi qua Caddy HTTPS
+    — chạy lại ngày 09/09 sau khi thêm bình luận và hai trò chơi: 13 migration, 41 E2E
 - **Triển khai:** chủ dự án tự deploy — hướng dẫn ở `docs/DEPLOY.md`
 
 ---
@@ -37,13 +39,15 @@
 |---|-----------|-------|
 | F1 | Ghép đôi (Pairing) | 2 người ghép thành 1 `couple` qua mã mời 6 ký tự. 1 user chỉ thuộc 1 couple tại 1 thời điểm |
 | F2 | Vị trí thời gian thực | Xem đối phương đang di chuyển trên bản đồ, có vệt đường đi (trail), độ chính xác, hướng, tốc độ |
-| F3 | Check-in bằng ảnh | Chụp/chọn ảnh + caption + vị trí → ghim lên bản đồ + lên timeline |
+| F3 | Check-in bằng ảnh | Chụp/chọn ảnh + caption + vị trí → ghim lên bản đồ + lên timeline. Mỗi khoảnh khắc có **thả cảm xúc** và **bình luận** |
 | F4 | Lịch trình chung | Lịch hẹn, kế hoạch đi chơi, nhắc nhở; xem "hôm nay đối phương đi đâu" |
 | F5 | Đếm ngày yêu | Số ngày bên nhau, đếm ngược mốc kỷ niệm (100/365/1000 ngày, sinh nhật) |
 | F6 | Địa điểm & Geofence | Lưu "Nhà", "Công ty", "Quán quen" → tự động thông báo khi đến/rời |
 | F7 | Thông báo đẩy | Web Push: đối phương đã đến nơi, vừa check-in, sắp tới ngày kỷ niệm |
 | F8 | Quyền riêng tư | Ghost mode (tạm ẩn vị trí), làm mờ độ chính xác, hạn lưu lịch sử vị trí |
 | F9 | Nhắn tin | **Không làm chat trong app.** Chỉ 1 nút deep-link mở Zalo / Messenger / gọi điện |
+| F10 | Tiến lên miền Nam | ✅ 2 người, 13 lá mỗi bên, luật cơ bản + chặt heo, 30s/lượt |
+| F11 | Cờ caro | ✅ Bàn 15×15, luật Việt Nam (đúng 5 quân bị chặn hai đầu thì không thắng, ≥6 quân thắng), 30s/lượt |
 
 ### 1.1b Ngoài phạm vi (không làm)
 
@@ -348,12 +352,22 @@ model Post {                             // F3 — check-in ảnh
   caption   String?
   mood      String?                      // emoji tâm trạng
   photos    Photo[]
+  comments  Comment[]
   lat       Float?
   lng       Float?
   placeName String?
   reactions Json     @default("[]")
   createdAt DateTime @default(now())
   @@index([coupleId, createdAt])
+}
+
+model Comment {                          // F3 — bình luận trong một khoảnh khắc
+  id        String   @id @default(uuid())
+  postId    String                       // KHÔNG có coupleId: quyền suy từ post
+  authorId  String
+  body      String                       // ≤300 ký tự
+  createdAt DateTime @default(now())
+  @@index([postId, createdAt])
 }
 
 model Photo {
@@ -396,6 +410,87 @@ model Milestone {                        // F5 — mốc kỷ niệm (tự sinh 
   emoji    String @default("💖")
 }
 ```
+
+### 6.5 Ván chơi (Phase 6 — đã triển khai cho caro)
+
+```prisma
+model Game {                             // F10/F11 — một ván giữa hai người
+  id              String     @id @default(uuid())
+  coupleId        String
+  kind            GameKind                  // TIEN_LEN | CARO
+  status          GameStatus @default(PLAYING)  // PLAYING | FINISHED | ABANDONED
+  state           Json                      // bàn cờ / bài trên tay — KHÔNG trả thẳng ra client
+  turnUserId      String?
+  turnDeadlineAt  DateTime?                 // NULL = đồng hồ đang TẠM DỪNG (§6.6)
+  turnRemainingMs Int        @default(30000)
+  lastMoveAt      DateTime   @default(now())  // mốc tính hạn huỷ ván bỏ dở
+  lastMoveAuto    Boolean    @default(false)  // nước do đồng hồ tự sinh
+  winnerId        String?
+  endReason       String?                   // HET_BAI|DU_QUAN|HET_GIO|DAU_HANG|HOA|BO_DO
+  version         Int        @default(0)    // khoá lạc quan, xem §6.7
+  @@index([coupleId, kind, status])
+  @@index([status, turnDeadlineAt])         // cron quét hết giờ
+  @@index([status, lastMoveAt])             // cron huỷ ván bỏ dở
+}
+
+model GameMove {                         // lịch sử, KHÔNG dùng để dựng lại ván
+  id      BigInt  @id @default(autoincrement())
+  gameId  String
+  userId  String
+  no      Int
+  payload Json                              // caro {r,c} · tiến lên {cards[]}|{pass}
+  auto    Boolean @default(false)
+  @@unique([gameId, no])
+}
+```
+
+Bảng điểm **không lưu riêng** — đếm thẳng từ `winnerId`. Một cặp đôi thì số ván nhỏ tới mức
+đếm lại mỗi lần vẫn rẻ hơn việc phải giữ hai nguồn sự thật đồng bộ.
+
+Khuôn của cột `state`:
+
+```ts
+// CARO — không có gì phải giấu, hai bên cùng nhìn một bàn cờ
+{ kind:'CARO', board: string /*225 ký tự*/, marks: {userId:'X'|'O'}, lastMove, winLine }
+
+// TIEN_LEN — `hands` chứa bài CẢ HAI NGƯỜI, tuyệt đối không trả thẳng ra client
+{ kind:'TIEN_LEN', hands: {userId: number[]}, table: {userId, cards} | null,
+  passedBy: userId | null, mustInclude: number | null }
+```
+
+`GamesService.clientState()` là **chỗ duy nhất** trong toàn bộ code base mở cột `state` ra để
+gửi đi: người xem thấy bài của mình, còn của đối phương chỉ thấy **số lá**. Thêm bất kỳ đường
+ra nào khác cho `game.state` là phá thẳng luật số một của tính năng này.
+
+### 6.6 Đồng hồ 30 giây — và cách không phạt oan người dùng
+
+Chủ dự án chốt 30 giây mỗi lượt. Nhưng §1.3 đã ghi: **iOS treo JavaScript ngay khi khoá màn
+hình** — để đồng hồ chạy thẳng thì ai nhận một cuộc gọi giữa ván sẽ thua oan. Nên:
+
+- Đồng hồ là **của server** (`turnDeadlineAt`); client chỉ vẽ lại phần đếm ngược.
+- `turnDeadlineAt = NULL` nghĩa là **tạm dừng**, phần còn lại nằm ở `turnRemainingMs`.
+- Dừng khi người tới lượt gửi `g:away` (bắt `visibilitychange`, **không đợi** socket rớt —
+  Socket.IO mất ~20 giây mới nhận ra, quá muộn trên đồng hồ 30 giây), hoặc khi socket rớt thật.
+- **Và sau MỖI lần lượt đổi tay**, server hỏi lại: người tới lượt có socket nào đang xem ván
+  không? Không thì dừng ngay. Thiếu bước này là lỗ hổng lớn nhất của cả cơ chế — `g:away` đã
+  xảy ra từ trước nước đi, nên deadline mới vẫn được đặt cho một người đang không nhìn màn hình.
+- **Trần chờ 30 phút**: không ai đi nước nào trong 30 phút thì ván sang `ABANDONED`. Không có
+  mốc này thì một ván tạm dừng treo vĩnh viễn.
+
+Canh giờ bằng **cron 5 giây**, không phải `setTimeout` hẹn riêng từng ván: `setTimeout` chết
+theo tiến trình nên khởi động lại API là mọi ván treo ở lượt của một người — đúng bài học đã
+ghi ở job nhắc lịch.
+
+### 6.7 Chống hai người bấm cùng lúc
+
+`Game.version` là khoá lạc quan: `UPDATE ... WHERE id = ? AND version = <đã đọc>`. Không đổi
+được dòng nào ⇒ có người đi trước ⇒ trả 409.
+
+Trường hợp thật sự xảy ra không phải hai người, mà là **đồng hồ hết giờ đúng lúc người chơi
+bấm đánh**. Một bên thua — và đó là kết quả đúng: ván không bao giờ đi hai nước cho một lượt.
+
+Cố tình **không** dùng transaction Serializable — ADR 2026-09-07 đã ghi lại bài học lúc ghép
+đôi: bên thua cuộc trả 500 vì hết `maxWait` của Prisma.
 
 ### 6.0 Cột không gian `geog` (đã triển khai & trace)
 
@@ -563,6 +658,10 @@ DELETE /posts/:id                  chỉ người đăng mới xoá được    
 POST   /posts/:id/react            {emoji} — mỗi người 1 cảm xúc, bấm lại = bỏ    ✅
 GET    /posts/photos/:photoId/:size   size = thumb | md | orig                    ✅
 
+GET    /posts/:postId/comments     ?cursor&limit — trả MỚI → CŨ, client đảo lại    ✅
+POST   /posts/:postId/comments     {body} ≤300 ký tự, trần 300 dòng/bài            ✅
+DELETE /posts/:postId/comments/:commentId   người viết HOẶC chủ khoảnh khắc        ✅
+
 GET    /events?from&to             sự kiện GIAO với khoảng đó (§6.3)              ✅
 POST   /events                     có giờ hoặc cả ngày, riêng tư hoặc chung        ✅
 GET    /events/:id                                                                ✅
@@ -573,6 +672,13 @@ GET    /milestones                 mốc sắp tới — trộn tự sinh + tự
 POST   /milestones                 {title, date, emoji, yearly} → cả danh sách  ✅
 PATCH  /milestones/:id             → cả danh sách mới                           ✅
 DELETE /milestones/:id             chỉ xoá được mốc TỰ THÊM                     ✅
+
+GET    /games                      ?kind — danh sách ván của couple               ✅
+GET    /games/summary              bảng điểm + id ván đang chạy mỗi loại          ✅
+POST   /games                      {kind} — 409 kèm gameId nếu còn ván dở         ✅
+GET    /games/:id                  state ĐÃ LỌC theo người xem                    ✅
+POST   /games/:id/moves            {version, move} — version là khoá lạc quan     ✅
+POST   /games/:id/resign           đầu hàng                                       ✅
 
 GET    /push/public-key            khoá công khai VAPID — endpoint PUBLIC        ✅
 POST   /push/subscribe             {endpoint, keys, userAgent?}                  ✅
@@ -635,6 +741,30 @@ khi rời khỏi. Ảnh trả về kèm `Cache-Control: private, max-age=3153600
 | S→C | `post:new` | `{postId, authorId, thumbUrl}` |
 | S→C | `event:changed` | `{eventId, action}` |
 
+**Namespace thứ hai `/rtg`** — trò chơi (F10/F11). Tách hẳn khỏi `/rt`: gateway vị trí là nơi
+nhạy cảm nhất về quyền riêng tư và đang chạy ổn định, trộn thêm luồng game vào là đặt hai việc
+không liên quan vào chung một chỗ dễ vỡ. Đổi lại máy người dùng mở socket thứ hai — nhưng chỉ
+khi đang ở màn game. **Nước đi KHÔNG đi qua đây** (xem §7.4).
+
+| Hướng | Sự kiện | Payload |
+|---|---|---|
+| C→S | `g:watch` ✅ | `{gameId}` |
+| C→S | `g:away` / `g:back` ✅ | `{}` — tab ẩn / hiện lại, để tạm dừng đồng hồ (§6.6) |
+| S→C | `g:state` ✅ | `GameResponse` — **gửi riêng từng socket** vì mỗi người thấy một bản đã lọc khác nhau |
+| S→C | `g:over` ✅ | `{gameId, winnerId, endReason}` |
+| S→C | `g:error` ✅ | `{code, message}` |
+
+### 7.4 Nước đi đi bằng REST, không bằng WebSocket
+
+Nước đi cần **mã lỗi rõ ràng** ("chưa tới lượt bạn", "ô này đã có quân") và cơ chế thử lại —
+HTTP có sẵn cả hai, còn qua WebSocket thì phải tự dựng lại. Ván 30 giây một lượt không cần
+tiết kiệm một nhịp mạng. WebSocket chỉ làm đúng một việc: đẩy state mới về.
+
+**Với Tiến lên, `state` chứa bài úp của cả hai người.** Mọi đường ra đều đi qua bộ lọc theo
+người xem: thấy bài của mình, còn của đối phương chỉ thấy **số lá**. Đây là bản sao của R3 áp
+cho ván bài. Xáo bài bằng `crypto.randomInt` chứ không `Math.random` — `Math.random` đoán được
+trạng thái sau vài chục mẫu, và với bài úp thì đó là lỗ hổng thật.
+
 ### 7.3 Nút nhắn tin — deep-link ra app ngoài (F9)
 
 Không có chat trong app. Mỗi user khai báo `messagingApp` + `messagingHandle` trong hồ sơ;
@@ -674,7 +804,7 @@ Bắt buộc tối thiểu: 1 happy path + 3 edge case + 1 case lỗi.
 |---|---|---|
 | `npm run typecheck` | `tsc --noEmit` cho cả 3 workspace, **bao gồm file `*.spec.ts`** | `verify:local` mục 4 |
 | `npm run lint` | **ESLint thật** (`eslint.config.mjs` ở gốc) cho cả 3 workspace | `verify:local` mục 4 |
-| `npm run test` | Vitest — hiện 270 unit test | `verify:local` mục 4 |
+| `npm run test` | Vitest — hiện 421 unit test | `verify:local` mục 4 |
 | `npm run e2e` | **Playwright ở 390×844** trên bản build thật trong Docker — 21 test (17 mobile + 4 offline) | `verify:local` mục 4 |
 
 > ⚠️ **Bài học đắt nhất của dự án này (L31).** Từ Phase 1 tới Phase 4,
@@ -719,7 +849,8 @@ Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L
 | **3** | ✅ Check-in ảnh + dòng kỷ niệm + MinIO + sharp (xoay & xoá EXIF), phân trang con trỏ, cảm xúc | Đăng & xem kỷ niệm · 34/34 trace |
 | **4** | ✅ F4 Lịch trình (37/37) · F7 Thông báo đẩy + nhắc lịch (21/21) · F6 Địa điểm & Geofence (27/27) · F5 Mốc kỷ niệm (25/25) | Đủ tính năng cốt lõi |
 | **5** | 🔸 Địa điểm + ảnh check-in lên bản đồ ✅ · tách socket.io khỏi gói tải đầu ✅ · PWA offline **mức 1** ✅ (mức 2 chờ quyết định, xem trace) · **Giao diện PC hoãn theo yêu cầu chủ dự án** | Bản 1.0 |
-| **6** | *(tuỳ chọn)* APK Android qua Capacitor cho tracking nền | File APK sideload |
+| **6** | ✅ **F11 Cờ caro** (luật VN) · **F10 Tiến lên** (13 lá, chặt heo) — chung khung ván + API + WS `/rtg` + đồng hồ 30s có tạm dừng | 45/45 trace · 84 unit test luật · 7 E2E · verify:local 40/40 |
+| **7** | *(tuỳ chọn)* APK Android qua Capacitor cho tracking nền | File APK sideload |
 
 ---
 
@@ -805,6 +936,38 @@ Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L
 | 2026-09-08 | `GET /users/:id/avatar/:size` **bắt buộc** `?v=` khớp `avatarId` hiện tại, lệch thì 404 | Route trả `Cache-Control: immutable` — đã hứa "URL này không bao giờ đổi nội dung". Bỏ qua `?v=` thì URL cũ lặng lẽ phục vụ ảnh MỚI, hứa một đằng làm một nẻo và trình duyệt sẽ giữ ảnh sai không gỡ được (trace PA-11) | Trang đã tải lâu giữ URL cũ sẽ mất ảnh; `Avatar` lùi về chữ cái đầu thay vì hiện ô vỡ |
 | 2026-09-08 | Đổi ảnh: **ghi kho trước, cập nhật DB sau**, xoá ảnh cũ sau cùng | Ngược lại mà ghi kho hỏng giữa chừng thì DB trỏ tới ảnh không tồn tại — người dùng thấy ô vỡ vĩnh viễn. Theo thứ tự này, hỏng ở bước ghi kho thì người dùng vẫn giữ ảnh cũ | Xoá hụt để lại vài chục KB rác trong kho, không ai chạm tới được |
 | 2026-09-08 | `bio` / `address` là chuỗi người dùng TỰ GÕ, không geocode | `address` chỉ để người ấy biết nhà nhau. Nối nó vào hệ thống vị trí (§2) hay hàng rào (F6) là biến một ô văn bản thành dữ liệu vị trí — đúng loại dữ liệu R3 bắt phải dè dặt nhất | Không tính được khoảng cách tới "nhà" từ trường này; muốn thế thì dùng F6 Địa điểm |
+| 2026-09-09 | **Bình luận trong từng khoảnh khắc** — không vi phạm "không làm chat" (F9) | Mỗi dòng gắn cứng vào một `Post`: không có phòng chat, không "đang gõ", không đã-xem, không đẩy thời gian thực. Đây là phần đọc thêm dưới một tấm ảnh, không phải kênh nhắn tin | Người dùng có thể coi nó như chỗ nhắn tin và thất vọng vì không có "đã xem"; nếu phát sinh thì vẫn phải trỏ ra nút deep-link Zalo |
+| 2026-09-09 | Bảng `comments` **không có cột `coupleId`** | Quyền đọc/ghi suy ra từ `post.coupleId`. Nhân đôi cột đó là tạo thêm một chỗ để dữ liệu lệch nhau, mà mọi đường vào đều đã phải nạp bài cha để kiểm quyền rồi | Truy vấn nào cần lọc theo couple phải join qua `posts` — hiện chưa có truy vấn nào như vậy |
+| 2026-09-09 | API trả bình luận **MỚI → CŨ**, client `reverse()` khi vẽ | Trả cũ → mới thì trang đầu là những dòng cũ nhất: bài có 25 bình luận, gõ thêm một câu, câu đó rơi vào trang chưa tải và người vừa gõ không thấy nó đâu. (Bắt được ở bước tự review, trước khi chạy thử) | Nơi vẽ phải nhớ đảo lại; nút "xem thêm" nằm ở ĐẦU danh sách chứ không phải cuối |
+| 2026-09-09 | **Chủ khoảnh khắc cũng xoá được** bình luận của người ấy trong bài mình | Bài là của họ, họ phải dọn được phần hiện dưới ảnh của mình. Khác với sự kiện trên lịch (chỉ người tạo mới sửa) vì ở đó hai người có hai lịch riêng, còn đây là một tấm ảnh có chủ rõ ràng | Có thể xoá lời người kia mà họ không được báo — với 2 người thì nói nhau một câu là xong |
+| 2026-09-09 | `commentCount` đếm bằng `_count` của Prisma, nhét sẵn vào `PostResponse` | Dòng kỷ niệm chỉ cần con số; kéo về toàn bộ nội dung bình luận của 10 bài chỉ để lấy `.length` là tốn băng thông vô ích | Thêm một `LEFT JOIN … COUNT` vào mọi truy vấn bài viết |
+| 2026-09-09 | Chỉ đẩy thông báo khi **người ấy có liên quan** tới bài (chủ bài, hoặc đã bình luận ở đó) | Vừa đăng ảnh xong rồi tự chú thích thêm một câu dưới bài của chính mình mà bắn thông báo đi là làm phiền vô cớ — người ấy còn chưa kịp mở bài ra xem | Thêm một câu `count` trước khi gửi; và bình luận đầu tiên vào bài của chính mình thì người ấy không được báo |
+| 2026-09-09 | `formatWhen()` tách khỏi `FeedScreen` ra `lib/relative-time.ts`, nhận `now` làm tham số | Tấm trượt bình luận cần đúng cách hiển thị thời gian đó; chép sang là hai bản sao sẽ lệch nhau. Nhận `now` nên unit test được mà không phải giả lập đồng hồ | Thêm một file; `FeedScreen` mất phần hiển thị thời gian của riêng nó |
+| 2026-09-09 | **Có game trong app** (F10/F11) — không mâu thuẫn với "không làm chat" (F9) | Mỗi nước đi gắn cứng vào một ván: không có phòng chat, không "đang gõ", không đã-xem. Chủ dự án yêu cầu | Kéo app rời khỏi định vị "check-in & lịch trình" một chút; đổi lại hai người có việc để làm cùng nhau khi ở xa |
+| 2026-09-09 | Luật chơi là **hàm thuần ở `packages/shared`**, dùng chung FE/BE | FE cần luật để tắt/bật nút và tô sáng nước thắng, BE cần luật để làm trọng tài. Hai bản sao là hai chỗ để lệch nhau. Hàm thuần thì test được 100% mà không cần DB — 27 test caro viết xong trước khi có một dòng API nào | Luật đi xuống client nên ai đọc mã nguồn cũng biết — vốn không phải bí mật; bí mật là **bài úp**, và nó không rời server |
+| 2026-09-09 | Bàn cờ lưu bằng **một chuỗi 225 ký tự**, không phải mảng hai chiều | Nó nằm trong cột JSON và đi qua WebSocket sau mỗi nước; chuỗi 225 byte thì gọn và so sánh được bằng `===`, mảng lồng mảng tốn gấp mấy lần chỗ mà không cho thêm gì | Muốn đọc một ô phải qua hàm `cellAt`, không index thẳng được |
+| 2026-09-09 | Caro dùng **luật Việt Nam**: đúng 5 quân bị chặn hai đầu thì không thắng, ≥6 quân thắng | Chủ dự án chốt — đúng kiểu chơi trên giấy ở VN, công bằng hơn cho người đi sau | Thêm 4 case biên, trong đó **mép bàn tính là bị chặn** là chỗ dễ quên nhất |
+| 2026-09-09 | Nước đi qua **REST**, WebSocket chỉ đẩy state | Nước đi cần mã lỗi rõ ràng và cơ chế thử lại; ván 30s/lượt không cần tiết kiệm một nhịp mạng | Chậm hơn một nhịp — không ai nhận ra ở nhịp 30 giây |
+| 2026-09-09 | `g:state` **gửi riêng từng socket**, không broadcast theo room như `loc:partner` | Mỗi người phải nhận một bản state đã lọc theo chính họ — với Tiến lên thì bài trên tay là thứ tuyệt đối không được lộ | Một vòng lặp thay cho một lệnh emit; với 2 người thì không đáng kể |
+| 2026-09-09 | Namespace WebSocket **riêng** `/rtg` cho game | Không trộn luồng game vào `LocationsGateway` — nơi nhạy cảm nhất về quyền riêng tư và đang chạy ổn | Socket thứ hai, nhưng chỉ mở khi đang ở màn game |
+| 2026-09-09 | Đồng hồ **dừng khi người tới lượt không mở app** — và dừng **cả sau mỗi lần lượt đổi tay** | §1.3: iOS treo JS khi khoá màn hình. Vế thứ hai là lỗ hổng bắt được ở bước tự review: `g:away` xảy ra TRƯỚC nước đi, nên deadline mới vẫn bị đặt cho người đang không nhìn màn hình và 30 giây sau họ thua một ván chưa từng thấy | Có thể câu giờ bằng cách tắt app — với hai người yêu nhau thì không phải mối lo. Trần 30 phút chặn lại |
+| 2026-09-09 | Ván bỏ dở **30 phút** thì tự huỷ | Chủ dự án chốt (tôi đề nghị 7 ngày). Khớp với việc chọn đồng hồ 30 giây: chơi khi cả hai cùng online, không phải cờ qua thư. Đây cũng chính là **trần chờ** mà cơ chế tạm dừng còn thiếu | Đi ra ngoài một tiếng rồi quay lại là mất ván |
+| 2026-09-09 | Hạn huỷ tính từ `lastMoveAt`, **không** từ `updatedAt` | Tạm dừng đồng hồ cũng là một lần ghi, nên `updatedAt` sẽ tự đẩy hạn huỷ ra xa mỗi lần người dùng khoá màn hình — ván bỏ dở sẽ không bao giờ bị dọn | Thêm một cột phải nhớ cập nhật ở mọi nước đi |
+| 2026-09-09 | Canh giờ bằng **cron 5 giây**, không `setTimeout` riêng từng ván | `setTimeout` chết theo tiến trình: khởi động lại API là mọi ván treo ở lượt của một người. Dùng lại đúng cách giải của job nhắc lịch | Độ chính xác chỉ tới 5 giây — người dùng luôn được lợi phần dư đó, không bao giờ bị thiệt |
+| 2026-09-09 | Caro trên 390px dùng **chạm hai bước** (ngắm → nút "Đặt quân" 44px) | Bàn 15×15 cho ra ô 23px, dưới mức 44px của R2. Cách này vừa đủ vùng chạm vừa chặn đánh nhầm ô — mà cờ thì không có nút hoàn tác | Thêm một lần chạm cho mỗi nước đi |
+| 2026-09-09 | Trò chơi vào **thẻ ở màn Nhà**, không thêm khe thứ sáu vào thanh tab | Bố cục 5 khe đã chốt trong ADR 2026-09-07. Thẻ mới thay đúng chỗ thẻ "Sắp có" từng quảng cáo thông báo đẩy — thứ đã làm xong từ Phase 4, giờ chỉ là chữ thừa | Trò chơi nằm sâu hơn một lớp so với các tính năng chính |
+| 2026-09-09 | Mỗi loại game chỉ **một ván đang chạy** mỗi couple | Hai ván song song giữa đúng hai người là vô nghĩa, mà lại đẻ ra câu hỏi "ván nào là ván đang chơi" ở mọi màn hình | Muốn bỏ ván cũ phải bấm đầu hàng; API trả 409 kèm `gameId` để client mở thẳng vào ván đó |
+| 2026-09-09 | Tiến lên: người đi trước là người cầm **lá nhỏ nhất ĐÃ CHIA**, không phải "ai có 3♠" | Mỗi người 13 lá nên **26 lá bị bỏ ra — 3♠ có thể không được chia cho ai cả**, và lúc đó không ván nào bắt đầu được. "Lá nhỏ nhất đã chia" là cách nói tổng quát của đúng luật ấy: với bộ bài chia hết thì nó chính là 3♠. Phát hiện lúc viết `deal.ts`, đã chốt bằng một unit test riêng | Ván khác nhau thì lá mở màn khác nhau — màn hình phải nói ra ("Nước đầu phải có 5♦") chứ không để người chơi tự đoán |
+| 2026-09-09 | Hết giờ ở Tiến lên là **mất lượt**, ở caro là **thua ván** | Cờ không có nước "bỏ lượt" nên hết giờ là thua, đúng luật đồng hồ cờ. Tiến lên thì có: xử thua ở đó là hình phạt nặng hơn hẳn thứ người chơi đáng nhận. Đang được ra bài tự do (không bỏ lượt được) thì tự đánh **lá lẻ nhỏ nhất** — ván buộc phải đi tiếp, và đó là nước ít thiệt nhất | Đây là chỗ DUY NHẤT hai game xử khác nhau; nằm gọn trong `GamesService.timeout()` |
+| 2026-09-09 | Đôi thông chỉ nhận **3 hoặc 4 đôi** | Luật miền Nam phổ biến chỉ dùng 3 và 4 đôi thông làm hàng chặt; mở rộng lên 5–6 đôi là thêm case biên cho một nước gần như không ai đánh | 5 đôi thông trong tay vẫn đánh được 4 đôi trong đó, nên không mất nước nào. Ghi `docs/BACKLOG.md` |
+| 2026-09-09 | Nút "Đánh" tắt/bật bằng **chính hàm luật server dùng làm trọng tài** | `checkPlay()` chạy ngay tại chỗ sau mỗi lần chạm lá bài, nên người chơi đọc được lý do ("sảnh này không chặn được sảnh trên bàn") thay vì bấm rồi chờ một vòng mạng mới biết mình sai | Luật đi xuống client — vốn không phải bí mật; bí mật là bài úp, và nó không rời server |
+| 2026-09-09 | Có `hasAnswer()` để nói thẳng "không có nước nào chặn được" | Người chơi bí mà không biết mình bí sẽ ngồi mò cho tới lúc hết giờ. Hàm chỉ dò các bộ cùng loại cộng hàng chặt, không liệt kê toàn bộ tổ hợp của 13 lá — đủ chính xác cho việc nó phục vụ | Về lý thuyết có thể bỏ sót một nước rất hiếm; nút "Bỏ lượt" vẫn luôn ở đó nên không chặn ai cả |
+| 2026-09-09 | Xáo bài bằng `crypto.randomInt`, Fisher–Yates | Bộ sinh số của V8 để lộ trạng thái sau vài chục mẫu. Với bài úp thì đó là lỗ hổng thật: nhìn vài ván là đoán được bài | Chậm hơn không đáng kể |
+| 2026-09-09 | Màn ván tách thành **khung chung + bàn riêng** (`GameScreen` · `CaroBoard` · `TienLenTable`) | Tải dữ liệu, socket, đồng hồ, đầu hàng giống hệt nhau ở cả hai game; chép đôi là hai chỗ để lệch nhau. Khung không biết gì về quân cờ hay lá bài | Thêm một lớp component; bù lại game thứ ba chỉ là thêm một nhánh ở đúng một chỗ |
+| 2026-09-09 | Bài trên tay xoè quạt, lá rộng 44px nhưng chỉ **lộ ra 24px** | 13 lá phải nằm vừa khổ 390px. Vùng CHẠM vẫn đủ 44px theo R2 — phần bị che nằm dưới lá kế bên, đúng cách mọi app bài vẫn làm | Ở máy 360px thì hàng bài cuộn ngang được thay vì lòi ra khỏi màn hình |
+| 2026-09-09 | Luồng ván Tiến lên tách thành **hàm thuần** `tien-len-flow.ts`, service chỉ còn lo DB · đồng hồ · thông báo | Đúng bài học ADR 2026-09-08: F5 tách hàm thuần thì chạy đúng ngay lượt trace đầu, F6 để logic lẫn trong service thì dính 3 lỗi. Ở đây còn một lý do nặng hơn: `viewTienLen()` là **hàng rào giữ bài úp**, mà hàng rào thì phải test được 100% — giờ nó có một test soi thẳng vào JSON đi qua dây, tìm bất kỳ lá nào chỉ đối phương mới có | Thêm một file và một lớp gián tiếp giữa service với luật |
+| 2026-09-09 | Trace Phase 6 **chờ 40 giây thật** để kiểm đồng hồ hết giờ, không rút ngắn bằng cách giả lập | Thứ cần kiểm chính là cron quét mỗi 5 giây có xử đúng không, và hai game xử KHÁC nhau ở đúng chỗ đó (caro thua, tiến lên mất lượt). Giả lập thời gian sẽ bỏ qua đúng phần đang cần chứng minh | `verify:local` chậm thêm ~40 giây |
+| 2026-09-09 | Trace đồng hồ phải **mở socket và ở lại xem** thì mới hết giờ được | Đồng hồ chỉ chạy khi người tới lượt đang mở app. Bản trace đầu không mở socket nên server tự dừng đồng hồ và ván không bao giờ hết giờ — đúng như thiết kế, nhưng cũng nghĩa là không kiểm được gì. Chính chỗ này chứng minh cơ chế chống phạt oan có hiệu lực thật | Kịch bản trace phải dựng đủ WebSocket, không gọi REST suông được |
 
 ---
 

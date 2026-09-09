@@ -18,7 +18,24 @@ import { LocationsService } from '../locations/locations.service';
 import { PushService } from '../push/push.service';
 import { ImageProcessor } from './image.processor';
 
-type PostWithRelations = Post & { photos: Photo[]; author: Pick<User, 'id' | 'displayName'> };
+type PostWithRelations = Post & {
+  photos: Photo[];
+  author: Pick<User, 'id' | 'displayName'>;
+  _count: { comments: number };
+};
+
+/**
+ * Mọi truy vấn bài viết đều lấy đúng bấy nhiêu quan hệ.
+ *
+ * Đếm bình luận bằng `_count` chứ không nạp cả danh sách rồi lấy `.length`:
+ * dòng kỷ niệm chỉ cần con số, kéo về toàn bộ nội dung bình luận của 10 bài
+ * chỉ để đếm là tốn băng thông vô ích.
+ */
+const POST_INCLUDE = {
+  photos: true,
+  author: { select: { id: true, displayName: true } },
+  _count: { select: { comments: true } },
+} as const;
 
 /** Tiền tố đường dẫn ảnh. Khớp với route trong PostsController. */
 const PHOTO_URL_PREFIX = '/api/v1/posts/photos';
@@ -116,7 +133,7 @@ export class PostsService {
           })),
         },
       },
-      include: { photos: true, author: { select: { id: true, displayName: true } } },
+      include: POST_INCLUDE,
     });
 
     // Ghim lên bản đồ = một điểm vị trí nguồn CHECKIN. Đi qua đúng LocationsService
@@ -183,7 +200,7 @@ export class PostsService {
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       // Lấy dư một bài để biết còn trang sau hay không, mà không cần đếm tổng.
       take: query.limit + 1,
-      include: { photos: true, author: { select: { id: true, displayName: true } } },
+      include: POST_INCLUDE,
     });
 
     const hasMore = rows.length > query.limit;
@@ -245,7 +262,7 @@ export class PostsService {
 
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
-      include: { photos: true, author: { select: { id: true, displayName: true } } },
+      include: POST_INCLUDE,
     });
     if (!post || post.coupleId !== ctx.coupleId) {
       throw AppError.notFound(ERROR_CODES.NOT_FOUND, 'Không tìm thấy khoảnh khắc này');
@@ -265,7 +282,7 @@ export class PostsService {
       // Prisma cần ép kiểu tường minh cho cột Json; mảng thuần không khớp
       // InputJsonValue dù nội dung hoàn toàn hợp lệ.
       data: { reactions: next as unknown as Prisma.InputJsonValue },
-      include: { photos: true, author: { select: { id: true, displayName: true } } },
+      include: POST_INCLUDE,
     });
 
     return this.toResponse(updated, userId);
@@ -336,6 +353,7 @@ export class PostsService {
       placeName: post.placeName,
       photos,
       reactions: this.parseReactions(post.reactions),
+      commentCount: post._count.comments,
       createdAt: post.createdAt.toISOString(),
       canDelete: post.authorId === viewerId,
     };

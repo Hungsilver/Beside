@@ -302,6 +302,16 @@ async function checkFlows() {
     TRACE_BASE_URL: `${HTTPS}/api/v1`,
     TRACE_INSECURE_TLS: '1',
   });
+
+  sh(`${COMPOSE} restart api`, { allowFail: true });
+  await waitHealthy();
+
+  // Bộ này chờ 40 giây thật để đồng hồ 30s hết giờ — không rút ngắn được, vì
+  // đó chính là thứ cần kiểm: cron quét mỗi 5 giây có thật sự xử đúng không.
+  runTrace('apps/api/test/trace-phase6-games.mjs', 'Phase 6 — cờ caro & tiến lên', {
+    TRACE_BASE_URL: `${HTTPS}/api/v1`,
+    TRACE_INSECURE_TLS: '1',
+  });
 }
 
 async function waitHealthy() {
