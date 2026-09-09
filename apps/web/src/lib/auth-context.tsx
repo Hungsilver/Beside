@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { AuthResponse, LoginInput, RegisterInput, SelfUser } from '@beside/shared';
 import {
   api,
@@ -30,16 +31,30 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SelfUser | null>(null);
   const [isRestoring, setIsRestoring] = useState(true);
+  const queryClient = useQueryClient();
 
   const applySession = useCallback((res: AuthResponse) => {
     setAccessToken(res.accessToken);
     setUser(res.user);
   }, []);
 
+  /**
+   * Kết thúc phiên — **chỗ duy nhất** dọn dấu vết của người vừa dùng máy.
+   *
+   * `queryClient.clear()` là phần dễ quên nhất. `queryClient` sống ở
+   * `main.tsx`, ngoài cả `AuthProvider`, nên nó KHÔNG bị dựng lại khi đổi
+   * người: không dọn thì người đăng nhập kế tiếp mở app lên là thấy ngay bản
+   * cache của người trước — vị trí, kỷ niệm, lịch, ván bài — cho tới khi từng
+   * `useQuery` tải xong bản mới. Với app chứa dữ liệu vị trí thì đó là rò rỉ
+   * thật, không phải chuyện nhấp nháy giao diện (R3).
+   *
+   * Gọi cho CẢ hai đường: bấm đăng xuất, và phiên hỏng hẳn (`setUnauthenticatedHandler`).
+   */
   const clearSession = useCallback(() => {
     setAccessToken(null);
     setUser(null);
-  }, []);
+    queryClient.clear();
+  }, [queryClient]);
 
   // Khôi phục phiên khi mở app: access token nằm trong RAM nên đã mất sau khi
   // tải lại trang; refresh token nằm trong cookie httpOnly nên vẫn còn.
