@@ -153,11 +153,43 @@ export class GamesGateway implements OnGatewayInit, OnGatewayConnection, OnGatew
    */
   async broadcastGame(gameId: string): Promise<void> {
     const sockets = await this.server.in(room(gameId)).fetchSockets();
+    if (sockets.length === 0) return;
+
+    // Một lần nạp cho cả phòng. Bản gửi đi thì mỗi người một khác, nhưng dữ liệu
+    // gốc thì chung — hỏi DB lại cho từng socket chỉ là cộng thêm độ trễ.
+    const game = await this.games.loadForBroadcast(gameId);
+
     for (const socket of sockets) {
       const state = this.watchers.get(socket.id);
       if (!state) continue;
-      await this.sendStateTo(socket, state.userId, gameId);
+
+      // `game.state` chứa bài úp của CẢ HAI người, nên không có ngoại lệ nào:
+      // không phải người trong ván thì không nhận được gì.
+      if (!game || !this.games.isMember(game, state.userId)) {
+        socket.emit(GAME_RT_EVENTS.ERROR, {
+          code: 'NOT_FOUND',
+          message: 'Không mở được ván này nữa',
+        });
+        continue;
+      }
+      socket.emit(GAME_RT_EVENTS.STATE, this.games.toResponse(game, state.userId));
     }
+  }
+
+  /**
+   * Bản KHÔNG CHỜ của `syncAndBroadcast`, dùng cho đường REST.
+   *
+   * Người vừa đi nước đã có state mới nằm sẵn trong câu trả lời HTTP rồi; bắt
+   * họ chờ thêm một vòng đọc DB + phát socket nữa chỉ để phục vụ người kia là
+   * cộng thẳng vào độ trễ của chính họ. Có gì lệch (đồng hồ vừa bị tạm dừng
+   * chẳng hạn) thì gói `g:state` theo sau sẽ chỉnh lại ngay sau đó.
+   */
+  pushState(gameId: string, turnUserId: string | null): void {
+    void this.syncAndBroadcast(gameId, turnUserId).catch((e: unknown) => {
+      this.logger.warn(
+        `Không phát được state ván ${gameId}: ${e instanceof Error ? e.message : 'lỗi lạ'}`,
+      );
+    });
   }
 
   /**

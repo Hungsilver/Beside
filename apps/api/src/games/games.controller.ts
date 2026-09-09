@@ -60,7 +60,7 @@ export class GamesController {
     @Body(new ZodBody(createGameSchema)) dto: CreateGameInput,
   ): Promise<GameResponse> {
     const game = await this.games.create(userId, dto.kind);
-    await this.gateway.syncAndBroadcast(game.id, game.turnUserId);
+    this.gateway.pushState(game.id, game.turnUserId);
     return game;
   }
 
@@ -87,9 +87,15 @@ export class GamesController {
     @Body(new ZodBody(gameMoveEnvelopeSchema)) dto: GameMoveEnvelope,
   ): Promise<GameResponse> {
     const game = await this.games.move(userId, id, dto.version, dto.move);
-    // Lượt vừa đổi tay — người tới lượt có thể đang không mở app, xem
-    // `syncAndBroadcast`.
-    await this.gateway.syncAndBroadcast(game.id, game.turnUserId);
+    /*
+     * Lượt vừa đổi tay — người tới lượt có thể đang không mở app, xem
+     * `syncAndBroadcast`.
+     *
+     * KHÔNG chờ: state mới đã nằm trong câu trả lời này rồi, chờ thêm một vòng
+     * đọc DB nữa chỉ để phục vụ người kia là cộng thẳng vào độ trễ của người
+     * vừa bấm.
+     */
+    this.gateway.pushState(game.id, game.turnUserId);
     return game;
   }
 
@@ -100,7 +106,7 @@ export class GamesController {
     @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<GameResponse> {
     const game = await this.games.resign(userId, id);
-    await this.gateway.broadcastGame(game.id);
+    this.gateway.pushState(game.id, game.turnUserId);
     return game;
   }
 }

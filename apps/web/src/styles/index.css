@@ -109,6 +109,142 @@ button {
     @apply border-love-600 focus:ring-love-100;
   }
 
+  /* =======================================================
+     Bàn bài Tiến lên (F10)
+     Tách khỏi component vì đây là hình khối thuần CSS, viết
+     bằng class Tailwind rời rạc sẽ dài gấp ba mà khó đọc hơn.
+     ======================================================= */
+
+  /* Mặt nỉ. Sáng ở giữa, tối dần ra rìa — mắt tự bị kéo về chỗ đánh bài. */
+  .tl-felt {
+    background:
+      radial-gradient(115% 80% at 50% 32%, #2c8360 0%, #1b5a42 52%, #0e3527 100%);
+  }
+  /* Sợi nỉ: hai lớp vân chéo rất mờ, chỉ đủ để mặt bàn không bị phẳng lì. */
+  .tl-felt::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.5;
+    background:
+      repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.022) 0 2px, transparent 2px 4px),
+      repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.03) 0 2px, transparent 2px 4px);
+  }
+
+  /* Vùng an toàn cho bàn bài toàn màn hình: khổ ngang thì tai thỏ nằm ở cạnh
+     TRÁI hoặc PHẢI, nên không thể dùng lại `.safe-top` / `.safe-bottom`. */
+  .tl-safe {
+    padding-top: env(safe-area-inset-top);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: max(env(safe-area-inset-bottom), 6px);
+    padding-left: env(safe-area-inset-left);
+  }
+
+  /* Khung chứa quạt bài. Chiều cao ở đây quyết định lá bài to bằng nào —
+     `fanLayout()` đo đúng khung này rồi mới tính kích thước lá. */
+  .tl-hand-box {
+    height: clamp(112px, 25vh, 152px);
+  }
+  @media (orientation: landscape) {
+    .tl-hand-box {
+      height: clamp(104px, 40vh, 156px);
+    }
+  }
+
+  .pcard {
+    position: relative;
+    display: block;
+    flex: none;
+    border-radius: 0.42em;
+    background: linear-gradient(160deg, #ffffff 0%, #f4f1f5 100%);
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.35),
+      0 4px 10px rgba(0, 0, 0, 0.22),
+      inset 0 0 0 1px rgba(20, 10, 20, 0.1);
+    font-weight: 800;
+    line-height: 1;
+    user-select: none;
+  }
+  .pcard-red {
+    color: #d8232a;
+  }
+  .pcard-black {
+    color: #201a20;
+  }
+
+  .pcard-corner {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 0.92;
+  }
+  .pcard-tl {
+    top: 0.22em;
+    left: 0.24em;
+  }
+  .pcard-br {
+    right: 0.24em;
+    bottom: 0.22em;
+    transform: rotate(180deg);
+  }
+  .pcard-corner i {
+    margin-top: 0.1em;
+    font-size: 0.82em;
+    font-style: normal;
+  }
+  /* Chất lớn ở giữa — mờ, để đọc số ở góc vẫn dễ khi các lá chồng mép nhau. */
+  .pcard-pip {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 2.05em;
+    opacity: 0.15;
+  }
+
+  .pcard-back {
+    background:
+      repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.16) 0 3px, transparent 3px 7px),
+      linear-gradient(135deg, #ff7a9c 0%, #ff4d7d 45%, #b14be8 100%);
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.35),
+      inset 0 0 0 1.5px rgba(255, 255, 255, 0.72);
+  }
+
+  /* Lá vừa được đánh xuống bàn: rơi từ phía người đánh vào giữa. */
+  @keyframes tl-drop {
+    from {
+      opacity: 0;
+      transform: translateY(-26px) scale(0.88) rotate(-4deg);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .tl-drop {
+    animation: tl-drop 220ms cubic-bezier(0.22, 1.2, 0.4, 1) backwards;
+  }
+
+  /* Đồng hồ sắp hết giờ — nhịp đập chậm, không chớp giật gây hoảng. */
+  @keyframes tl-pulse {
+    50% {
+      transform: scale(1.07);
+    }
+  }
+  .tl-urgent {
+    animation: tl-pulse 1s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tl-drop,
+    .tl-urgent {
+      animation: none;
+    }
+  }
+
   .love-gradient {
     background: linear-gradient(135deg, #ff7a9c 0%, #ff4d7d 42%, #b14be8 100%);
   }

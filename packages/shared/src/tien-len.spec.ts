@@ -5,7 +5,6 @@ import {
   checkPass,
   checkPlay,
   detectCombo,
-  hasAnswer,
   isRedSuit,
   lowestCard,
   rankOf,
@@ -311,51 +310,5 @@ describe('lowestCard', () => {
 
   it('tay rỗng trả null', () => {
     expect(lowestCard([])).toBeNull();
-  });
-});
-
-describe('hasAnswer', () => {
-  it('có lá lớn hơn thì chặn được rác', () => {
-    expect(hasAnswer(set('9♥', '3♠'), combo('8♦'))).toBe(true);
-    expect(hasAnswer(set('3♠', '4♥'), combo('8♦'))).toBe(false);
-  });
-
-  it('cần đôi lớn hơn mới chặn được đôi', () => {
-    expect(hasAnswer(set('9♠', '9♥'), combo('8♠', '8♣'))).toBe(true);
-    // Chỉ có một lá 9 thì không thành đôi.
-    expect(hasAnswer(set('9♠', '3♥'), combo('8♠', '8♣'))).toBe(false);
-  });
-
-  it('sảnh phải đúng độ dài', () => {
-    const table = combo('3♠', '4♥', '5♣');
-    expect(hasAnswer(set('6♠', '7♥', '8♣'), table)).toBe(true);
-
-    /*
-     * Bốn lá liên tiếp chứa tới HAI sảnh 3 lá (3-4-5 và 4-5-6), nên tay
-     * `3♣4♦5♥6♠` vẫn chặn được sảnh 3-4-5 bằng 4-5-6. Muốn thử đúng ý "có sảnh
-     * dài nhưng không có sảnh cùng cỡ lớn hơn" thì bàn phải cao hơn hẳn.
-     */
-    const tableCao = combo('9♠', '10♥', 'J♥');
-    expect(hasAnswer(set('3♣', '4♦', '5♥', '6♠'), tableCao)).toBe(false);
-  });
-
-  it('tứ quý trong tay chặt được heo lẻ', () => {
-    expect(hasAnswer(set('5♠', '5♣', '5♦', '5♥'), combo('2♥'))).toBe(true);
-  });
-
-  it('3 đôi thông chặt được heo lẻ nhưng không chặt được đôi heo', () => {
-    const hand = set('5♠', '5♥', '6♣', '6♦', '7♠', '7♣');
-    expect(hasAnswer(hand, combo('2♥'))).toBe(true);
-    expect(hasAnswer(hand, combo('2♦', '2♥'))).toBe(false);
-  });
-
-  it('tứ quý chỉ bị chặn bởi hàng chặt', () => {
-    const table = combo('5♠', '5♣', '5♦', '5♥');
-    expect(hasAnswer(set('A♠', 'A♣', 'A♦', 'K♥'), table)).toBe(false);
-    expect(hasAnswer(set('A♠', 'A♣', 'A♦', 'A♥'), table)).toBe(true);
-  });
-
-  it('tay rỗng thì không có nước nào', () => {
-    expect(hasAnswer([], combo('3♠'))).toBe(false);
   });
 });

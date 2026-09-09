@@ -55,7 +55,7 @@ interface CaroStoredState {
  */
 type TienLenStoredState = TienLenTableState & { kind: 'TIEN_LEN' };
 
-type GameWithPlayers = Game & {
+export type GameWithPlayers = Game & {
   couple: { members: { id: string; displayName: string }[] };
 };
 
@@ -627,11 +627,15 @@ export class GamesService {
     userId: string,
     gameId: string,
   ): Promise<{ ctx: CoupleContext; game: GameWithPlayers }> {
-    const ctx = await this.locations.getContext(userId);
-    const game = await this.prisma.game.findUnique({
-      where: { id: gameId },
-      include: COUPLE_INCLUDE,
-    });
+    // Hai truy vấn không phụ thuộc nhau — hỏi song song để bớt một vòng tới DB.
+    // Trên đường đi một nước bài thì mỗi vòng đều được tính vào độ trễ người chơi.
+    const [ctx, game] = await Promise.all([
+      this.locations.getContext(userId),
+      this.prisma.game.findUnique({
+        where: { id: gameId },
+        include: COUPLE_INCLUDE,
+      }),
+    ]);
     if (!game || game.coupleId !== ctx.coupleId) {
       throw AppError.notFound(ERROR_CODES.NOT_FOUND, 'Không tìm thấy ván này');
     }
@@ -690,6 +694,28 @@ export class GamesService {
       );
     }
     return result;
+  }
+
+  /**
+   * Nạp ván cho việc phát state, KHÔNG kèm kiểm quyền.
+   *
+   * Gateway gọi đúng một lần rồi tự dựng bản riêng cho từng người bằng
+   * `toResponse()` — trước đây mỗi socket một lần `get()`, tức là hai truy vấn
+   * DB nhân với số tab đang mở, ngay trên đường đi của một nước bài.
+   *
+   * Vì hàm này bỏ qua kiểm quyền nên nơi gọi **bắt buộc** lọc bằng `isMember()`
+   * trước khi gửi bất cứ thứ gì đi: `state` chứa bài úp của cả hai người.
+   */
+  async loadForBroadcast(gameId: string): Promise<GameWithPlayers | null> {
+    return this.prisma.game.findUnique({
+      where: { id: gameId },
+      include: COUPLE_INCLUDE,
+    });
+  }
+
+  /** Người này có thuộc cặp đôi sở hữu ván không. */
+  isMember(game: GameWithPlayers, userId: string): boolean {
+    return game.couple.members.some((m) => m.id === userId);
   }
 
   private partnerOf(game: GameWithPlayers, userId: string): string | null {

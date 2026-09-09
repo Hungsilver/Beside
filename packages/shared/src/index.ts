@@ -17,6 +17,7 @@ export * from './love';
 export * from './messaging';
 export * from './caro';
 export * from './tien-len';
+export * from './tien-len-suggest';
 export * from './tien-len-flow';
 export * from './game.schema';
 

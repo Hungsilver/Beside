@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useCouple } from '@/lib/couple-api';
 import { ApiRequestError } from '@/lib/api-client';
 import { useCreateGame, useGameSummary } from '@/lib/games-api';
+import { exitLandscape, requestLandscape } from '@/lib/use-landscape';
 import TabBar from '@/components/TabBar';
 import { Screen, Spinner } from '@/components/ui';
 
@@ -40,6 +41,14 @@ export default function GamesScreen() {
   const partnerName = coupleQuery.data?.partner?.displayName ?? 'Người ấy';
 
   async function start(kind: GameKind, activeGameId: string | null) {
+    /*
+     * Xin xoay ngang NGAY tại đây, không đợi màn ván bài mở lên.
+     *
+     * Trình duyệt chỉ cho vào toàn màn hình khi lệnh đi ra từ một cú chạm, mà cú
+     * chạm hết hiệu lực sau `await` đầu tiên. Gọi ở đây là chỗ sớm nhất còn kịp.
+     */
+    if (kind === 'TIEN_LEN') requestLandscape();
+
     // Đã có ván dở thì mở thẳng vào đó — server cũng từ chối tạo ván thứ hai,
     // nhưng đi thẳng vào thì người dùng khỏi phải đọc một thông báo lỗi vô ích.
     if (activeGameId) {
@@ -62,6 +71,8 @@ export default function GamesScreen() {
         void navigate(`/tro-choi/${running}`);
         return;
       }
+      // Không vào được ván thì đừng để cả sảnh kẹt ở màn hình ngang.
+      if (kind === 'TIEN_LEN') void exitLandscape();
       setError(e instanceof ApiRequestError ? e.message : 'Không mở được ván mới');
     }
   }
@@ -87,6 +98,7 @@ export default function GamesScreen() {
           return (
             <GameCard
               key={g.kind}
+              kind={g.kind}
               emoji={g.emoji}
               title={GAME_KIND_LABELS[g.kind]}
               blurb={g.blurb}
@@ -116,6 +128,7 @@ export default function GamesScreen() {
 // ---------------------------------------------------------------------------
 
 function GameCard({
+  kind,
   emoji,
   title,
   blurb,
@@ -126,6 +139,7 @@ function GameCard({
   busy,
   onStart,
 }: {
+  kind: GameKind;
   emoji: string;
   title: string;
   blurb: string;
@@ -173,7 +187,13 @@ function GameCard({
           Đang được làm, chưa chơi được.
         </p>
       ) : row?.activeGameId ? (
-        <Link to={`/tro-choi/${row.activeGameId}`} className="btn-primary mt-3 w-full">
+        <Link
+          to={`/tro-choi/${row.activeGameId}`}
+          onClick={() => {
+            if (kind === 'TIEN_LEN') requestLandscape();
+          }}
+          className="btn-primary mt-3 w-full"
+        >
           ▶ Chơi tiếp ván đang dở
         </Link>
       ) : (

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client';
 import {
   GAME_RT_EVENTS,
@@ -9,6 +9,20 @@ import {
   type GameSummaryResponse,
 } from '@beside/shared';
 import { api, getAccessToken } from './api-client';
+
+/**
+ * Ghi state mới vào cache — **chỗ duy nhất** được phép làm việc đó.
+ *
+ * Bỏ qua gói tin cũ hơn thứ đang có. Cần chốt này vì state về từ hai đường
+ * (REST trả lời nước đi, và socket đẩy về cho cả hai người) mà thứ tự tới nơi
+ * thì không ai bảo đảm: một gói tin chậm chân sẽ kéo bàn cờ lùi lại một nước,
+ * và người chơi thấy lá bài mình vừa đánh nhảy ngược về tay.
+ */
+function putGame(qc: QueryClient, game: GameResponse): void {
+  qc.setQueryData<GameResponse>(gameKeys.one(game.id), (prev) =>
+    prev && prev.version > game.version ? prev : game,
+  );
+}
 
 export const gameKeys = {
   all: ['games'] as const,
@@ -47,7 +61,7 @@ export function useCreateGame() {
   return useMutation({
     mutationFn: (kind: GameKind) => api.post<GameResponse>('/games', { kind }),
     onSuccess: (game) => {
-      qc.setQueryData(gameKeys.one(game.id), game);
+      putGame(qc, game);
       void qc.invalidateQueries({ queryKey: gameKeys.all });
     },
   });
@@ -66,7 +80,7 @@ export function useGameMove(gameId: string) {
     mutationFn: ({ version, move }: { version: number; move: unknown }) =>
       api.post<GameResponse>(`/games/${gameId}/moves`, { version, move }),
     onSuccess: (game) => {
-      qc.setQueryData(gameKeys.one(game.id), game);
+      putGame(qc, game);
       if (game.status !== 'PLAYING') void qc.invalidateQueries({ queryKey: gameKeys.all });
     },
   });
@@ -77,7 +91,7 @@ export function useResign(gameId: string) {
   return useMutation({
     mutationFn: () => api.post<GameResponse>(`/games/${gameId}/resign`),
     onSuccess: (game) => {
-      qc.setQueryData(gameKeys.one(game.id), game);
+      putGame(qc, game);
       void qc.invalidateQueries({ queryKey: gameKeys.all });
     },
   });
@@ -131,7 +145,7 @@ export function useGameChannel(gameId: string | null): { connected: boolean } {
       socket.on('disconnect', () => setConnected(false));
 
       socket.on(GAME_RT_EVENTS.STATE, (game: GameResponse) => {
-        qc.setQueryData(gameKeys.one(game.id), game);
+        putGame(qc, game);
       });
 
       socket.on(GAME_RT_EVENTS.OVER, () => {

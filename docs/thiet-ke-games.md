@@ -335,29 +335,78 @@ ghi, một cái thua — và đó là kết quả đúng, ván không bao giờ 
 
 ## 8. Giao diện (390×844, mobile-first — R2)
 
-### 8.1 Tiến lên
+### 8.1 Tiến lên — **bàn toàn màn hình, ưu tiên khổ NGANG** (làm lại 09/09)
+
+Đây là màn duy nhất của app không nằm trong cột 430px của `<Screen>`: ván bài cần bề ngang.
+Ở khổ dọc 390px, 13 lá cạnh nhau chỉ hở 26px mỗi lá; xoay ngang thì hở hơn 50px và lá to
+gần gấp rưỡi.
 
 ```
-┌─────────────────────────────┐
-│ ⏱ 24s   [Bình] 🂠×9         │  đối phương: chỉ số lá, không lộ bài
-│                             │
-│      ┌──────────────┐       │
-│      │  bộ vừa đánh │       │  bàn giữa
-│      └──────────────┘       │
-│                             │
-│  [Bỏ lượt]      [Đánh]      │  hai nút ≥44px, cách xa nhau
-│ ╭──╮╭──╮╭──╮╭──╮╭──╮╭──╮   │  bài mình: xoè quạt, lộ 26px mỗi lá,
-│ │3♠││5♦││7♥││J♣││K♦││2♥│   │  chạm là lá nhô lên 20px
-└─────────────────────────────┘
+khổ ngang 844×390
+┌──────────────────────────────────────────────┐
+│ ‹      Tới lượt bạn ⏱17      ⇅  ⤢  🏳️        │
+│            [Mai Anh · 🂠×9]                   │
+│                 ┌────┐┌────┐                 │  bàn giữa
+│                 │ 8♠ ││ 8♥ │                 │
+│                 └────┘└────┘                 │
+│                 đôi · sẵn sàng               │
+│   ╭─╮╭─╮╭─╮╭─╮╭─╮╭─╮╭─╮╭─╮╭─╮      ┌───────┐ │
+│   │3││4││5││6││7││9││9││10││J│      │💡 Gợi ý│ │
+│   ╰─╯╰─╯╰─╯╰─╯╰─╯╰─╯╰─╯╰──╯╰─╯      │Bỏ lượt│ │
+│                                     │Đánh 2 │ │
+└──────────────────────────────────────────────┘
 ```
 
-- 13 lá chồng mép nhau, mỗi lá lộ ~26px nhưng **vùng chạm 44px** (lá nằm chồng, vùng chạm
-  tràn ra ngoài viền — đúng cách các app bài vẫn làm).
+**Xoay ngang.** Sảnh trò chơi gọi `requestLandscape()` ngay trong cú chạm mở ván
+(`requestFullscreen()` + `screen.orientation.lock('landscape')`) — phải gọi ở đó vì cử chỉ
+người dùng hết hiệu lực sau `await` đầu tiên, mà mở ván thì có gọi API. iOS Safari không có
+API khoá xoay, và rất nhiều máy đang bật khoá xoay hệ thống, nên **không bao giờ dựng tấm
+chắn "hãy xoay máy"**: khổ dọc vẫn chơi được đầy đủ, chỉ nhắc một dòng rồi tự ẩn sau 8 giây.
+
+**Chọn bài.** Hai cách, cùng nhắm vào một việc: bớt số lần phải ngắm từng lá.
+
+| Thao tác | Kết quả |
+|---|---|
+| Chạm một lá khi đang phải chặn | `autoPick()` chọn luôn cả bộ rẻ nhất chứa lá đó (bàn có đôi 8 → chạm một lá 9 lấy cả đôi 9) |
+| Chạm một lá khi bàn trống | chỉ chọn đúng lá đó — lúc đó chỉ người chơi mới biết định ghép bộ gì |
+| **Vuốt ngang** qua nhiều lá | nhặt tất cả các lá đi qua; chỉ THÊM, không bỏ chọn |
+| Chạm lá đang chọn | bỏ lá đó ra |
+| Nút **💡 Gợi ý** | duyệt lần lượt mọi bộ đi được (`listPlays()`), hàng chặt xếp cuối |
+
+`listPlays()` / `autoPick()` nằm ở `packages/shared/src/tien-len-suggest.ts` — **hàm thuần**,
+không chứa luật: nó dựng bộ ứng viên rồi hỏi `checkPlay()`. Nhờ đó cũng biết chính xác khi
+nào người chơi bí thật để nói thẳng "đành bỏ lượt", thay cho `hasAnswer()` cũ (đã bỏ).
+
+**Kích thước lá** do `apps/web/src/lib/fan-layout.ts` tính từ khung đo bằng `ResizeObserver`,
+theo thứ tự ưu tiên: nằm gọn trong khung → hở đủ 26px để đọc được số ở góc (kể cả "10") →
+hở đủ 16px để chạm trúng → còn dư chỗ thì lá to lên. Lá đang chọn **nhô lên 22px** đúng bằng
+chiều cao phần chỉ số, và **không** được nâng thứ tự chồng lớp — nâng thì nó che mất chỉ số
+của lá bên phải.
+
 - Nút "Đánh" tắt cho tới khi các lá đang chọn tạo thành một bộ **chặn được bộ trên bàn**.
   Kiểm bằng chính hàm luật ở `packages/shared` — người chơi không phải đoán.
-- Nút "Sắp xếp" đổi giữa xếp theo rank và xếp theo bộ.
-- Đồng hồ là vòng cung quanh avatar người đang tới lượt; **dừng thì chuyển sang xám** kèm
-  chữ "đang chờ người ấy mở lại app" — không để ai tưởng mình đang mất giờ.
+- Nút ⇅ đổi giữa xếp theo bậc và xếp theo chất.
+- Đồng hồ nằm giữa thanh trên, đỏ và đập nhẹ khi còn ≤10 giây; **dừng thì nói rõ vì sao** —
+  không để ai tưởng mình đang mất giờ.
+
+### 8.1b Bấm là thấy ngay — bù độ trễ mạng
+
+Bài **rời tay và rơi xuống bàn ngay lúc bấm**, không đợi server trả lời (state `sending` cục
+bộ trong `TienLenTable`). Server vẫn là trọng tài duy nhất: nó từ chối thì bài quay về tay
+kèm đúng câu lỗi của server.
+
+Cố tình **không** đặt nước-đang-gửi vào cache của TanStack Query: cache còn là nơi socket đổ
+state thật vào, trộn hai thứ vào một chỗ thì một gói tin đến muộn sẽ xoá mất nước vừa bấm.
+Cùng lý do đó, mọi đường ghi vào cache đi qua `putGame()` — **bỏ qua state có `version` cũ
+hơn thứ đang có**, vì state về từ hai đường (REST và socket) mà thứ tự tới nơi không ai bảo đảm.
+
+Phía server, ba chỗ cắt được độ trễ thật:
+
+| Chỗ | Trước | Sau |
+|---|---|---|
+| `POST /moves` | `await` phát socket rồi mới trả lời | trả lời ngay, phát socket chạy nền (`pushState`) |
+| Phát state cho phòng | mỗi socket một lần `games.get()` = 2 truy vấn DB × số tab | nạp ván **một lần** rồi dựng bản riêng cho từng người |
+| `load()` | `getContext()` rồi mới `findUnique()` | hai truy vấn chạy song song |
 
 ### 8.2 Caro
 

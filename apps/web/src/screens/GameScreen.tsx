@@ -42,12 +42,25 @@ export default function GameScreen() {
     );
   }
 
-  return <Table game={query.data} myId={user?.id ?? null} />;
+  /*
+   * Tiến lên chiếm trọn màn hình, cờ caro thì không.
+   *
+   * Ván bài cần bề ngang cho 13 lá và cần chỗ để xoay ngang máy, nên nó tự dựng
+   * khung riêng thay vì nằm trong cột 430px của `<Screen>`. Cờ caro là bàn
+   * vuông, ở khổ dọc đã vừa vặn — nhét nốt nó vào khung toàn màn hình chỉ làm
+   * bàn cờ nhỏ đi.
+   */
+  if (query.data.kind === 'TIEN_LEN') {
+    return <TienLenTable game={query.data} myId={user?.id ?? null} />;
+  }
+
+  return <CaroTable game={query.data} myId={user?.id ?? null} />;
 }
 
 // ---------------------------------------------------------------------------
 
-function Table({ game, myId }: { game: GameResponse; myId: string | null }) {
+/** Khung ván cờ caro — vẫn nằm trong cột 430px như mọi màn khác. */
+function CaroTable({ game, myId }: { game: GameResponse; myId: string | null }) {
   const resign = useResign(game.id);
   const [error, setError] = useState<string | null>(null);
   const [confirmResign, setConfirmResign] = useState(false);
@@ -71,20 +84,14 @@ function Table({ game, myId }: { game: GameResponse; myId: string | null }) {
             {GAME_KIND_LABELS[game.kind]}
           </h1>
           <p className="text-[11.5px] text-ink-400">
-            {game.kind === 'CARO'
-              ? 'Đủ 5 quân là thắng — trừ khi bị chặn cả hai đầu'
-              : 'Hết bài trước là thắng · có chặt heo'}
+            Đủ 5 quân là thắng — trừ khi bị chặn cả hai đầu
           </p>
         </div>
       </header>
 
       <GameStatusBar game={game} myId={myId} seconds={seconds} opponentName={opponentName} />
 
-      {game.kind === 'CARO' ? (
-        <CaroBoard game={game} myId={myId} onError={setError} />
-      ) : (
-        <TienLenTable game={game} myId={myId} onError={setError} />
-      )}
+      <CaroBoard game={game} myId={myId} onError={setError} />
 
       {error && (
         <p role="alert" className="mt-2 text-center text-[12.5px] font-semibold text-love-600">

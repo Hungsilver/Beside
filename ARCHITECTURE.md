@@ -761,6 +761,13 @@ Nước đi cần **mã lỗi rõ ràng** ("chưa tới lượt bạn", "ô này
 HTTP có sẵn cả hai, còn qua WebSocket thì phải tự dựng lại. Ván 30 giây một lượt không cần
 tiết kiệm một nhịp mạng. WebSocket chỉ làm đúng một việc: đẩy state mới về.
 
+**Phát state KHÔNG chặn câu trả lời REST** (09/09). State mới đã nằm sẵn trong body trả về
+cho người vừa đi; bắt họ chờ thêm một vòng đọc DB + phát socket nữa chỉ để phục vụ người kia
+là cộng thẳng vào độ trễ của chính họ. `GamesController` gọi `gateway.pushState()` — bản
+không-chờ, có bắt lỗi và ghi log. Cùng lúc đó `broadcastGame()` nạp ván **một lần** cho cả
+phòng thay vì `games.get()` cho từng socket; bản gửi đi vẫn lọc riêng theo từng người (bài
+úp không đổi), chỉ dữ liệu gốc là dùng chung. Xem `docs/thiet-ke-games.md` §8.1b.
+
 **Với Tiến lên, `state` chứa bài úp của cả hai người.** Mọi đường ra đều đi qua bộ lọc theo
 người xem: thấy bài của mình, còn của đối phương chỉ thấy **số lá**. Đây là bản sao của R3 áp
 cho ván bài. Xáo bài bằng `crypto.randomInt` chứ không `Math.random` — `Math.random` đoán được
@@ -969,6 +976,9 @@ Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L
 | 2026-09-09 | Luồng ván Tiến lên tách thành **hàm thuần** `tien-len-flow.ts`, service chỉ còn lo DB · đồng hồ · thông báo | Đúng bài học ADR 2026-09-08: F5 tách hàm thuần thì chạy đúng ngay lượt trace đầu, F6 để logic lẫn trong service thì dính 3 lỗi. Ở đây còn một lý do nặng hơn: `viewTienLen()` là **hàng rào giữ bài úp**, mà hàng rào thì phải test được 100% — giờ nó có một test soi thẳng vào JSON đi qua dây, tìm bất kỳ lá nào chỉ đối phương mới có | Thêm một file và một lớp gián tiếp giữa service với luật |
 | 2026-09-09 | Trace Phase 6 **chờ 40 giây thật** để kiểm đồng hồ hết giờ, không rút ngắn bằng cách giả lập | Thứ cần kiểm chính là cron quét mỗi 5 giây có xử đúng không, và hai game xử KHÁC nhau ở đúng chỗ đó (caro thua, tiến lên mất lượt). Giả lập thời gian sẽ bỏ qua đúng phần đang cần chứng minh | `verify:local` chậm thêm ~40 giây |
 | 2026-09-09 | Trace đồng hồ phải **mở socket và ở lại xem** thì mới hết giờ được | Đồng hồ chỉ chạy khi người tới lượt đang mở app. Bản trace đầu không mở socket nên server tự dừng đồng hồ và ván không bao giờ hết giờ — đúng như thiết kế, nhưng cũng nghĩa là không kiểm được gì. Chính chỗ này chứng minh cơ chế chống phạt oan có hiệu lực thật | Kịch bản trace phải dựng đủ WebSocket, không gọi REST suông được |
+| 2026-09-09 | Bàn Tiến lên **toàn màn hình, ưu tiên khổ ngang**; xin `orientation.lock` từ cú chạm ở sảnh, không chặn màn hình khi khoá hỏng | 13 lá ở khổ dọc 390px chỉ hở 26px mỗi lá. iOS Safari không có API khoá xoay và rất nhiều máy bật khoá xoay hệ thống — dựng tấm chắn "hãy xoay máy" là khoá luôn ván bài của họ | Màn này lệch khỏi khung 430px dùng chung; phải tự lo vùng an toàn tai thỏ cho cả hai chiều |
+| 2026-09-09 | **Vẽ lạc quan** nước bài vừa bấm ở client, giữ state cục bộ trong component chứ không đưa vào cache Query | Người chơi thấy bài rời tay ngay, không phải chờ hết một vòng mạng. Không trộn vào cache vì socket cũng đổ state vào đó — gói tin đến muộn sẽ xoá mất nước vừa bấm | Thêm một đường quay lui khi server từ chối; mọi ghi vào cache phải qua `putGame()` chốt theo `version` |
+| 2026-09-09 | Bỏ `hasAnswer()`, thay bằng `listPlays()` liệt kê **đủ** mọi bộ đi được | Cùng một phép liệt kê phục vụ ba việc: nút Gợi ý, tự chọn cả bộ khi chạm một lá, và biết chính xác lúc nào người chơi bí thật. Giữ hai cách dò song song là giữ hai nguồn sự thật về cùng một câu hỏi | Nặng hơn `hasAnswer()` cũ (vài chục bộ ứng viên thay vì dò có chọn lọc) nên phải bọc `useMemo` ở màn chơi |
 
 ---
 
