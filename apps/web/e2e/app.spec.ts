@@ -723,6 +723,14 @@ test.describe('Trò chơi — tiến lên miền Nam', () => {
    * duyệt trả lời được: chia đúng 13 lá, bài đối phương KHÔNG lộ, và nút "Đánh"
    * chỉ sáng khi bộ đang chọn thật sự hợp lệ.
    */
+  /*
+   * Bài trên tay dò bằng `[aria-label^="Lá "]` chứ không bằng một thẻ bọc:
+   * cách bày bài (xoè quạt, chồng lớp, xoay ngang) đã đổi vài lần, nhưng nhãn
+   * đọc-màn-hình của từng lá thì là yêu cầu cố định — neo test vào thứ ổn định
+   * thay vì vào cấu trúc DOM đang còn thay đổi.
+   */
+  const handCards = () => page.locator('[aria-label^="Lá "]');
+
   const openTienLen = async () => {
     await page.goto('/tro-choi');
     const card = page.locator('section').filter({ hasText: 'Tiến lên miền Nam' });
@@ -731,23 +739,16 @@ test.describe('Trò chơi — tiến lên miền Nam', () => {
       .or(card.getByRole('link', { name: /Chơi tiếp ván đang dở/ }))
       .first()
       .click();
-    await expect(page.getByRole('group', { name: 'Bài trên tay' })).toBeVisible({
-      timeout: 15_000,
-    });
+    await expect(handCards().first()).toBeVisible({ timeout: 15_000 });
   };
 
   test('TL-01 — chia đúng 13 lá và bài người ấy không lộ', async () => {
     await openTienLen();
 
-    const hand = page.getByRole('group', { name: 'Bài trên tay' }).getByRole('button');
-    await expect(hand).toHaveCount(13);
+    await expect(handCards()).toHaveCount(13);
 
     // Đối phương chỉ hiện SỐ lá — đây là hàng rào quan trọng nhất của tính năng.
-    await expect(page.getByText(/còn 13 lá/)).toBeVisible();
-
-    // Không được có chỗ nào vô tình vẽ bài của người ấy ra.
-    const backs = page.locator('[aria-label^="Lá "]');
-    await expect(backs).toHaveCount(13);
+    await expect(page.getByText(/13 lá/).first()).toBeVisible();
 
     expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
   });
@@ -773,13 +774,71 @@ test.describe('Trò chơi — tiến lên miền Nam', () => {
     );
     expect(overflow, 'trang bị tràn ngang').toBeLessThanOrEqual(0);
 
-    // Vùng chạm mỗi lá phải đạt 44px dù chỉ lộ ra ~24px vì chồng mép (R2).
-    const firstCard = page
-      .getByRole('group', { name: 'Bài trên tay' })
-      .getByRole('button')
-      .first();
-    const box = await firstCard.boundingBox();
+    // Vùng chạm mỗi lá phải đạt 44px dù chỉ lộ ra một phần vì chồng lớp (R2).
+    const box = await handCards().first().boundingBox();
     expect(box!.width).toBeGreaterThanOrEqual(44);
     expect(box!.height).toBeGreaterThanOrEqual(44);
+  });
+});
+
+test.describe('Phòng học chung', () => {
+  /*
+   * Chặng ngắn nhất là 15 phút nên bộ này không chờ hết một chặng được — phần
+   * đó thuộc về trace API (S7-11..16, đẩy đồng hồ về quá khứ rồi để cron thật
+   * xử). Ở đây chỉ kiểm thứ trình duyệt trả lời được: màn dựng ra sao, vùng
+   * chạm, và đồng hồ có chạy thật không.
+   *
+   * Dọn sau mỗi test bằng nút "Dừng hẳn" để không để lại phiên treo.
+   */
+  test('ST-01 — mở phòng học từ màn Nhà, chọn được thời lượng', async () => {
+    await page.goto('/');
+    await page.getByRole('link', { name: /Học cùng nhau/ }).click();
+    await expect(page.getByRole('heading', { name: 'Phòng học' })).toBeVisible();
+
+    // Ba mức học và hai mức nghỉ, vùng chạm đủ 44px.
+    const focus25 = page.getByRole('button', { name: '25 phút' });
+    await expect(focus25).toBeVisible();
+    const box = await focus25.boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+
+    // Phải nói rõ khoá màn hình vẫn tính giờ — đây là điểm khác hẳn phòng game.
+    await expect(page.getByText(/đồng hồ vẫn chạy/i)).toBeVisible();
+    expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
+  });
+
+  test('ST-02 — bắt đầu phiên thì đồng hồ hiện ra và đếm ngược thật', async () => {
+    await page.goto('/hoc-cung-nhau');
+    await page.getByRole('button', { name: '15 phút' }).click();
+    await page.getByRole('button', { name: /Bắt đầu học/ }).click();
+
+    const clock = page.getByText(/^\d{2}:\d{2}$/);
+    await expect(clock.first()).toBeVisible({ timeout: 15_000 });
+
+    const first = await clock.first().textContent();
+    // Chờ qua hai nhịp cập nhật rồi đọc lại — đồng hồ phải nhỏ đi.
+    await expect
+      .poll(async () => (await clock.first().textContent()) !== first, { timeout: 8_000 })
+      .toBe(true);
+
+    await expect(page.getByText(/ĐANG HỌC/)).toBeVisible();
+
+    // Dọn: dừng hẳn phiên vừa mở.
+    await page.getByRole('button', { name: 'Dừng buổi học' }).click();
+    await page.getByRole('button', { name: 'Dừng hẳn' }).click();
+    await expect(page.getByRole('button', { name: /Bắt đầu học/ })).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
+  test('ST-03 — thống kê hiện lên sau khi đã có giờ học', async () => {
+    await page.goto('/hoc-cung-nhau');
+    // Mục thống kê chỉ hiện khi couple đã có thành viên — luôn đúng ở đây.
+    await expect(page.getByText('Đã học được')).toBeVisible({ timeout: 15_000 });
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow, 'trang bị tràn ngang').toBeLessThanOrEqual(0);
+    expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
   });
 });

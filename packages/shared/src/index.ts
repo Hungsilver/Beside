@@ -20,6 +20,7 @@ export * from './tien-len';
 export * from './tien-len-suggest';
 export * from './tien-len-flow';
 export * from './game.schema';
+export * from './study.schema';
 
 /** Khuôn lỗi thống nhất do API trả về (khớp với AllExceptionsFilter ở apps/api). */
 export interface ApiError {

@@ -24,9 +24,10 @@
   - Phase 5: `docs/traces/phase-5-hieu-nang.md` — tách socket.io khỏi gói tải đầu
   - Phase 5: `docs/traces/phase-5-pwa-offline.md` — PWA offline mức 1, 4/4 case (mức 2 chưa làm được)
   - Phase 4 (F5): `docs/traces/phase-4-milestones.md` — 25/25 case (không lỗi mới)
-  - Tổng: **421 unit test** + **314 case trace** + **41 E2E**, typecheck + lint sạch cả 3 workspace
+  - Phase 7: F12 Học cùng nhau — **22/22 case trace** (`trace:study`) + 3 E2E
+  - Tổng: **466 unit test** + **336 case trace** + **44 E2E**, typecheck + lint sạch cả 3 workspace
   - Phase 6: F11 Cờ caro + F10 Tiến lên — `docs/thiet-ke-games.md`, **45/45 case trace** (`trace:games`), 84 unit test luật, 7 E2E
-  - ✅ `npm run verify:local` → **40/40 mục đạt** trên Docker thật (gồm chốt ESLint và E2E trình duyệt)
+  - ✅ `npm run verify:local` → **41/41 mục đạt** trên Docker thật (gồm chốt ESLint và E2E trình duyệt)
     (6/6 container healthy: db · redis · api · web · caddy · minio), đi qua Caddy HTTPS
     — chạy lại ngày 09/09 sau khi thêm bình luận và hai trò chơi: 13 migration, 41 E2E
 - **Triển khai:** chủ dự án tự deploy — hướng dẫn ở `docs/DEPLOY.md`
@@ -49,11 +50,16 @@
 | F9 | Nhắn tin | **Không làm chat trong app.** Chỉ 1 nút deep-link mở Zalo / Messenger / gọi điện |
 | F10 | Tiến lên miền Nam | ✅ 2 người, 13 lá mỗi bên, luật cơ bản + chặt heo, 30s/lượt |
 | F11 | Cờ caro | ✅ Bàn 15×15, luật Việt Nam (đúng 5 quân bị chặn hai đầu thì không thắng, ≥6 quân thắng), 30s/lượt |
+| F12 | Học cùng nhau | ✅ Phòng Pomodoro chung: đồng hồ chạy đồng bộ hai máy, thống kê giờ học + chuỗi ngày. **Không có gọi video** — xem §1.1b |
 
 ### 1.1b Ngoài phạm vi (không làm)
 
 - Chat / nhắn tin trong app (đã chốt: chỉ deep-link ra app ngoài — xem F9)
-- Gọi thoại / video trong app
+- **Gọi thoại / video trong app** — được nêu lại ngày 09/09 khi làm F12 và **chủ dự án
+  chốt giữ nguyên**. Về kỹ thuật thì khả thi (WebRTC P2P cho đúng hai người, báo hiệu đi
+  nhờ Socket.IO sẵn có), nhưng ~15–30% cuộc gọi sẽ hỏng nếu không dựng thêm coturn, mà
+  coturn thì relay ~2 Mbps mỗi cuộc qua băng thông VPS. Zalo/Messenger đã có sẵn video
+  call và app đã có nút deep-link (F9)
 - Hỗ trợ >2 người trong một `couple`
 - Đưa lên App Store / CH Play
 
@@ -463,6 +469,47 @@ Khuôn của cột `state`:
 gửi đi: người xem thấy bài của mình, còn của đối phương chỉ thấy **số lá**. Thêm bất kỳ đường
 ra nào khác cho `game.state` là phá thẳng luật số một của tính năng này.
 
+### 6.8 Phòng học chung (Phase 7)
+
+```prisma
+model StudySession {                     // F12 — Pomodoro cho hai người
+  id             String      @id @default(uuid())
+  coupleId       String
+  startedById    String
+  phase          StudyPhase  @default(FOCUS)   // FOCUS | BREAK
+  status         StudyStatus @default(RUNNING) // RUNNING | DONE | CANCELLED
+  focusMin       Int         @default(25)
+  breakMin       Int         @default(5)
+  endsAt         DateTime                      // đồng hồ của SERVER
+  roundsDone     Int         @default(0)
+  presentUserIds Json        @default("[]")    // ai đang trong phòng
+  @@index([coupleId, status])
+  @@index([status, endsAt])                    // cron quét chặng hết giờ
+}
+
+model StudyLog {                         // một chặng HỌC đã hoàn thành
+  id        BigInt @id @default(autoincrement())
+  coupleId  String
+  userId    String
+  sessionId String?
+  round     Int                          // (sessionId, round) = khoá của một chặng
+  minutes   Int
+  day       DateTime @db.Date            // ngày lịch GIỜ VN
+  @@index([coupleId, userId, day])
+}
+```
+
+**Đồng hồ học chạy ngược với đồng hồ ván bài.** Đồng hồ ván bài *dừng* khi người tới lượt
+khoá màn hình (§6.6). Đồng hồ học phải *chạy tiếp*: khoá máy để khỏi bị phân tâm chính là
+điều người ta làm khi ngồi học — dừng lúc đó là phá đúng thứ tính năng này phục vụ. Hệ quả
+bắt buộc: hết chặng phải báo bằng **Web Push**, vì rất có thể app đang đóng.
+
+Chỉ ghi `StudyLog` khi chặng FOCUS **chạy hết giờ**; bỏ dở giữa chừng thì không tính, để
+con số thống kê nói đúng sự thật.
+
+`day` là **ngày lịch giờ Việt Nam**, không phải ngày UTC: chuỗi ngày học đếm theo cột này,
+mà lưu timestamp rồi so sau sẽ tính nhầm mọi buổi học sau nửa đêm (ADR 2026-09-07).
+
 ### 6.6 Đồng hồ 30 giây — và cách không phạt oan người dùng
 
 Chủ dự án chốt 30 giây mỗi lượt. Nhưng §1.3 đã ghi: **iOS treo JavaScript ngay khi khoá màn
@@ -681,6 +728,13 @@ GET    /games/:id                  state ĐÃ LỌC theo người xem           
 POST   /games/:id/moves            {version, move} — version là khoá lạc quan     ✅
 POST   /games/:id/resign           đầu hàng                                       ✅
 
+GET    /study/current              phiên đang chạy, hoặc null                     🔸
+GET    /study/summary              tổng giờ + chuỗi ngày + "học cùng nhau"        🔸
+POST   /study                      {focusMin, breakMin} — đã có phòng thì vào cùng 🔸
+POST   /study/:id/join             vào học cùng                                   🔸
+POST   /study/:id/leave            rời phòng; người cuối rời thì phiên đóng lại    🔸
+POST   /study/:id/cancel           dừng hẳn — ai trong hai người cũng dừng được    🔸
+
 GET    /push/public-key            khoá công khai VAPID — endpoint PUBLIC        ✅
 POST   /push/subscribe             {endpoint, keys, userAgent?}                  ✅
 DELETE /push/subscribe             {endpoint} — chỉ gỡ được đăng ký của mình      ✅
@@ -755,6 +809,18 @@ khi đang ở màn game. **Nước đi KHÔNG đi qua đây** (xem §7.4).
 | S→C | `g:over` ✅ | `{gameId, winnerId, endReason}` |
 | S→C | `g:error` ✅ | `{code, message}` |
 
+**Namespace thứ ba `/rts`** — phòng học (F12), cùng lý do tách như `/rtg`.
+
+| Hướng | Sự kiện | Payload |
+|---|---|---|
+| C→S | `s:watch` 🔸 | *(không tham số)* — nghe theo **couple**, không theo phiên |
+| S→C | `s:state` 🔸 | `StudySessionResponse` hoặc `null` |
+| S→C | `s:error` 🔸 | `{code, message}` |
+
+Nghe theo couple chứ không theo phiên là có chủ ý: người kia bấm "bắt đầu" lúc mình đang
+mở app thì mình phải thấy ngay. Nghe theo phiên thì lúc chưa có phiên nào client chẳng có
+gì để nghe — mà đúng khoảnh khắc cần biết nhất lại là khoảnh khắc không nghe được.
+
 ### 7.4 Nước đi đi bằng REST, không bằng WebSocket
 
 Nước đi cần **mã lỗi rõ ràng** ("chưa tới lượt bạn", "ô này đã có quân") và cơ chế thử lại —
@@ -812,7 +878,7 @@ Bắt buộc tối thiểu: 1 happy path + 3 edge case + 1 case lỗi.
 |---|---|---|
 | `npm run typecheck` | `tsc --noEmit` cho cả 3 workspace, **bao gồm file `*.spec.ts`** | `verify:local` mục 4 |
 | `npm run lint` | **ESLint thật** (`eslint.config.mjs` ở gốc) cho cả 3 workspace | `verify:local` mục 4 |
-| `npm run test` | Vitest — hiện 421 unit test | `verify:local` mục 4 |
+| `npm run test` | Vitest — hiện 466 unit test | `verify:local` mục 4 |
 | `npm run e2e` | **Playwright ở 390×844** trên bản build thật trong Docker — 21 test (17 mobile + 4 offline) | `verify:local` mục 4 |
 
 > ⚠️ **Bài học đắt nhất của dự án này (L31).** Từ Phase 1 tới Phase 4,
@@ -858,7 +924,8 @@ Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L
 | **4** | ✅ F4 Lịch trình (37/37) · F7 Thông báo đẩy + nhắc lịch (21/21) · F6 Địa điểm & Geofence (27/27) · F5 Mốc kỷ niệm (25/25) | Đủ tính năng cốt lõi |
 | **5** | 🔸 Địa điểm + ảnh check-in lên bản đồ ✅ · tách socket.io khỏi gói tải đầu ✅ · PWA offline **mức 1** ✅ (mức 2 chờ quyết định, xem trace) · **Giao diện PC hoãn theo yêu cầu chủ dự án** | Bản 1.0 |
 | **6** | ✅ **F11 Cờ caro** (luật VN) · **F10 Tiến lên** (13 lá, chặt heo) — chung khung ván + API + WS `/rtg` + đồng hồ 30s có tạm dừng | 45/45 trace · 84 unit test luật · 7 E2E · verify:local 40/40 |
-| **7** | *(tuỳ chọn)* APK Android qua Capacitor cho tracking nền | File APK sideload |
+| **7** | ✅ **F12 Học cùng nhau** — phòng Pomodoro chung, đồng hồ đồng bộ, thống kê giờ + chuỗi ngày | 22/22 trace · 3 E2E · verify:local 41/41 |
+| **8** | *(tuỳ chọn)* APK Android qua Capacitor cho tracking nền | File APK sideload |
 
 ---
 
@@ -973,6 +1040,14 @@ Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L
 | 2026-09-09 | Xáo bài bằng `crypto.randomInt`, Fisher–Yates | Bộ sinh số của V8 để lộ trạng thái sau vài chục mẫu. Với bài úp thì đó là lỗ hổng thật: nhìn vài ván là đoán được bài | Chậm hơn không đáng kể |
 | 2026-09-09 | Màn ván tách thành **khung chung + bàn riêng** (`GameScreen` · `CaroBoard` · `TienLenTable`) | Tải dữ liệu, socket, đồng hồ, đầu hàng giống hệt nhau ở cả hai game; chép đôi là hai chỗ để lệch nhau. Khung không biết gì về quân cờ hay lá bài | Thêm một lớp component; bù lại game thứ ba chỉ là thêm một nhánh ở đúng một chỗ |
 | 2026-09-09 | Bài trên tay xoè quạt, lá rộng 44px nhưng chỉ **lộ ra 24px** | 13 lá phải nằm vừa khổ 390px. Vùng CHẠM vẫn đủ 44px theo R2 — phần bị che nằm dưới lá kế bên, đúng cách mọi app bài vẫn làm | Ở máy 360px thì hàng bài cuộn ngang được thay vì lòi ra khỏi màn hình |
+| 2026-09-09 | **Giữ nguyên "không gọi thoại/video trong app"** dù đã cân nhắc lại khi làm F12 | Khả thi về kỹ thuật (WebRTC P2P cho đúng hai người, báo hiệu đi nhờ Socket.IO sẵn có), nhưng ~15–30% cuộc gọi hỏng nếu không có coturn, mà coturn relay ~2 Mbps mỗi cuộc qua băng thông VPS đang chạy chung hai stack. Zalo/Messenger đã có video call và app đã có nút deep-link (F9). Chủ dự án chốt không làm | Muốn thấy mặt nhau lúc học thì phải mở app ngoài |
+| 2026-09-09 | Đồng hồ phòng học **chạy tiếp khi khoá màn hình** — ngược hẳn đồng hồ ván bài | Khoá máy để khỏi bị phân tâm chính là điều người ta làm khi ngồi học; dừng đồng hồ lúc đó là phá đúng thứ tính năng phục vụ. Đồng hồ ván bài thì ngược lại, dừng để khỏi xử thua oan | Hết chặng phải báo bằng Web Push vì app rất có thể đang đóng; và không có cách nào biết chắc người dùng thật sự đang ngồi học |
+| 2026-09-09 | Chỉ ghi `StudyLog` khi chặng học **chạy hết giờ**, bỏ dở thì không tính | Con số thống kê phải nói đúng sự thật. Cộng cả chặng dở dang thì "tổng giờ học" thành một con số tự khen | Dừng ở phút 24/25 là mất trắng chặng đó |
+| 2026-09-09 | `StudyLog` có cột `round`; `(sessionId, round)` là khoá của một chặng | Cần nó để đếm "chặng nào CẢ HAI cùng ngồi". Bản đầu nhóm theo ngày + số phút, và hai chặng 25 phút trong cùng một buổi bị gộp làm một — con số "học cùng nhau" thấp hơn sự thật | Thêm một cột phải nhớ ghi ở mọi chỗ tạo log |
+| 2026-09-09 | Phòng học nghe WebSocket theo **couple**, không theo phiên | Người kia bấm "bắt đầu" lúc mình đang mở app thì phải thấy ngay. Nghe theo phiên thì lúc chưa có phiên nào client chẳng có gì để nghe — mà đúng khoảnh khắc cần biết nhất lại là khoảnh khắc không nghe được (bắt được ở bước tự review) | Room sống suốt thời gian ở màn học chứ không chỉ khi có phiên |
+| 2026-09-09 | **Ai trong hai người cũng dừng được** buổi học, khác sự kiện trên lịch (chỉ người tạo mới sửa) | Phòng học là hoạt động chung chứ không phải đồ của riêng ai, và người còn lại cần thoát được mà không phải chờ người kia | Có thể dừng buổi học của nhau — với hai người thì nói một câu là xong |
+| 2026-09-09 | Chặng mới tính từ **lúc cron phát hiện**, không phải từ `endsAt` cũ | Cộng dồn từ `endsAt` thì server ngủ một tiếng rồi tỉnh dậy sẽ chạy đuổi hàng chục chặng liên tiếp và ghi công cho người không hề ngồi học | Mỗi chặng trôi thêm tối đa 10 giây so với lịch |
+| 2026-09-09 | Route **tạo ván** phải CHỜ `syncAndBroadcast`, hai route kia thì không | Người tạo ván chưa gửi `g:watch` — họ còn chưa biết ván tồn tại. Để việc đó chạy nền thì nó đua với `g:watch`: gateway thấy "chưa ai xem" nên tạm dừng đồng hồ, trong khi `handleWatch` vừa đọc DB thấy đồng hồ còn chạy nên không gọi `resumeClock`. Kết quả: ván đứng im ở lượt đầu, KHÔNG BAO GIỜ hết giờ. Trace G6-41/45 bắt được ngay sau khi tối ưu "không chờ" được đưa vào | Route tạo ván chậm thêm một vòng phát socket; hai route nước đi vẫn giữ được tối ưu vì người tới lượt đã ở trong phòng từ trước |
 | 2026-09-09 | Luồng ván Tiến lên tách thành **hàm thuần** `tien-len-flow.ts`, service chỉ còn lo DB · đồng hồ · thông báo | Đúng bài học ADR 2026-09-08: F5 tách hàm thuần thì chạy đúng ngay lượt trace đầu, F6 để logic lẫn trong service thì dính 3 lỗi. Ở đây còn một lý do nặng hơn: `viewTienLen()` là **hàng rào giữ bài úp**, mà hàng rào thì phải test được 100% — giờ nó có một test soi thẳng vào JSON đi qua dây, tìm bất kỳ lá nào chỉ đối phương mới có | Thêm một file và một lớp gián tiếp giữa service với luật |
 | 2026-09-09 | Trace Phase 6 **chờ 40 giây thật** để kiểm đồng hồ hết giờ, không rút ngắn bằng cách giả lập | Thứ cần kiểm chính là cron quét mỗi 5 giây có xử đúng không, và hai game xử KHÁC nhau ở đúng chỗ đó (caro thua, tiến lên mất lượt). Giả lập thời gian sẽ bỏ qua đúng phần đang cần chứng minh | `verify:local` chậm thêm ~40 giây |
 | 2026-09-09 | Trace đồng hồ phải **mở socket và ở lại xem** thì mới hết giờ được | Đồng hồ chỉ chạy khi người tới lượt đang mở app. Bản trace đầu không mở socket nên server tự dừng đồng hồ và ván không bao giờ hết giờ — đúng như thiết kế, nhưng cũng nghĩa là không kiểm được gì. Chính chỗ này chứng minh cơ chế chống phạt oan có hiệu lực thật | Kịch bản trace phải dựng đủ WebSocket, không gọi REST suông được |

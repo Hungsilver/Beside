@@ -42,7 +42,8 @@
     "trace:push": "node apps/api/test/trace-phase4-push.mjs",
     "trace:places": "node apps/api/test/trace-phase4-places.mjs",
     "trace:milestones": "node apps/api/test/trace-phase4-milestones.mjs",
-    "trace:games": "node apps/api/test/trace-phase6-games.mjs"
+    "trace:games": "node apps/api/test/trace-phase6-games.mjs",
+    "trace:study": "node apps/api/test/trace-phase7-study.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",

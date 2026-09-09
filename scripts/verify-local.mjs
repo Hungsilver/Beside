@@ -312,6 +312,14 @@ async function checkFlows() {
     TRACE_BASE_URL: `${HTTPS}/api/v1`,
     TRACE_INSECURE_TLS: '1',
   });
+
+  sh(`${COMPOSE} restart api`, { allowFail: true });
+  await waitHealthy();
+
+  runTrace('apps/api/test/trace-phase7-study.mjs', 'Phase 7 — phòng học chung', {
+    TRACE_BASE_URL: `${HTTPS}/api/v1`,
+    TRACE_INSECURE_TLS: '1',
+  });
 }
 
 async function waitHealthy() {

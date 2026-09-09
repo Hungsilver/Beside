@@ -180,4 +180,7 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 | 09/09 | **Caro chưa có luật cấm nước đôi ba** (double-three) — hiếm ai chơi trên giấy áp luật đó, nhưng người chơi mạnh sẽ thấy thiếu | Thấp | `docs/thiet-ke-games.md` §4.5 |
 | 09/09 | **Chưa có màn phát lại ván cũ** — `GameMove` đã lưu đủ dữ liệu, chỉ thiếu phần giao diện | Thấp | `docs/thiet-ke-games.md` §3 |
 | 09/09 | **Chưa có âm thanh cho game** — repo chưa có tài sản âm thanh nào | Chờ quyết định | `docs/thiet-ke-games.md` §12 |
+| 09/09 | **Không có cách biết chắc người dùng thật sự đang ngồi học** — đồng hồ chạy tiếp khi khoá màn hình (đúng ý đồ), nên phiên bỏ quên vẫn được ghi công tới khi chạm trần 16 chặng. Chấp nhận được: đây là công cụ tự giác cho hai người, không phải hệ thống chấm công | Thấp | `apps/api/src/study/study.service.ts` |
+| 09/09 | **Pomodoro chưa có "nghỉ dài"** sau mỗi 4 chặng như luật gốc — hiện chỉ luân phiên học/nghỉ ngắn | Thấp | `packages/shared/src/study.schema.ts` |
+| 09/09 | **Gọi thoại/video trong app**: đã cân nhắc lại 09/09, chủ dự án chốt giữ nguyên "không làm". Nếu đổi ý thì cần WebRTC P2P + coturn — xem ADR cùng ngày | Chờ quyết định | — |
 

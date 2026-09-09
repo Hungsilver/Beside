@@ -61,6 +61,17 @@ enum GameStatus {
   ABANDONED // bỏ dở quá lâu, xem ABANDON_AFTER_MS
 }
 
+enum StudyPhase {
+  FOCUS
+  BREAK
+}
+
+enum StudyStatus {
+  RUNNING
+  DONE
+  CANCELLED
+}
+
 // ---------------------------------------------------------
 // Người dùng & ghép đôi
 // ---------------------------------------------------------
@@ -100,6 +111,8 @@ model User {
   gameTurns      Game[]     @relation("GameTurn")
   gameWins       Game[]     @relation("GameWinner")
   gameMoves      GameMove[]
+  studyStarted   StudySession[] @relation("StudyStarter")
+  studyLogs      StudyLog[]
   locationPoints LocationPoint[]
   geofenceEvents GeofenceEvent[]
   geofenceStates GeofenceState[]
@@ -132,6 +145,8 @@ model Couple {
   events         Event[]
   milestones     Milestone[]
   games          Game[]
+  studySessions  StudySession[]
+  studyLogs      StudyLog[]
   locationPoints LocationPoint[]
   geofenceEvents GeofenceEvent[]
 
@@ -470,4 +485,72 @@ model GameMove {
 
   @@unique([gameId, no])
   @@map("game_moves")
+}
+
+// ---------------------------------------------------------
+// Phòng học chung (F12) — Pomodoro cho hai người
+// ---------------------------------------------------------
+
+/// Một phiên học. Đồng hồ là của SERVER: cả hai máy đọc chung `endsAt`, không
+/// máy nào tự đếm giờ của mình.
+///
+/// Khác đồng hồ ván bài ở một điểm cốt lõi: đồng hồ này **không dừng** khi
+/// người dùng khoá màn hình. Khoá máy để khỏi bị phân tâm chính là điều người
+/// ta làm khi ngồi học — dừng đồng hồ lúc đó là phá đúng thứ đang phục vụ.
+model StudySession {
+  id          String      @id @default(uuid())
+  coupleId    String
+  couple      Couple      @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  startedById String
+  startedBy   User        @relation("StudyStarter", fields: [startedById], references: [id], onDelete: Cascade)
+  phase       StudyPhase  @default(FOCUS)
+  status      StudyStatus @default(RUNNING)
+  focusMin    Int         @default(25)
+  breakMin    Int         @default(5)
+
+  /// Mốc kết thúc chặng hiện tại.
+  endsAt DateTime
+  /// Số chặng HỌC đã hoàn thành (chặng nghỉ không tính).
+  roundsDone Int @default(0)
+
+  /// Ai đang ở trong phòng — mảng userId. Chỉ hai người nên để Json là đủ,
+  /// cùng lý do với `Post.reactions`: tách bảng chỉ tốn thêm một lần join.
+  presentUserIds Json @default("[]")
+
+  logs       StudyLog[]
+  startedAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  finishedAt DateTime?
+
+  @@index([coupleId, status])
+  /// Cho cron quét chặng đã hết giờ.
+  @@index([status, endsAt])
+  @@map("study_sessions")
+}
+
+/// Một chặng HỌC đã hoàn thành của một người. Chỉ ghi khi chặng FOCUS chạy hết
+/// giờ — bỏ dở giữa chừng thì không tính, để con số thống kê nói đúng sự thật.
+model StudyLog {
+  id        BigInt        @id @default(autoincrement())
+  coupleId  String
+  couple    Couple        @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId String?
+  session   StudySession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  /// Chặng thứ mấy trong phiên. Cùng `sessionId` thì cặp (sessionId, round) là
+  /// khoá tự nhiên của một chặng — nhờ nó mới đếm được "chặng nào cả hai cùng
+  /// ngồi" mà không phải đoán bằng cách so mốc thời gian tạo bản ghi.
+  round     Int
+  minutes   Int
+
+  /// Ngày lịch GIỜ VIỆT NAM, không phải ngày UTC. Chuỗi ngày học đếm theo cột
+  /// này; lưu timestamp rồi so sau sẽ tính nhầm mọi buổi học sau nửa đêm
+  /// (ADR 2026-09-07).
+  day DateTime @db.Date
+
+  createdAt DateTime @default(now())
+
+  @@index([coupleId, userId, day])
+  @@map("study_logs")
 }

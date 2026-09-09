@@ -17,6 +17,7 @@ import { PushModule } from './push/push.module';
 import { PlacesModule } from './places/places.module';
 import { MilestonesModule } from './milestones/milestones.module';
 import { GamesModule } from './games/games.module';
+import { StudyModule } from './study/study.module';
 import { UsersModule } from './users/users.module';
 import { HealthController } from './health/health.controller';
 
@@ -45,6 +46,7 @@ import { HealthController } from './health/health.controller';
     PlacesModule,
     MilestonesModule,
     GamesModule,
+    StudyModule,
   ],
   controllers: [HealthController],
   providers: [

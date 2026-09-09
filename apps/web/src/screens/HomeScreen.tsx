@@ -186,6 +186,21 @@ export default function HomeScreen() {
         từ Phase 4, nên nó chỉ còn là chữ thừa. Trò chơi vào đây chứ không thêm
         khe thứ sáu vào thanh tab: bố cục 5 khe đã chốt trong ADR.
       */}
+      <Link to="/hoc-cung-nhau" className="card mt-3.5 block">
+        <div className="flex items-center gap-3">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-ink-100 text-[22px]">
+            📚
+          </span>
+          <div className="min-w-0 flex-1">
+            <b className="block text-[15.5px]">Học cùng nhau</b>
+            <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink-500">
+              Đồng hồ Pomodoro chạy chung trên cả hai máy
+            </p>
+          </div>
+          <span className="shrink-0 text-[18px] text-ink-400">›</span>
+        </div>
+      </Link>
+
       <Link to="/tro-choi" className="card mt-3.5 block">
         <div className="flex items-center gap-3">
           <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-ink-100 text-[22px]">

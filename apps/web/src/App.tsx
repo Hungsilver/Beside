@@ -22,6 +22,7 @@ const MilestonesScreen = lazy(() => import('@/screens/MilestonesScreen'));
 const GamesScreen = lazy(() => import('@/screens/GamesScreen'));
 // Màn ván kéo theo socket riêng của trò chơi — chỉ tải khi thật sự mở một ván.
 const GameScreen = lazy(() => import('@/screens/GameScreen'));
+const StudyScreen = lazy(() => import('@/screens/StudyScreen'));
 
 export default function App() {
   const { user, isRestoring } = useAuth();
@@ -123,6 +124,16 @@ export default function App() {
             <RequireCouple>
               <Suspense fallback={<Spinner label="Đang mở ván..." />}>
                 <GameScreen />
+              </Suspense>
+            </RequireCouple>
+          }
+        />
+        <Route
+          path="/hoc-cung-nhau"
+          element={
+            <RequireCouple>
+              <Suspense fallback={<Spinner label="Đang mở phòng học..." />}>
+                <StudyScreen />
               </Suspense>
             </RequireCouple>
           }
