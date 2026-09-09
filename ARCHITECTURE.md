@@ -8,7 +8,8 @@
 - **Domain:** `https://easytech.io.vn` (tạm dùng — đã mua). Sẽ đổi sang domain `beside` sau
   ⇒ **mọi URL phải lấy từ biến môi trường, không hardcode domain ở bất kỳ đâu**
 - **Cập nhật lần cuối:** 2026-09-09
-- **Trạng thái:** `PHASE 5` 🔸 đang làm — đã vẽ địa điểm & ảnh check-in lên bản đồ. Phase 4 ✅ xong phần tính năng
+- **Trạng thái:** `PHASE 6` ✅ xong — bình luận trong khoảnh khắc, cờ caro & tiến lên cho hai người.
+  Đã chạy trên máy chủ thật `https://easytech.io.vn` từ 2026-09-09 (commit `4e0be7f`)
   - Phase 1: `docs/traces/phase-1-auth-pairing.md` — 53/53 case
   - Phase 2: `docs/traces/phase-2-realtime-location.md` — 29/29 case
   - Rà soát: `docs/traces/phase-2-review.md` — 21/21 case (bắt được 2 lỗi rò rỉ quyền riêng tư)
