@@ -60,7 +60,23 @@ export class GamesController {
     @Body(new ZodBody(createGameSchema)) dto: CreateGameInput,
   ): Promise<GameResponse> {
     const game = await this.games.create(userId, dto.kind);
-    this.gateway.pushState(game.id, game.turnUserId);
+
+    /*
+     * Ở ĐÂY phải CHỜ, khác hai route dưới.
+     *
+     * Người tạo ván chưa kịp gửi `g:watch` — họ còn chưa biết ván tồn tại. Nếu
+     * để `syncAndBroadcast` chạy nền thì nó và `g:watch` đua nhau: gateway thấy
+     * "chưa ai xem" nên tạm dừng đồng hồ, trong khi `handleWatch` vừa đọc DB
+     * thấy đồng hồ còn chạy nên không gọi `resumeClock`. Kết quả: ván đứng im
+     * mãi mãi ở lượt đầu, không bao giờ hết giờ (trace G6-41/45 bắt được).
+     *
+     * Chờ ở đây thì thứ tự chắc chắn: dừng xong rồi client mới biết ván có thật,
+     * và `g:watch` theo sau sẽ cho đồng hồ chạy tiếp.
+     *
+     * Hai route kia không có vấn đề đó: người tới lượt là đối phương, họ đã ở
+     * trong phòng từ trước.
+     */
+    await this.gateway.syncAndBroadcast(game.id, game.turnUserId);
     return game;
   }
 
