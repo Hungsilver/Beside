@@ -8,8 +8,28 @@ import { ApiRequestError } from '@/lib/api-client';
 import { formatWhen } from '@/lib/relative-time';
 import AuthedImage from '@/components/AuthedImage';
 import CommentSheet from '@/components/CommentSheet';
+import PhotoLightbox from '@/components/PhotoLightbox';
 import TabBar from '@/components/TabBar';
 import { Screen, Spinner } from '@/components/ui';
+
+/*
+ * Trần tỉ lệ khung ảnh trong dòng kỷ niệm (rộng / cao).
+ *
+ * Ảnh hiện theo TỈ LỆ THẬT thay vì ép hết về 4:3 — ảnh dọc chụp bằng điện thoại
+ * bị khung 4:3 cắt mất cả đầu lẫn chân, đúng chỗ có mặt người. Nhưng vẫn phải
+ * chặn hai đầu: một tấm toàn cảnh 9:21 để nguyên thì cao gần hết màn hình và
+ * đẩy mọi thứ khác xuống dưới.
+ */
+const MIN_ASPECT = 0.7; // dọc nhất: xấp xỉ 7:10
+const MAX_ASPECT = 1.91; // ngang nhất: xấp xỉ 1,91:1
+
+/** Tỉ lệ khung để hiển thị một tấm ảnh, đã kẹp trong hai trần trên. */
+function displayAspect(width: number, height: number): number {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return 4 / 3;
+  }
+  return Math.min(MAX_ASPECT, Math.max(MIN_ASPECT, width / height));
+}
 
 const FILTERS: { key: FeedFilter; label: string }[] = [
   { key: 'all', label: 'Tất cả' },
@@ -143,6 +163,8 @@ function PostCard({
   const [error, setError] = useState<string | null>(null);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [showComments, setShowComments] = useState(false);
+  // Chỉ số ảnh đang mở toàn màn hình; `null` = đang không mở.
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const myReaction = post.reactions.find((r) => r.userId === myId)?.emoji;
   const photo = post.photos[photoIndex];
@@ -160,25 +182,44 @@ function PostCard({
     <article className="overflow-hidden rounded-[var(--radius-card)] border border-black/[0.04] bg-white shadow-[0_2px_8px_rgba(35,19,32,0.06)]">
       {photo && (
         <div className="relative">
-          <AuthedImage
-            path={photo.urlMd}
-            placeholder={photo.placeholder}
-            alt={post.caption ?? 'Ảnh check-in'}
-            eager={eager}
-            className="aspect-[4/3] w-full"
-          />
+          {/*
+            Cả tấm ảnh là một nút: chạm vào là xem toàn màn hình, phóng to được.
+            Đây là thao tác người dùng thử đầu tiên khi muốn nhìn rõ một tấm ảnh.
+          */}
+          <button
+            type="button"
+            onClick={() => setLightboxIndex(photoIndex)}
+            aria-label="Xem ảnh toàn màn hình"
+            className="block w-full"
+          >
+            <AuthedImage
+              path={photo.urlMd}
+              placeholder={photo.placeholder}
+              alt={post.caption ?? 'Ảnh check-in'}
+              eager={eager}
+              className="w-full"
+              aspectRatio={displayAspect(photo.width, photo.height)}
+            />
+          </button>
+
           {post.photos.length > 1 && (
-            <div className="absolute inset-x-0 bottom-2 flex justify-center gap-1.5">
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center pb-1">
               {post.photos.map((p, i) => (
                 <button
                   key={p.id}
                   type="button"
                   onClick={() => setPhotoIndex(i)}
                   aria-label={`Ảnh ${i + 1}`}
-                  className={`size-1.5 rounded-full transition ${
-                    i === photoIndex ? 'w-4 bg-white' : 'bg-white/60'
-                  }`}
-                />
+                  aria-current={i === photoIndex}
+                  // Vùng chạm 44px theo R2, còn chấm nhìn thấy thì vẫn nhỏ.
+                  className="pointer-events-auto flex h-11 items-center px-1.5"
+                >
+                  <span
+                    className={`block h-1.5 rounded-full shadow-[0_1px_3px_rgba(0,0,0,0.4)] transition-all ${
+                      i === photoIndex ? 'w-4 bg-white' : 'w-1.5 bg-white/60'
+                    }`}
+                  />
+                </button>
               ))}
             </div>
           )}
@@ -285,6 +326,15 @@ function PostCard({
           không ai cần. */}
       {showComments && (
         <CommentSheet post={post} myId={myId} onClose={() => setShowComments(false)} />
+      )}
+
+      {lightboxIndex !== null && (
+        <PhotoLightbox
+          photos={post.photos}
+          startIndex={lightboxIndex}
+          caption={post.caption}
+          onClose={() => setLightboxIndex(null)}
+        />
       )}
     </article>
   );

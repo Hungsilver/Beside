@@ -25,11 +25,19 @@
   - Phase 5: `docs/traces/phase-5-pwa-offline.md` — PWA offline mức 1, 4/4 case (mức 2 chưa làm được)
   - Phase 4 (F5): `docs/traces/phase-4-milestones.md` — 25/25 case (không lỗi mới)
   - Phase 7: F12 Học cùng nhau — **22/22 case trace** (`trace:study`) + 3 E2E
-  - Tổng: **466 unit test** + **336 case trace** + **44 E2E**, typecheck + lint sạch cả 3 workspace
   - Phase 6: F11 Cờ caro + F10 Tiến lên — `docs/thiet-ke-games.md`, **45/45 case trace** (`trace:games`), 84 unit test luật, 7 E2E
+  - 10/09 — **Bản đồ**: lọc ghim check-in theo khoảng thời gian; chạm ghim mở chi tiết bài
+    kèm toạ độ và nút chỉ đường Google Maps. **Khoảnh khắc**: xem ảnh toàn màn hình
+    (phóng to, vuốt đổi ảnh) + cắt / chọn tỉ lệ ảnh trước khi đăng.
+    28 unit test mới (`crop-math`, `map-filter`, `datetime`, `geo`) + 4 E2E (BD-01…BD-04)
+  - Tổng: **536 unit test** + **336 case trace** + **50 E2E**, typecheck + lint sạch cả 3 workspace
   - ✅ `npm run verify:local` → **41/41 mục đạt** trên Docker thật (gồm chốt ESLint và E2E trình duyệt)
     (6/6 container healthy: db · redis · api · web · caddy · minio), đi qua Caddy HTTPS
     — chạy lại ngày 09/09 sau khi thêm bình luận và hai trò chơi: 13 migration, 41 E2E
+  - ⚠️ 10/09: chạy `npm run e2e` trên Docker thật — **45 test đạt** (gồm 4 test mới), **TL-05 hỏng**
+    (lá 4♠ chắn mất lá 3♣ đang được ghim ở bàn Tiến lên) nên 8 test sau nó không chạy.
+    Lỗi này nằm ở màn Tiến lên, **không liên quan** tới phần bản đồ / khoảnh khắc vừa làm —
+    đã ghi vào `docs/BACKLOG.md`. Bộ 4 test mới chạy riêng: 4/4 đạt
 - **Triển khai:** chủ dự án tự deploy — hướng dẫn ở `docs/DEPLOY.md`
 
 ---
@@ -710,7 +718,8 @@ PATCH  /places/:id                 dời/đổi bán kính thì XOÁ trạng th�
 DELETE /places/:id                                                              ✅
 
 POST   /posts                      multipart: photos[] + caption + mood + toạ độ  ✅
-GET    /posts                      ?cursor&limit&filter=all|mine|partner|pinned   ✅
+GET    /posts                      ?cursor&limit&authorId&pinned&from&to           ✅
+                                   from/to = epoch ms, bao gồm cả hai đầu (10/09)
 DELETE /posts/:id                  chỉ người đăng mới xoá được                    ✅
 POST   /posts/:id/react            {emoji} — mỗi người 1 cảm xúc, bấm lại = bỏ    ✅
 GET    /posts/photos/:photoId/:size   size = thumb | md | orig                    ✅
@@ -1067,6 +1076,14 @@ Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L
 | 2026-09-09 | Bàn Tiến lên **toàn màn hình, ưu tiên khổ ngang**; xin `orientation.lock` từ cú chạm ở sảnh, không chặn màn hình khi khoá hỏng | 13 lá ở khổ dọc 390px chỉ hở 26px mỗi lá. iOS Safari không có API khoá xoay và rất nhiều máy bật khoá xoay hệ thống — dựng tấm chắn "hãy xoay máy" là khoá luôn ván bài của họ | Màn này lệch khỏi khung 430px dùng chung; phải tự lo vùng an toàn tai thỏ cho cả hai chiều |
 | 2026-09-09 | **Vẽ lạc quan** nước bài vừa bấm ở client, giữ state cục bộ trong component chứ không đưa vào cache Query | Người chơi thấy bài rời tay ngay, không phải chờ hết một vòng mạng. Không trộn vào cache vì socket cũng đổ state vào đó — gói tin đến muộn sẽ xoá mất nước vừa bấm | Thêm một đường quay lui khi server từ chối; mọi ghi vào cache phải qua `putGame()` chốt theo `version` |
 | 2026-09-09 | Bỏ `hasAnswer()`, thay bằng `listPlays()` liệt kê **đủ** mọi bộ đi được | Cùng một phép liệt kê phục vụ ba việc: nút Gợi ý, tự chọn cả bộ khi chạm một lá, và biết chính xác lúc nào người chơi bí thật. Giữ hai cách dò song song là giữ hai nguồn sự thật về cùng một câu hỏi | Nặng hơn `hasAnswer()` cũ (vài chục bộ ứng viên thay vì dò có chọn lọc) nên phải bọc `useMemo` ở màn chơi |
+| 2026-09-10 | Lọc ghim bản đồ theo thời gian **ở server** (`?from&to`), không lọc ở client | Một trang chỉ có 10–50 bài; lọc sau khi phân trang cho ra những trang gần như rỗng và người dùng tưởng là hết bài | Thêm hai tham số vào `feedQuerySchema` — dùng chung FE/BE nên không lệch được |
+| 2026-09-10 | Ranh giới bộ lọc là **ngày lịch giờ VN**, không phải "24 giờ trước tính từ bây giờ" | Người dùng nghĩ theo tờ lịch: chọn "7 ngày" là muốn thấy cả tấm ảnh chụp 6 giờ sáng của ngày đầu khoảng. Thêm `startOfDayMs` / `endOfDayMs` vào `datetime.ts` (R2) | Client phải tự quy đổi sang epoch trước khi gọi API — chỉ client mới biết múi giờ người xem |
+| 2026-09-10 | Ghim bản đồ dùng truy vấn **một trang** `useMapPins` (trần 50), không dùng lại `useFeed('pinned')` | `useInfiniteQuery` chỉ nạp trang đầu (10 bài) nếu không ai bấm "tải thêm" — bản đồ lặng lẽ bỏ sót ghim từ Phase 5 tới giờ | Quá 50 ghim thì phải thu hẹp khoảng thời gian; đổi lại bản đồ không bao giờ đặc kín ảnh |
+| 2026-09-10 | Chạm ghim mở **tấm trượt chi tiết** ngay trên bản đồ, không nhảy sang dòng kỷ niệm | Nhảy màn là mất khung nhìn bản đồ vừa canh, mà thứ người dùng cần lúc đó (toạ độ + đường tới đó) lại không có ở dòng kỷ niệm | Thêm một component; phần bài viết hiển thị rút gọn, muốn bình luận vẫn phải sang Kỷ niệm |
+| 2026-09-10 | Nút bản đồ ngoài dùng link `google.com/maps/dir/?api=1`, KHÔNG dùng scheme riêng `comgooglemaps://` | Cùng lý do với nút nhắn tin (§7.3): iOS Safari chặn im lặng scheme riêng khi app chưa cài, còn link https tự rơi về trang web | Không mở thẳng được Apple Maps; ai muốn thì sao chép toạ độ |
+| 2026-09-10 | Ảnh trong dòng kỷ niệm hiện theo **tỉ lệ thật** (kẹp trong 0,7–1,91), thay cho khung 4:3 cứng | Khung 4:3 cắt mất đầu và chân của mọi ảnh dọc chụp bằng điện thoại — đúng chỗ có mặt người | Thẻ bài cao thấp không đều nhau; `AuthedImage` phải nhận `aspectRatio` để khung có chiều cao trước khi ảnh tải xong (chống nhảy bố cục) |
+| 2026-09-10 | Cắt ảnh **tự viết** (`crop-math.ts` + `PhotoCropper`), không kéo thư viện cropper về | Mọi gói phổ biến nặng 30–60KB gói tải đầu, trong khi phần việc thật chỉ là một phép biến hình; hình học tách ra hàm thuần nên test được bằng ngòi bút (15 unit test) | Tự lo cử chỉ kéo / chụm hai ngón; chưa có xoay ảnh (EXIF đã được `createImageBitmap` xử lý) |
+| 2026-09-10 | Cắt từ **tệp gốc**, không cắt trên bản đã nén ở bước chọn ảnh | Cắt bản nén rồi nén lại là hai lượt mất chất lượng chồng lên nhau, thấy rõ ở vùng trời và da người | Giữ `File` gốc trong bộ nhớ tới lúc đăng (tối đa 3 tệp) và giải mã ảnh thêm một lượt khi mở màn cắt |
 
 ---
 

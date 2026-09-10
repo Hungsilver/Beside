@@ -77,3 +77,77 @@ export function isFutureCalendarDay(
     ymdToUtcMidnight(ymdInTimeZone(now, timeZone))
   );
 }
+
+// ---------------------------------------------------------------------------
+// Mốc đầu / cuối ngày theo múi giờ hiển thị
+// ---------------------------------------------------------------------------
+
+/**
+ * Độ lệch của một múi giờ so với UTC tại một thời điểm cụ thể (ms).
+ *
+ * Phải đo TẠI MỘT THỜI ĐIỂM chứ không lấy hằng số: Việt Nam không có giờ mùa hè
+ * nên luôn là +7, nhưng hàm này còn nhận `timeZone` bất kỳ và ngày mai có thể
+ * dùng cho múi giờ khác. Cách đo: định dạng thời điểm đó theo múi giờ cần biết,
+ * rồi đọc ngược các thành phần như thể chúng là UTC — chênh lệch chính là độ lệch.
+ */
+function timeZoneOffsetMs(date: Date, timeZone: string): number {
+  if (Number.isNaN(date.getTime())) {
+    throw new RangeError('timeZoneOffsetMs: ngày không hợp lệ');
+  }
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    // `hour12: false` cho ra "24" lúc nửa đêm ở một số engine; h23 thì luôn 00–23.
+    hourCycle: 'h23',
+  }).formatToParts(date);
+
+  const get = (type: Intl.DateTimeFormatPartTypes): number => {
+    const found = parts.find((p) => p.type === type);
+    if (!found) throw new RangeError(`timeZoneOffsetMs: thiếu thành phần ${type}`);
+    return Number(found.value);
+  };
+
+  const asUtc = Date.UTC(
+    get('year'),
+    get('month') - 1,
+    get('day'),
+    get('hour'),
+    get('minute'),
+    get('second'),
+  );
+  // Chuỗi định dạng chỉ tới GIÂY, nên phải bỏ phần mili-giây của mốc gốc,
+  // không thì mọi kết quả lệch đi một chút và cứ âm ỉ sai.
+  return asUtc - Math.floor(date.getTime() / 1000) * 1000;
+}
+
+/**
+ * Mốc epoch (ms) của 00:00 ngày lịch chứa `date`, tính theo múi giờ hiển thị.
+ *
+ * Dùng cho mọi bộ lọc "từ ngày … đến ngày …": lấy thẳng `Date.now() - 7 ngày`
+ * sẽ cắt giữa ngày, người dùng chọn "7 ngày" mà bài đăng lúc sáng sớm hôm thứ
+ * bảy lại rơi ra ngoài khoảng — sai đúng kiểu R2 cảnh báo.
+ */
+export function startOfDayMs(date: Date, timeZone = DISPLAY_TIMEZONE): number {
+  const midnightAsUtc = ymdToUtcMidnight(ymdInTimeZone(date, timeZone));
+  // Đo độ lệch hai lượt: lượt đầu dùng độ lệch tại `date`, lượt sau dùng độ lệch
+  // tại chính mốc nửa đêm vừa tính. Hai lượt chỉ khác nhau ở múi giờ có giờ mùa
+  // hè và `date` nằm đúng ngày chuyển giờ — VN thì luôn cho cùng kết quả.
+  const first = midnightAsUtc - timeZoneOffsetMs(date, timeZone);
+  return midnightAsUtc - timeZoneOffsetMs(new Date(first), timeZone);
+}
+
+/** Mốc epoch (ms) của 23:59:59.999 ngày lịch chứa `date`. */
+export function endOfDayMs(date: Date, timeZone = DISPLAY_TIMEZONE): number {
+  // Cộng 36 giờ rồi lấy đầu ngày: chắc chắn rơi vào NGÀY HÔM SAU kể cả khi ngày
+  // hiện tại dài 25 giờ vì lùi giờ mùa hè. Cộng đúng 24 giờ thì không chắc.
+  const nextDayStart = startOfDayMs(
+    new Date(startOfDayMs(date, timeZone) + MS_PER_DAY + MS_PER_DAY / 2),
+    timeZone,
+  );
+  return nextDayStart - 1;
+}

@@ -183,11 +183,31 @@ export class PostsService {
      */
     const cursor = this.parseCursor(query.cursor);
 
+    /*
+     * Lọc theo khoảng thời gian đăng (bản đồ dùng để xem "tháng trước hai đứa
+     * đi những đâu"). Lọc Ở SERVER chứ không kéo cả dòng kỷ niệm về rồi lọc ở
+     * client: một trang chỉ có 10–50 bài, lọc sau khi phân trang sẽ cho ra
+     * những trang gần như rỗng và người dùng tưởng là hết bài.
+     *
+     * Hai đầu đều BAO GỒM (`gte`/`lte`) — client gửi lên đúng mốc 00:00 và
+     * 23:59:59.999 giờ VN của ngày đầu và ngày cuối.
+     */
+    const createdAtRange =
+      query.from !== undefined || query.to !== undefined
+        ? {
+            createdAt: {
+              ...(query.from !== undefined ? { gte: new Date(query.from) } : {}),
+              ...(query.to !== undefined ? { lte: new Date(query.to) } : {}),
+            },
+          }
+        : {};
+
     const rows = await this.prisma.post.findMany({
       where: {
         coupleId: ctx.coupleId,
         ...(query.authorId ? { authorId: query.authorId } : {}),
         ...(query.pinned ? { lat: { not: null } } : {}),
+        ...createdAtRange,
         ...(cursor
           ? {
               OR: [

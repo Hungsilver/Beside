@@ -136,3 +136,41 @@ export function circlePolygon(
   ring.push(ring[0]!);
   return ring;
 }
+
+/**
+ * Toạ độ dạng người đọc được: `10.776900, 106.700900`.
+ *
+ * Sáu chữ số thập phân ≈ 11 cm — thừa cho mọi mục đích hiển thị, và là dạng
+ * Google Maps / Apple Maps nhận trực tiếp khi dán vào ô tìm kiếm.
+ *
+ * Cố ý KHÔNG dùng `toLocaleString`: dấu thập phân ở vi-VN là dấu phẩy, dán
+ * `10,7769` vào Google Maps là ra một chỗ hoàn toàn khác.
+ */
+export function formatLatLng(point: LatLng, digits = 6): string {
+  if (!isValidLatLng(point)) return '';
+  return `${point.lat.toFixed(digits)}, ${point.lng.toFixed(digits)}`;
+}
+
+/**
+ * Link chỉ đường Google Maps tới một toạ độ.
+ *
+ * Dùng cú pháp chính thức `maps/dir/?api=1` chứ không phải link `maps?q=` kiểu
+ * cũ: bản `api=1` được Google cam kết giữ ổn định, mở đúng app Google Maps trên
+ * cả iOS lẫn Android khi đã cài, và tự rơi về trang web khi chưa cài — cùng lý
+ * do với nút nhắn tin ở §7.3 (không dùng scheme riêng `comgooglemaps://`).
+ *
+ * Trả `null` khi toạ độ không dùng được, để giao diện ẩn hẳn nút thay vì hiện
+ * một nút bấm vào chẳng đi đâu.
+ */
+export function googleMapsDirectionsUrl(point: LatLng): string | null {
+  if (!isValidLatLng(point)) return null;
+  const dest = encodeURIComponent(`${point.lat},${point.lng}`);
+  return `https://www.google.com/maps/dir/?api=1&destination=${dest}`;
+}
+
+/** Link xem một toạ độ trên Google Maps (không chỉ đường). */
+export function googleMapsPlaceUrl(point: LatLng): string | null {
+  if (!isValidLatLng(point)) return null;
+  const q = encodeURIComponent(`${point.lat},${point.lng}`);
+  return `https://www.google.com/maps/search/?api=1&query=${q}`;
+}

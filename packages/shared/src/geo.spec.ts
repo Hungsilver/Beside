@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   bearingDegrees,
   circlePolygon,
+  formatLatLng,
+  googleMapsDirectionsUrl,
+  googleMapsPlaceUrl,
   haversineMeters,
   isValidLatLng,
   snapToGrid,
@@ -179,5 +182,47 @@ describe('circlePolygon', () => {
       expect(lng).toBeGreaterThanOrEqual(-180);
       expect(lng).toBeLessThanOrEqual(180);
     }
+  });
+});
+
+describe('formatLatLng', () => {
+  it('luôn dùng dấu chấm thập phân và 6 chữ số', () => {
+    expect(formatLatLng(NHA_AN)).toBe('10.776900, 106.700900');
+  });
+
+  it('toạ độ âm giữ nguyên dấu', () => {
+    expect(formatLatLng({ lat: -33.8688, lng: 151.2093 })).toBe(
+      '-33.868800, 151.209300',
+    );
+  });
+
+  it('toạ độ hỏng trả chuỗi rỗng', () => {
+    expect(formatLatLng({ lat: Number.NaN, lng: 0 })).toBe('');
+    expect(formatLatLng({ lat: 0, lng: 0 })).toBe('');
+  });
+});
+
+describe('googleMapsDirectionsUrl', () => {
+  it('dựng link api=1 với điểm đến là toạ độ', () => {
+    expect(googleMapsDirectionsUrl(NHA_AN)).toBe(
+      'https://www.google.com/maps/dir/?api=1&destination=10.7769%2C106.7009',
+    );
+  });
+
+  it('trả null khi toạ độ không dùng được — giao diện phải ẩn nút', () => {
+    expect(googleMapsDirectionsUrl({ lat: 0, lng: 0 })).toBeNull();
+    expect(googleMapsDirectionsUrl({ lat: 91, lng: 10 })).toBeNull();
+  });
+});
+
+describe('googleMapsPlaceUrl', () => {
+  it('dựng link xem vị trí', () => {
+    expect(googleMapsPlaceUrl(NHA_AN)).toBe(
+      'https://www.google.com/maps/search/?api=1&query=10.7769%2C106.7009',
+    );
+  });
+
+  it('trả null với toạ độ hỏng', () => {
+    expect(googleMapsPlaceUrl({ lat: Number.NaN, lng: Number.NaN })).toBeNull();
   });
 });

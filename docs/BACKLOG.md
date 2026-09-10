@@ -187,3 +187,8 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 | 09/09 | **Pomodoro chưa có "nghỉ dài"** sau mỗi 4 chặng như luật gốc — hiện chỉ luân phiên học/nghỉ ngắn | Thấp | `packages/shared/src/study.schema.ts` |
 | 09/09 | **Gọi thoại/video trong app**: đã cân nhắc lại 09/09, chủ dự án chốt giữ nguyên "không làm". Nếu đổi ý thì cần WebRTC P2P + coturn — xem ADR cùng ngày | Chờ quyết định | — |
 
+| 10/09 | **TL-05 E2E hỏng**: ở bàn Tiến lên 390×844, lá `4♠` chắn mất vùng chạm của lá `3♣` đang được ghim "bắt buộc đánh" → Playwright không bấm được (`subtree intercepts pointer events`). Người thật chạm vào phần lộ ra vẫn trúng, nhưng đây là dấu hiệu vùng chạm bị che thật | Trung bình | `apps/web/src/components/TienLenTable.tsx` · `apps/web/e2e/app.spec.ts:791` |
+| 10/09 | **Màn cắt ảnh chưa dùng cho ảnh đại diện** — `PhotoCropper` + `crop-math.ts` đã có và dùng được cho `/cai-dat`, chỉ chưa nối vào (gộp với mục 08/09 ở trên) | Thấp | `apps/web/src/screens/SettingsScreen.tsx` |
+| 10/09 | **Bản đồ chỉ lấy tối đa 50 ghim mỗi lượt** (`MAP_PIN_LIMIT`) — vượt qua thì phải thu hẹp khoảng thời gian. Chưa có gộp cụm (clustering) khi nhiều ghim nằm sát nhau | Thấp | `apps/web/src/lib/posts-api.ts` |
+| 10/09 | **Màn cắt ảnh chưa xoay được ảnh** — hướng ảnh đã đúng nhờ EXIF, nhưng ai muốn xoay thêm 90° thì chưa có nút | Thấp | `apps/web/src/components/PhotoCropper.tsx` |
+| 10/09 | **Chuỗi hiển thị của phần bản đồ / khoảnh khắc mới vẫn hardcode trong component** — cùng lý do với mục game ở trên: web chưa có `src/i18n/vi.ts` nên gom riêng vài màn sẽ lệch với phần còn lại | Thấp | `apps/web/src/components/MapTimeFilter.tsx` |

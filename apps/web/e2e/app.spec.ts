@@ -890,3 +890,105 @@ test.describe('Phòng học chung', () => {
     expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
   });
 });
+
+test.describe('Bộ lọc thời gian & xem ảnh (bổ sung 10/09)', () => {
+  test('BD-01 — lọc ghim theo khoảng thời gian, có báo số lượng', async () => {
+    await page.goto('/ban-do');
+    const container = page.locator('[aria-label="Bản đồ"]');
+    await expect(container).not.toHaveAttribute('data-photo-pins', '0', { timeout: 15_000 });
+
+    const group = page.getByRole('group', { name: /Lọc khoảnh khắc theo thời gian/ });
+    await expect(group).toBeVisible();
+
+    // Chip phải đủ cao để chạm được (R2: 44px là vùng chạm, chip 36px + khoảng
+    // trống quanh nó vẫn phải ≥ 32px thấy được).
+    const chip = group.getByRole('button', { name: '7 ngày' });
+    expect((await chip.boundingBox())!.height).toBeGreaterThanOrEqual(32);
+
+    await chip.click();
+    await expect(page.getByText(/7 ngày gần đây/)).toBeVisible();
+
+    // Khoảng tự chọn ngược ngày phải báo lỗi và KHÔNG gọi API.
+    await group.getByRole('button', { name: /Chọn ngày/ }).click();
+    const from = page.getByLabel('Từ ngày');
+    const to = page.getByLabel('Đến ngày');
+    await expect(from).toBeVisible();
+    await from.fill('2026-09-09');
+    await to.fill('2026-09-01');
+    await expect(page.getByText(/Ngày bắt đầu phải trước/)).toBeVisible();
+
+    // Trả về "Tất cả" để các test sau vẫn thấy đủ ghim.
+    await group.getByRole('button', { name: 'Tất cả' }).click();
+    await expect(container).not.toHaveAttribute('data-photo-pins', '0', { timeout: 15_000 });
+  });
+
+  test('BD-02 — chạm ghim ảnh mở chi tiết kèm toạ độ và nút Google Maps', async () => {
+    await page.goto('/ban-do');
+    const container = page.locator('[aria-label="Bản đồ"]');
+    await expect(container).not.toHaveAttribute('data-photo-pins', '0', { timeout: 15_000 });
+
+    await page.locator('button.maplibregl-marker').first().click();
+
+    const sheet = page.getByRole('dialog', { name: 'Chi tiết khoảnh khắc' });
+    await expect(sheet).toBeVisible();
+    // Toạ độ phải là dạng máy đọc được: dấu CHẤM thập phân, 6 chữ số.
+    await expect(sheet.getByText(/-?\d+\.\d{6}, -?\d+\.\d{6}/)).toBeVisible();
+
+    const maps = sheet.getByRole('link', { name: /Chỉ đường bằng Google Maps/ });
+    await expect(maps).toHaveAttribute(
+      'href',
+      /^https:\/\/www\.google\.com\/maps\/dir\/\?api=1&destination=/,
+    );
+
+    await sheet.getByRole('button', { name: 'Xong' }).click();
+    await expect(sheet).toHaveCount(0);
+  });
+
+  test('BD-03 — xem ảnh toàn màn hình trong Kỷ niệm', async () => {
+    await page.goto('/ky-niem');
+    const open = page.getByRole('button', { name: 'Xem ảnh toàn màn hình' }).first();
+    await expect(open).toBeVisible({ timeout: 20_000 });
+    await open.click();
+
+    const viewer = page.getByRole('dialog', { name: 'Xem ảnh' });
+    await expect(viewer).toBeVisible();
+    await viewer.getByRole('button', { name: 'Đóng ảnh' }).click();
+    await expect(viewer).toHaveCount(0);
+
+    expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
+  });
+
+  test('BD-04 — cắt / đổi tỉ lệ ảnh trước khi đăng', async () => {
+    await page.goto('/check-in');
+
+    const png = await sharp({
+      create: { width: 900, height: 600, channels: 3, background: { r: 120, g: 180, b: 240 } },
+    })
+      .png()
+      .toBuffer();
+
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'khoanh-khac.png',
+      mimeType: 'image/png',
+      buffer: png,
+    });
+
+    const crop = page.getByRole('button', { name: 'Cắt và chỉnh tỉ lệ ảnh' });
+    await expect(crop).toBeVisible({ timeout: 20_000 });
+    await crop.click();
+
+    const cropper = page.getByRole('dialog', { name: 'Chỉnh tỉ lệ ảnh' });
+    await expect(cropper).toBeVisible();
+    await cropper.getByRole('button', { name: 'Vuông 1:1' }).click();
+    await cropper.getByRole('button', { name: 'Xong' }).click();
+
+    // Cắt xong thì màn cắt đóng lại và thẻ ảnh đổi nhãn.
+    await expect(cropper).toHaveCount(0, { timeout: 20_000 });
+    await expect(page.getByRole('button', { name: 'Cắt và chỉnh tỉ lệ ảnh' })).toContainText(
+      'Đã cắt',
+    );
+
+    // Cố ý KHÔNG đăng: bộ E2E không được để lại rác trong dữ liệu demo.
+    expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
+  });
+});

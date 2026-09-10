@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   haversineMeters,
   LIVE_STALE_AFTER_MS,
@@ -24,28 +24,59 @@ import {
   saveStyle,
   type MapStyleId,
 } from '@/lib/map-styles';
-import { useFeed } from '@/lib/posts-api';
+import { useMapPins } from '@/lib/posts-api';
+import {
+  readSavedRange,
+  resolveMapRange,
+  saveRange,
+  toDayInput,
+  type MapRangeState,
+} from '@/lib/map-filter';
+import MapTimeFilter from '@/components/MapTimeFilter';
+import PostDetailSheet from '@/components/PostDetailSheet';
 import TabBar from '@/components/TabBar';
 import Avatar from '@/components/Avatar';
 
 export default function MapScreen() {
   const coupleQuery = useCouple();
   const partnerQuery = usePartnerLatest();
-  const navigate = useNavigate();
   const [styleId, setStyleId] = useState<MapStyleId>(readSavedStyle);
   const [photoPinsOn, setPhotoPinsOn] = useState(readSavedPhotoPins);
   const trailQuery = usePartnerTrail();
   const placesQuery = usePlaces();
-  /*
-   * Chỉ lấy bài CÓ GHIM toạ độ. Bộ lọc `pinned` đã có sẵn từ Phase 3 nên
-   * không phải tải cả dòng kỷ niệm rồi lọc ở client.
-   */
-  const pinnedQuery = useFeed('pinned', null, null);
   const { connected, partnerLocation, partnerPresence } = useRealtime();
   const live = useLiveLocation();
 
   const [recenterToken, setRecenterToken] = useState(0);
   const [now, setNow] = useState(Date.now());
+
+  // Bộ lọc thời gian của ghim ảnh — nhớ lại lựa chọn lần trước.
+  const [range, setRange] = useState<MapRangeState>(readSavedRange);
+  const [openPostId, setOpenPostId] = useState<string | null>(null);
+
+  /*
+   * Ngày hôm nay theo giờ VN. Dùng làm phụ thuộc để mốc "7 ngày gần đây" tự
+   * dịch sang ngày mới khi app mở qua nửa đêm — nếu chỉ phụ thuộc vào `range`
+   * thì khoảng lọc đứng yên ở ngày hôm qua cho tới khi tải lại trang.
+   */
+  const todayKey = toDayInput(now);
+  const resolvedRange = useMemo(
+    () => resolveMapRange(range),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [range, todayKey],
+  );
+
+  /*
+   * Chỉ lấy bài CÓ GHIM toạ độ, trong khoảng thời gian đang chọn. Bộ lọc
+   * `pinned` có sẵn từ Phase 3, còn `from`/`to` là phần thêm ngày 10/09 —
+   * cả hai đều lọc Ở SERVER.
+   */
+  const pinsQuery = useMapPins(resolvedRange);
+
+  const changeRange = useCallback((next: MapRangeState) => {
+    setRange(next);
+    saveRange(next);
+  }, []);
 
   // Nhịp 1 giây để câu "cập nhật x giây trước" tự chạy
   useEffect(() => {
@@ -122,19 +153,32 @@ export default function MapScreen() {
     [placesQuery.data],
   );
 
-  const photoPins = useMemo<MapPhotoPin[]>(() => {
-    const posts = pinnedQuery.data?.pages.flatMap((page) => page.items) ?? [];
-    return posts
-      .filter((post) => post.lat !== null && post.lng !== null && post.photos.length > 0)
-      .slice(0, 40) // Nhiều hơn nữa thì bản đồ rối và tốn data tải ảnh
-      .map((post) => ({
+  // Bài có toạ độ VÀ có ảnh — ghim trên bản đồ chính là tấm ảnh đầu tiên.
+  const pinnedPosts = useMemo(
+    () =>
+      (pinsQuery.data?.items ?? []).filter(
+        (post) => post.lat !== null && post.lng !== null && post.photos.length > 0,
+      ),
+    [pinsQuery.data],
+  );
+
+  const photoPins = useMemo<MapPhotoPin[]>(
+    () =>
+      pinnedPosts.map((post) => ({
         id: post.id,
         point: { lat: post.lat!, lng: post.lng! },
         thumbPath: post.photos[0]!.urlThumb,
         placeholder: post.photos[0]!.placeholder,
         label: post.caption ?? `Khoảnh khắc của ${post.authorName}`,
-      }));
-  }, [pinnedQuery.data]);
+      })),
+    [pinnedPosts],
+  );
+
+  // Bài đang mở trong tấm trượt chi tiết. Tra lại từ danh sách thay vì cất một
+  // bản sao: đổi bộ lọc mà bài không còn trong khoảng thì tấm trượt tự đóng.
+  const openPost = openPostId
+    ? (pinnedPosts.find((p) => p.id === openPostId) ?? null)
+    : null;
 
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-canvas">
@@ -144,7 +188,7 @@ export default function MapScreen() {
         trail={trailQuery.data?.points}
         places={places}
         photoPins={photoPinsOn ? photoPins : []}
-        onPhotoPinClick={() => void navigate('/ky-niem')}
+        onPhotoPinClick={setOpenPostId}
         recenterToken={recenterToken}
       />
 
@@ -182,6 +226,17 @@ export default function MapScreen() {
           <p className="pointer-events-auto mt-2 inline-block rounded-full bg-white/95 px-3 py-1.5 text-[11.5px] font-semibold text-ink-500 shadow-sm">
             🔒 {partner?.displayName} đang bật làm mờ vị trí
           </p>
+        )}
+
+        {/* Bộ lọc thời gian chỉ có nghĩa khi ghim ảnh đang được hiện. */}
+        {photoPinsOn && (
+          <MapTimeFilter
+            state={range}
+            onChange={changeRange}
+            resolved={resolvedRange}
+            pinCount={photoPins.length}
+            loading={pinsQuery.isLoading || pinsQuery.isFetching}
+          />
         )}
       </div>
 
@@ -276,6 +331,10 @@ export default function MapScreen() {
             : 'Chia sẻ trực tiếp chỉ chạy khi app đang mở trên màn hình'}
         </p>
       </DraggableSheet>
+
+      {openPost && (
+        <PostDetailSheet post={openPost} onClose={() => setOpenPostId(null)} />
+      )}
 
       <TabBar />
     </div>

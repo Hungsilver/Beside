@@ -38,18 +38,42 @@ export const reactionSchema = z.object({
   emoji: z.enum(REACTIONS),
 });
 
-export const feedQuerySchema = z.object({
-  /** Con trỏ phân trang: `createdAtMs_postId` của bài cuối trang trước. */
-  cursor: z.string().max(120).optional(),
-  limit: z.coerce.number().int().min(1).max(50).default(10),
-  /** Lọc theo người đăng. */
-  authorId: z.string().uuid().optional(),
-  /** Chỉ lấy bài có ghim toạ độ. */
-  pinned: z
-    .union([z.boolean(), z.literal('true'), z.literal('false')])
-    .optional()
-    .transform((v) => (v === undefined ? undefined : v === true || v === 'true')),
-});
+/**
+ * Số ghim ảnh tối đa lấy về cho bản đồ trong một lượt.
+ *
+ * Bằng đúng trần `limit` của truy vấn dòng kỷ niệm. Nhiều hơn thì bản đồ đặc
+ * kín ảnh, mà mỗi ghim còn kéo theo một lượt tải ảnh nhỏ qua mạng di động.
+ * Người dùng thu hẹp khoảng thời gian là cách đúng để thấy nhóm ảnh mình cần.
+ */
+export const MAP_PIN_LIMIT = 50;
+
+export const feedQuerySchema = z
+  .object({
+    /** Con trỏ phân trang: `createdAtMs_postId` của bài cuối trang trước. */
+    cursor: z.string().max(120).optional(),
+    limit: z.coerce.number().int().min(1).max(50).default(10),
+    /** Lọc theo người đăng. */
+    authorId: z.string().uuid().optional(),
+    /** Chỉ lấy bài có ghim toạ độ. */
+    pinned: z
+      .union([z.boolean(), z.literal('true'), z.literal('false')])
+      .optional()
+      .transform((v) => (v === undefined ? undefined : v === true || v === 'true')),
+    /**
+     * Lọc theo thời điểm đăng (epoch ms, bao gồm cả hai đầu).
+     *
+     * Cùng quy ước với `trailQuerySchema` — số epoch chứ không phải chuỗi ISO:
+     * chuỗi ISO thiếu hậu tố múi giờ là mỗi máy hiểu một kiểu, còn số thì không
+     * có chỗ cho hiểu nhầm. Client tự quy đổi ranh giới NGÀY theo giờ VN
+     * (`startOfDayMs` / `endOfDayMs`) trước khi gửi lên.
+     */
+    from: z.coerce.number().int().positive().optional(),
+    to: z.coerce.number().int().positive().optional(),
+  })
+  .refine((q) => q.from === undefined || q.to === undefined || q.from <= q.to, {
+    message: 'Khoảng thời gian không hợp lệ (từ ngày phải trước đến ngày)',
+    path: ['from'],
+  });
 export type FeedQuery = z.infer<typeof feedQuerySchema>;
 
 export interface PhotoResponse {

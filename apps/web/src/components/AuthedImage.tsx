@@ -16,6 +16,7 @@ export default function AuthedImage({
   alt,
   className,
   eager = false,
+  aspectRatio,
 }: {
   path: string;
   placeholder: string;
@@ -23,6 +24,15 @@ export default function AuthedImage({
   className?: string;
   /** Ảnh đầu danh sách thì tải ngay, còn lại chờ tới khi cuộn gần đến. */
   eager?: boolean;
+  /**
+   * Tỉ lệ khung (rộng / cao) do NƠI GỌI quyết định — thường là tỉ lệ thật của
+   * ảnh, lấy từ `width/height` trong dữ liệu bài viết.
+   *
+   * Cần nó vì khung phải có chiều cao NGAY từ lúc chưa tải xong ảnh: không thì
+   * cả dòng kỷ niệm nhảy chồm lên mỗi khi một tấm ảnh tải xong (layout shift),
+   * và người đang đọc bị đẩy mất chỗ.
+   */
+  aspectRatio?: number;
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -80,7 +90,15 @@ export default function AuthedImage({
   }, [path, visible]);
 
   return (
-    <div ref={holderRef} className={`relative overflow-hidden bg-ink-100 ${className ?? ''}`}>
+    <div
+      ref={holderRef}
+      className={`relative overflow-hidden bg-ink-100 ${className ?? ''}`}
+      style={
+        aspectRatio && Number.isFinite(aspectRatio) && aspectRatio > 0
+          ? { aspectRatio: String(aspectRatio) }
+          : undefined
+      }
+    >
       <img
         src={placeholder}
         alt=""

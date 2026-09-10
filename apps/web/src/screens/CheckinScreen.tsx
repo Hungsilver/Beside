@@ -9,11 +9,21 @@ import {
 import { ApiRequestError } from '@/lib/api-client';
 import { useCreatePost } from '@/lib/posts-api';
 import { compressImage, formatBytes, type CompressResult } from '@/lib/image-compress';
+import PhotoCropper from '@/components/PhotoCropper';
 import { FormError, Screen } from '@/components/ui';
 
 interface Picked extends CompressResult {
   id: string;
   previewUrl: string;
+  /**
+   * Tệp GỐC người dùng chọn, giữ lại để cắt ảnh.
+   *
+   * Phải cắt từ bản gốc chứ không từ bản đã nén: cắt trên bản nén rồi nén lại
+   * là hai lượt mất chất lượng chồng lên nhau, thấy rõ ở vùng trời và da người.
+   */
+  file: File;
+  /** Đã qua màn chỉnh tỉ lệ hay chưa — chỉ dùng để hiện dấu trên thẻ ảnh. */
+  cropped: boolean;
 }
 
 export default function CheckinScreen() {
@@ -29,6 +39,8 @@ export default function CheckinScreen() {
   const [locState, setLocState] = useState<'idle' | 'loading' | 'ok' | 'denied' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Id tấm ảnh đang mở trong màn cắt; `null` = không mở. */
+  const [croppingId, setCroppingId] = useState<string | null>(null);
 
   // Thu hồi mọi blob preview khi rời màn hình — không thì rò bộ nhớ.
   //
@@ -82,6 +94,8 @@ export default function CheckinScreen() {
           ...result,
           id: `${file.name}-${Date.now()}-${Math.random()}`,
           previewUrl: URL.createObjectURL(result.blob),
+          file,
+          cropped: false,
         });
       }
       setPhotos((prev) => [...prev, ...picked]);
@@ -92,6 +106,26 @@ export default function CheckinScreen() {
       // Đặt lại input để chọn cùng một tệp lần nữa vẫn kích hoạt onChange.
       if (fileRef.current) fileRef.current.value = '';
     }
+  }
+
+  /** Nhận ảnh vừa cắt xong: thay bản cũ, thu hồi blob cũ ngay tại chỗ. */
+  function applyCrop(id: string, result: CompressResult) {
+    setPhotos((prev) =>
+      prev.map((p) => {
+        if (p.id !== id) return p;
+        URL.revokeObjectURL(p.previewUrl);
+        return {
+          ...p,
+          ...result,
+          // Giữ nguyên `originalBytes` của tệp gốc để câu "đã tiết kiệm" không
+          // nhảy lung tung sau mỗi lần cắt.
+          originalBytes: p.originalBytes,
+          previewUrl: URL.createObjectURL(result.blob),
+          cropped: true,
+        };
+      }),
+    );
+    setCroppingId(null);
   }
 
   function removePhoto(id: string) {
@@ -133,6 +167,7 @@ export default function CheckinScreen() {
   }
 
   const savedBytes = photos.reduce((s, p) => s + (p.originalBytes - p.compressedBytes), 0);
+  const cropping = croppingId ? (photos.find((p) => p.id === croppingId) ?? null) : null;
 
   return (
     <Screen>
@@ -178,15 +213,23 @@ export default function CheckinScreen() {
                 <img
                   src={p.previewUrl}
                   alt=""
-                  className="size-40 rounded-[var(--radius-card)] object-cover"
+                  className="size-40 rounded-[var(--radius-card)] bg-ink-100 object-contain"
                 />
                 <button
                   type="button"
                   onClick={() => removePhoto(p.id)}
                   aria-label="Bỏ ảnh này"
-                  className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-black/55 text-[13px] text-white"
+                  className="absolute right-1 top-1 flex size-9 items-center justify-center rounded-full bg-black/55 text-[13px] text-white"
                 >
                   ✕
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCroppingId(p.id)}
+                  aria-label="Cắt và chỉnh tỉ lệ ảnh"
+                  className="absolute bottom-1.5 left-1.5 flex min-h-9 items-center gap-1 rounded-full bg-black/55 px-2.5 text-[11.5px] font-bold text-white"
+                >
+                  ✂️ {p.cropped ? 'Đã cắt' : 'Cắt ảnh'}
                 </button>
               </div>
             ))}
@@ -214,9 +257,11 @@ export default function CheckinScreen() {
           onChange={(e) => void pickFiles(e.target.files)}
         />
 
-        {savedBytes > 0 && (
-          <p className="-mt-1 text-[11.5px] text-ink-400">
-            Đã nén trước khi gửi — tiết kiệm {formatBytes(savedBytes)} dung lượng mạng
+        {photos.length > 0 && (
+          <p className="-mt-1 text-[11.5px] leading-relaxed text-ink-400">
+            Chạm ✂️ để cắt hoặc đổi tỉ lệ (vuông, dọc 4:5, ngang 16:9).
+            {savedBytes > 0 &&
+              ` Đã nén trước khi gửi — tiết kiệm ${formatBytes(savedBytes)} dung lượng mạng.`}
           </p>
         )}
 
@@ -300,6 +345,14 @@ export default function CheckinScreen() {
           lưu. Toạ độ chỉ được ghi khi bạn bật “Ghim lên bản đồ”.
         </p>
       </form>
+
+      {cropping && (
+        <PhotoCropper
+          file={cropping.file}
+          onDone={(result) => applyCrop(cropping.id, result)}
+          onCancel={() => setCroppingId(null)}
+        />
+      )}
     </Screen>
   );
 }
