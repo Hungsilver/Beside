@@ -1,10 +1,13 @@
-import type { TienLenClientState } from './game.schema';
+import type { TienLenClientState, TienLenPlay } from './game.schema';
 import {
   checkPass,
   checkPlay,
   detectCombo,
+  holdsThreeSpade,
   lowestCard,
   sortCards,
+  type Combo,
+  type InstantWinKind,
   type MoveError,
 } from './tien-len';
 
@@ -23,11 +26,31 @@ import {
 export interface TienLenTableState {
   /** userId → bài trên tay. CHỨA BÀI CẢ HAI NGƯỜI. */
   hands: Record<string, number[]>;
-  table: { userId: string; cards: number[] } | null;
+  /**
+   * Các bộ đã đánh trong **vòng hiện tại**, cũ → mới.
+   *
+   * Trước đây chỗ này chỉ giữ đúng bộ cuối (`table`), nên bấm một cái là bộ
+   * trước biến mất — người chơi không còn nhìn lại được mình vừa chặn cái gì.
+   * Giữ cả chồng bài cũng là cách bàn hiện lên giống bàn thật: bộ mới đè lên
+   * bộ cũ chứ không xoá nó đi.
+   *
+   * Chỉ trong MỘT vòng: có người bỏ lượt là vòng kết thúc, bàn được dọn sạch.
+   */
+  pile: TienLenPlay[];
   /** Ai vừa bỏ lượt trong vòng này. */
   passedBy: string | null;
   /** Lá bắt buộc có trong bộ ĐẦU TIÊN của ván. */
   mustInclude: number | null;
+  /**
+   * Người thua còn ôm 3♠ lúc ván kết thúc — "thối 3 bích".
+   *
+   * Chốt lại ngay lúc ván xong chứ không tính lại lúc đọc: sau đó `hands` vẫn
+   * còn đó, nhưng một ván kết thúc bằng đầu hàng hay hết giờ thì "người thua"
+   * lại do service quyết, không phải do luật bài.
+   */
+  thoiThreeSpade: string | null;
+  /** Tới trắng: chia bài xong là thắng luôn, không đánh lá nào. */
+  instantWin: { userId: string; kind: InstantWinKind } | null;
 }
 
 export type TienLenAction = { cards: number[] } | { pass: true };
@@ -43,6 +66,22 @@ export interface TienLenStep {
 export type TienLenResult =
   | { ok: true; step: TienLenStep }
   | { ok: false; error: MoveError };
+
+/**
+ * Bộ đang phải chặn — bộ trên cùng của chồng bài.
+ *
+ * Một hàm nhỏ nhưng cố ý: `pile` là nguồn sự thật duy nhất của mặt bàn, và mọi
+ * chỗ cần "bộ trên bàn" đều đi qua đây thay vì tự đọc phần tử cuối mảng.
+ */
+export function topPlay(pile: TienLenPlay[]): TienLenPlay | null {
+  return pile.length === 0 ? null : (pile[pile.length - 1] as TienLenPlay);
+}
+
+/** Bộ trên bàn, đã nhận diện. `null` = được ra bài tự do. */
+export function tableCombo(pile: TienLenPlay[]): Combo | null {
+  const top = topPlay(pile);
+  return top ? detectCombo(top.cards) : null;
+}
 
 /**
  * Áp một nước đi lên trạng thái ván.
@@ -62,7 +101,7 @@ export function stepTienLen(
     return { ok: false, error: { code: 'NOT_IN_HAND', message: 'Bạn không ở trong ván này' } };
   }
 
-  const table = state.table ? detectCombo(state.table.cards) : null;
+  const table = tableCombo(state.pile);
 
   if ('pass' in action) {
     const error = checkPass(table);
@@ -71,7 +110,8 @@ export function stepTienLen(
     return {
       ok: true,
       step: {
-        state: { ...state, table: null, passedBy: userId },
+        // Vòng khép lại: chồng bài dọn sạch, người kia ra bài tự do ở lượt sau.
+        state: { ...state, pile: [], passedBy: userId },
         nextTurnUserId: partnerId,
         finished: false,
         winnerId: null,
@@ -92,10 +132,14 @@ export function stepTienLen(
       state: {
         ...state,
         hands: { ...state.hands, [userId]: rest },
-        table: { userId, cards: sortCards(action.cards) },
+        pile: [...state.pile, { userId, cards: sortCards(action.cards) }],
         passedBy: null,
         // Ràng buộc lá nhỏ nhất chỉ áp cho đúng nước đầu tiên của ván.
         mustInclude: null,
+        thoiThreeSpade:
+          finished && holdsThreeSpade(state.hands[partnerId] ?? [])
+            ? partnerId
+            : state.thoiThreeSpade,
       },
       nextTurnUserId: finished ? null : partnerId,
       finished,
@@ -118,7 +162,7 @@ export function autoActionTienLen(
   state: TienLenTableState,
   userId: string,
 ): TienLenAction | null {
-  if (state.table) return { pass: true };
+  if (state.pile.length > 0) return { pass: true };
 
   const low = lowestCard(state.hands[userId] ?? []);
   return low === null ? null : { cards: [low] };
@@ -140,8 +184,10 @@ export function viewTienLen(
     kind: 'TIEN_LEN',
     myHand: sortCards(state.hands[viewerId] ?? []),
     opponentCount: opponentId ? (state.hands[opponentId]?.length ?? 0) : 0,
-    table: state.table,
+    pile: state.pile,
     opponentPassed: state.passedBy !== null && state.passedBy !== viewerId,
     mustInclude: state.mustInclude,
+    thoiThreeSpade: state.thoiThreeSpade,
+    instantWin: state.instantWin,
   };
 }

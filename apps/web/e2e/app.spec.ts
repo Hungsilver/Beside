@@ -756,14 +756,62 @@ test.describe('Trò chơi — tiến lên miền Nam', () => {
   test('TL-02 — nút Đánh chỉ sáng khi bộ hợp lệ, và nói rõ lý do khi không', async () => {
     await openTienLen();
 
-    const play = page.getByRole('button', { name: /Đánh \d+ lá|Chọn bài để đánh|Chờ người ấy/ });
+    const play = page.getByRole('button', { name: /Đánh \d+ lá|Chọn bài|Bộ không hợp lệ|Đang gửi/ });
     await expect(play).toBeDisabled();
 
     // Bỏ lượt phải TẮT khi bàn trống — bỏ lượt lúc đó thì ván đứng im mãi.
     await expect(page.getByRole('button', { name: 'Bỏ lượt' })).toBeDisabled();
 
-    // Ván đầu bắt buộc có lá nhỏ nhất — màn hình phải nói ra.
+    // Ván đầu bắt buộc có lá nhỏ nhất — màn hình phải nói ra, và ghim luôn lên lá đó.
     await expect(page.getByText(/Nước đầu phải có/)).toBeVisible();
+    await expect(page.locator('[aria-label*="bắt buộc đánh"]')).toHaveCount(1);
+  });
+
+  test('TL-04 — hàng nút nằm TRÊN quạt bài, trong tầm ngón cái', async () => {
+    await openTienLen();
+
+    /*
+     * Yêu cầu của chủ dự án 10/09: nút "Đánh"/"Bỏ lượt" phải dễ bấm hơn. Cách
+     * kiểm được bằng máy là so toạ độ — hàng nút phải nằm CAO HƠN quạt bài, và
+     * cả hai phải nằm trong nửa dưới màn hình (chỗ ngón cái với tới).
+     */
+    const pass = await page.getByRole('button', { name: 'Bỏ lượt' }).boundingBox();
+    const card = await handCards().first().boundingBox();
+    const viewport = page.viewportSize();
+
+    expect(pass!.y + pass!.height, 'hàng nút phải nằm trên quạt bài').toBeLessThanOrEqual(
+      card!.y + card!.height,
+    );
+    expect(pass!.y, 'hàng nút phải ở nửa dưới màn hình').toBeGreaterThan(viewport!.height / 2);
+
+    // Vùng chạm của cả ba nút phải đạt 44px (R2).
+    expect(pass!.height).toBeGreaterThanOrEqual(44);
+  });
+
+  test('TL-05 — chạm một lá thì lá ghép được đổi màu', async () => {
+    await openTienLen();
+
+    /*
+     * Chỉ chạy được phần này khi ĐANG LÀ LƯỢT MÌNH, mà ai đi trước thì do lần
+     * chia bài quyết (người cầm lá nhỏ nhất). Một tài khoản không ép được điều
+     * đó, nên test tự bỏ qua khi tới lượt người kia — phần luật của gợi ý đã
+     * được phủ kín bằng unit test ở `tien-len-suggest.spec.ts`.
+     */
+    const mine = await page.getByText('Tới lượt bạn').first().isVisible();
+    test.skip(!mine, 'ván này người kia đi trước');
+
+    // Nước đầu bắt buộc chứa lá nhỏ nhất, nên chạm đúng lá đang được ghim.
+    const pinned = page.locator('[aria-label*="bắt buộc đánh"]');
+    await pinned.click();
+
+    await expect(pinned).toHaveAttribute('data-tone', 'on');
+    await expect(page.getByText(/sẵn sàng/)).toBeVisible();
+
+    // Bấm lần nữa là bỏ chọn — chạm giờ chỉ chọn đúng lá đó, không nhặt cả bộ.
+    await pinned.click();
+    await expect(pinned).toHaveAttribute('data-tone', 'plain');
+
+    expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
   });
 
   test('TL-03 — bài trên tay không làm tràn ngang khổ 390px', async () => {

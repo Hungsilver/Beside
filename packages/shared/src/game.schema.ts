@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { CaroBoard, CaroMark } from './caro';
+import type { InstantWinKind } from './tien-len';
 
 /**
  * Ván chơi giữa hai người (F10 Tiến lên · F11 Cờ caro).
@@ -31,6 +32,7 @@ export const GAME_END_REASONS = [
   'DAU_HANG',
   'HOA', // Caro: bàn đầy
   'BO_DO', // quá hạn không ai đi
+  'TOI_TRANG', // Tiến lên: chia bài xong đã thắng, không đánh lá nào
 ] as const;
 export type GameEndReason = (typeof GAME_END_REASONS)[number];
 
@@ -41,6 +43,7 @@ export const GAME_END_LABELS: Record<GameEndReason, string> = {
   DAU_HANG: 'Đầu hàng',
   HOA: 'Hoà — bàn đã đầy',
   BO_DO: 'Ván bị bỏ dở',
+  TOI_TRANG: 'Tới trắng',
 };
 
 // ---------------------------------------------------------------------------
@@ -72,14 +75,26 @@ export interface CaroClientState {
   winLine: { r: number; c: number }[] | null;
 }
 
+/** Một bộ đã được đánh xuống bàn. */
+export interface TienLenPlay {
+  userId: string;
+  cards: number[];
+}
+
 export interface TienLenClientState {
   kind: 'TIEN_LEN';
   /** Bài của CHÍNH người đang xem. Bài đối phương không bao giờ đi ra khỏi server. */
   myHand: number[];
   /** Đối phương còn mấy lá — chỉ con số. */
   opponentCount: number;
-  /** Bộ đang nằm trên bàn, phải chặn được nó. `null` = được ra bài tự do. */
-  table: { userId: string; cards: number[] } | null;
+  /**
+   * Cả chồng bài của **vòng hiện tại**, cũ → mới. Bộ cuối cùng là bộ phải chặn;
+   * mảng rỗng = được ra bài tự do.
+   *
+   * Gửi cả chồng chứ không chỉ bộ cuối: người chơi cần nhìn lại vòng vừa rồi
+   * diễn ra thế nào, và giao diện xếp chúng chồng lệch lên nhau như bàn thật.
+   */
+  pile: TienLenPlay[];
   /** Đối phương vừa bỏ lượt hay không (để giao diện nói rõ vì sao tới lượt mình). */
   opponentPassed: boolean;
   /**
@@ -89,6 +104,10 @@ export interface TienLenClientState {
    * nên 26 lá bị bỏ ra, và 3♠ có thể không được chia cho ai cả.
    */
   mustInclude: number | null;
+  /** Người thua còn ôm 3♠ lúc ván kết thúc — "thối 3 bích". */
+  thoiThreeSpade: string | null;
+  /** Tới trắng: ai, và bằng tay bài gì. */
+  instantWin: { userId: string; kind: InstantWinKind } | null;
 }
 
 export type GameClientState = CaroClientState | TienLenClientState;

@@ -7,7 +7,7 @@
 - **Tên app:** `Beside` (đã chốt)
 - **Domain:** `https://easytech.io.vn` (tạm dùng — đã mua). Sẽ đổi sang domain `beside` sau
   ⇒ **mọi URL phải lấy từ biến môi trường, không hardcode domain ở bất kỳ đâu**
-- **Cập nhật lần cuối:** 2026-09-09
+- **Cập nhật lần cuối:** 2026-09-10
 - **Trạng thái:** `PHASE 7` ✅ xong — bình luận trong khoảnh khắc, cờ caro & tiến lên, phòng học chung.
   Đã chạy trên máy chủ thật `https://easytech.io.vn` từ 2026-09-09 (commit `133e5fc`)
   - Phase 1: `docs/traces/phase-1-auth-pairing.md` — 53/53 case
@@ -433,7 +433,7 @@ model Game {                             // F10/F11 — một ván giữa hai ng
   lastMoveAt      DateTime   @default(now())  // mốc tính hạn huỷ ván bỏ dở
   lastMoveAuto    Boolean    @default(false)  // nước do đồng hồ tự sinh
   winnerId        String?
-  endReason       String?                   // HET_BAI|DU_QUAN|HET_GIO|DAU_HANG|HOA|BO_DO
+  endReason       String?                   // HET_BAI|DU_QUAN|HET_GIO|DAU_HANG|HOA|BO_DO|TOI_TRANG
   version         Int        @default(0)    // khoá lạc quan, xem §6.7
   @@index([coupleId, kind, status])
   @@index([status, turnDeadlineAt])         // cron quét hết giờ
@@ -461,9 +461,18 @@ Khuôn của cột `state`:
 { kind:'CARO', board: string /*225 ký tự*/, marks: {userId:'X'|'O'}, lastMove, winLine }
 
 // TIEN_LEN — `hands` chứa bài CẢ HAI NGƯỜI, tuyệt đối không trả thẳng ra client
-{ kind:'TIEN_LEN', hands: {userId: number[]}, table: {userId, cards} | null,
-  passedBy: userId | null, mustInclude: number | null }
+{ kind:'TIEN_LEN', hands: {userId: number[]},
+  pile: {userId, cards}[],          // CẢ VÒNG, cũ → mới; bộ cuối là bộ phải chặn
+  passedBy: userId | null, mustInclude: number | null,
+  thoiThreeSpade: userId | null,    // người thua còn ôm 3♠ lúc ván xong
+  instantWin: {userId, kind} | null // tới trắng lúc chia bài
+}
 ```
+
+`pile` thay cho `table` cũ (một bộ): bàn phải **giữ nguyên cả vòng** thì người chơi mới
+nhìn lại được mình vừa chặn cái gì. Bỏ lượt là vòng khép lại và `pile` về `[]`. Ván mở
+trước thay đổi này được `readTienLenState()` nâng cấp tại chỗ (`table` → `pile` một tầng),
+nên không cần migration dữ liệu.
 
 `GamesService.clientState()` là **chỗ duy nhất** trong toàn bộ code base mở cột `state` ra để
 gửi đi: người xem thấy bài của mình, còn của đối phương chỉ thấy **số lá**. Thêm bất kỳ đường
@@ -997,6 +1006,10 @@ Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L
 | 2026-09-08 | `packages/shared` tách `tsconfig.build.json` khỏi `tsconfig.json` | Bản build phải bỏ `*.spec.ts` khỏi `dist`, nhưng typecheck và ESLint thì phải thấy chúng — một file không phục vụ được cả hai | Thêm một file cấu hình phải giữ đồng bộ |
 | 2026-09-08 | Không đặt utility bố cục của Tailwind lên thẻ DOM mà thư viện ngoài tự gắn class vào — bọc thêm một thẻ ngoài | Tailwind v4 gói utility vào `@layer utilities`; CSS thư viện ngoài nhập thẳng thì không-layer nên **thắng tuyệt đối** bất kể độ đặc hiệu. `.maplibregl-map{position:relative}` đè `absolute` làm khung bản đồ co còn cao 0px (trace L30) | Thêm một thẻ bọc; đổi lại không phải kéo 70KB CSS của MapLibre vào bundle khởi động chỉ để đưa nó vào layer |
 | 2026-09-08 | Trên VPS thật, Beside **không chạy Caddy riêng** — dùng chung Caddy của dự án `hungsilver` đã ở sẵn trên máy | Máy đã có stack khác giữ cổng 80/443; dựng Caddy thứ hai là không thể. `caddy` bị đẩy vào profile `standalone-tls` trong `docker-compose.vps.yml` nên không khởi động | Site block của Beside sống ở `/opt/hungsilver/Caddyfile` — ngoài repo. Bản gốc giữ ở `infra/caddy/shared-host.Caddyfile`, sửa một chỗ phải nhớ chỗ kia |
+| 2026-09-10 | Bàn Tiến lên giữ **cả chồng bài của một vòng** (`pile`), không chỉ bộ cuối (`table`) | Đánh một cái là bộ trước biến mất — mất đúng thứ người chơi cần lúc cân nhắc: mình vừa chặn cái gì. Chủ dự án báo lỗi 10/09 | Cột `state` phình theo số nước trong vòng (trần thực tế vài bộ); giao diện phải tự cắt bớt còn 4 tầng |
+| 2026-09-10 | **Đảo Q2**: làm luật **tới trắng** và **thối 3 bích** (trước đó chốt "chỉ luật cơ bản + chặt heo") | Chủ dự án chốt lại 10/09. Tới trắng: sảnh rồng · tứ quý heo · 5–6 đôi thông · 6 đôi. Xét ngay lúc chia bài ở server nên không sinh trạng thái "chờ khai báo" mà đồng hồ 30 giây không biết xử ra sao | Thêm `endReason = TOI_TRANG`; ván có thể kết thúc mà không ai đánh lá nào — mọi màn hình phải chịu được `status = FINISHED` ngay lúc vừa tạo |
+| 2026-09-10 | Gợi ý đổi từ **tự chọn hộ cả bộ** (`autoPick`) sang **tô màu lá ghép được** (`companions`) | `autoPick` quyết hộ người chơi: chạm một lá 9 khi bàn có đôi 8 là mất luôn đôi 9. Bản mới chạm là chọn đúng lá đó, còn "ghép được với gì" thì nói bằng màu | Muốn đánh nguyên bộ phải chạm nhiều lá hơn — bù lại nút 💡 vẫn chọn sẵn cả bộ |
+| 2026-09-10 | `companions()` dựng bộ **theo từng hình dạng**, không dùng lại `candidates()` của `listPlays()` | `candidates()` cố tình chỉ giữ bản rẻ nhất mỗi hình dạng (luôn lấy lá thấp làm nền) nên nó không biết `3♣3♦` cũng là một đôi. Tô màu thì phải phủ đủ mọi cách ghép | Thêm ~150 dòng dựng bộ; chặn nổ tổ hợp bằng nhận xét "chỉ lá ở bậc cao nhất mới đổi được sức mạnh của sảnh/đôi thông" |
 | 2026-09-08 | `api`/`web` mở cổng trên **IP gateway của mạng bridge** (`172.18.0.1:3003`/`:3002`), không dùng tên container | Caddy nằm ở stack khác nên không cùng mạng Docker, không phân giải được `api:3000`. Đây cũng là cách stack cũ vẫn dùng | Phụ thuộc vào IP gateway; mạng bridge bị dựng lại thì IP có thể đổi và phải sửa Caddyfile |
 | 2026-09-08 | TLS ở production đi bằng **Cloudflare Origin Certificate**, không phải Let's Encrypt | DNS đang bật proxy Cloudflare (mây cam) nên ACME HTTP-01 không tới được origin. Cert sẵn có phủ `*.easytech.io.vn`, hạn 2041 | Trái với mặc định "Caddy tự lo TLS" của §4; đổi domain sau này phải xin cert origin mới, và `curl -k https://127.0.0.1` ở origin báo lỗi SSL vì thiếu SNI |
 | 2026-09-08 | `POSTGRES_PORT=5433` trên VPS đó | 5432 đã bị Postgres của dự án kia chiếm, và nó bind `0.0.0.0` | Lệnh Prisma chạy tay trên máy chủ phải nhớ cổng khác |

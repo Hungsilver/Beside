@@ -6,9 +6,11 @@ import {
   caroMoveSchema,
   checkMove,
   autoActionTienLen,
+  detectInstantWin,
   emptyBoard,
   ERROR_CODES,
   findWin,
+  holdsThreeSpade,
   isBoardFull,
   placeMark,
   stepTienLen,
@@ -22,7 +24,9 @@ import {
   type GameEndReason,
   type GameResponse,
   type GameSummaryResponse,
+  type InstantWinKind,
   type TienLenAction,
+  type TienLenPlay,
   type TienLenTableState,
 } from '@beside/shared';
 import { PrismaService } from '../common/prisma/prisma.service';
@@ -164,17 +168,38 @@ export class GamesService {
         : await this.newTienLenState(ctx.coupleId, userId, ctx.partnerId);
     const now = new Date();
 
+    /*
+     * Tới trắng: ván kết thúc NGAY lúc chia bài, không ai đánh lá nào.
+     *
+     * Xử ngay ở đây chứ không để người cầm bài phải bấm một nút "báo tới trắng":
+     * server đã nhìn thấy cả hai tay bài, còn nút bấm thì tạo ra một trạng thái
+     * "đang chờ khai báo" mà đồng hồ 30 giây không biết phải làm gì với nó.
+     */
+    const blitz = opened.state.kind === 'TIEN_LEN' ? opened.state.instantWin : null;
+
     const game = await this.prisma.game.create({
       data: {
         coupleId: ctx.coupleId,
         kind,
         state: opened.state as unknown as Prisma.InputJsonValue,
-        turnUserId: opened.firstUserId,
-        // Đồng hồ chỉ chạy khi người tới lượt thật sự đang mở app; lúc vừa tạo
-        // thì họ đang mở, nên bắt đầu đếm ngay.
-        turnDeadlineAt: new Date(now.getTime() + TURN_MS),
-        turnRemainingMs: TURN_MS,
-        lastMoveAt: now,
+        ...(blitz
+          ? {
+              status: GameStatus.FINISHED,
+              turnUserId: null,
+              turnDeadlineAt: null,
+              winnerId: blitz.userId,
+              endReason: 'TOI_TRANG' satisfies GameEndReason,
+              finishedAt: now,
+              lastMoveAt: now,
+            }
+          : {
+              turnUserId: opened.firstUserId,
+              // Đồng hồ chỉ chạy khi người tới lượt thật sự đang mở app; lúc vừa
+              // tạo thì họ đang mở, nên bắt đầu đếm ngay.
+              turnDeadlineAt: new Date(now.getTime() + TURN_MS),
+              turnRemainingMs: TURN_MS,
+              lastMoveAt: now,
+            }),
       },
       include: COUPLE_INCLUDE,
     });
@@ -221,6 +246,21 @@ export class GamesService {
       [partnerId]: hands[1],
     };
 
+    /*
+     * Tới trắng xét TRƯỚC mọi thứ khác: người cầm tay bài ấy thắng luôn, nên ai
+     * đi trước hay lá nào bắt buộc đều thành vô nghĩa.
+     *
+     * Cả hai cùng tới trắng thì người tạo ván được tính thắng. Xác suất gần như
+     * bằng không, nhưng "gần như" không phải là "không" — để hoà ở đây sẽ là một
+     * nhánh code không ai từng chạy tới mà vẫn phải bảo trì.
+     */
+    const blitzUser = ([creatorId, partnerId] as const).find(
+      (id) => detectInstantWin(byUser[id] as number[]) !== null,
+    );
+    const instantWin = blitzUser
+      ? { userId: blitzUser, kind: detectInstantWin(byUser[blitzUser] as number[]) as InstantWinKind }
+      : null;
+
     const lastWinner = await this.prisma.game.findFirst({
       where: {
         coupleId,
@@ -236,22 +276,25 @@ export class GamesService {
     const previous =
       lastWinner?.winnerId && byUser[lastWinner.winnerId] ? lastWinner.winnerId : null;
 
+    const base: Omit<TienLenStoredState, 'mustInclude'> = {
+      kind: 'TIEN_LEN',
+      hands: byUser,
+      pile: [],
+      passedBy: null,
+      thoiThreeSpade: null,
+      instantWin,
+    };
+
     if (previous) {
       return {
-        state: { kind: 'TIEN_LEN', hands: byUser, table: null, passedBy: null, mustInclude: null },
+        state: { ...base, mustInclude: null },
         firstUserId: previous,
       };
     }
 
     const firstUserId = byUser[creatorId]?.includes(lowest) ? creatorId : partnerId;
     return {
-      state: {
-        kind: 'TIEN_LEN',
-        hands: byUser,
-        table: null,
-        passedBy: null,
-        mustInclude: lowest,
-      },
+      state: { ...base, mustInclude: lowest },
       firstUserId,
     };
   }
@@ -465,6 +508,15 @@ export class GamesService {
     }
 
     const partnerId = this.partnerOf(game, userId);
+
+    /*
+     * Đầu hàng cũng là một cách kết thúc ván, nên luật thối 3 bích vẫn áp: người
+     * bỏ cuộc mà còn ôm 3♠ thì vẫn bị ghi tên. Không ghi thì đầu hàng thành cách
+     * chạy trốn khỏi con bài thối.
+     */
+    const thoi =
+      game.kind === GameKind.TIEN_LEN ? this.markThoiThreeSpade(game, userId) : null;
+
     const saved = await this.commit(game, game.version, {
       status: GameStatus.FINISHED,
       turnUser: { disconnect: true },
@@ -473,6 +525,7 @@ export class GamesService {
       endReason: 'DAU_HANG',
       finishedAt: new Date(),
       lastMoveAt: new Date(),
+      ...(thoi ? { state: thoi as unknown as Prisma.InputJsonValue } : {}),
     });
 
     return this.toResponse(saved, userId);
@@ -740,6 +793,19 @@ export class GamesService {
     };
   }
 
+  /**
+   * Ghi tên người thua còn ôm 3♠ vào state.
+   *
+   * `stepTienLen()` đã tự làm việc này cho ván kết thúc bằng **hết bài** — nơi
+   * luật bài biết chắc ai thua. Hàm này lo các kiểu kết thúc còn lại (đầu hàng),
+   * nơi người thua là do service quyết chứ không phải luật bài.
+   */
+  private markThoiThreeSpade(game: Game, loserId: string): TienLenStoredState | null {
+    const state = this.readTienLenState(game);
+    if (!holdsThreeSpade(state.hands[loserId] ?? [])) return null;
+    return { ...state, thoiThreeSpade: loserId };
+  }
+
   private readTienLenState(game: Game): TienLenStoredState {
     const raw = game.state as unknown as Partial<TienLenStoredState> | null;
     if (!raw || typeof raw.hands !== 'object' || raw.hands === null) {
@@ -751,9 +817,16 @@ export class GamesService {
     return {
       kind: 'TIEN_LEN',
       hands: raw.hands,
-      table: raw.table ?? null,
+      /*
+       * Ván mở trước khi bàn giữ lịch sử chỉ có đúng `table` (một bộ). Nâng nó
+       * lên thành chồng bài một tầng thay vì bỏ trắng — ván đang chơi dở lúc
+       * triển khai vẫn chạy tiếp được, chỉ mất phần lịch sử của vòng đó.
+       */
+      pile: raw.pile ?? (legacyTable(raw) ? [legacyTable(raw) as TienLenPlay] : []),
       passedBy: raw.passedBy ?? null,
       mustInclude: raw.mustInclude ?? null,
+      thoiThreeSpade: raw.thoiThreeSpade ?? null,
+      instantWin: raw.instantWin ?? null,
     };
   }
 
@@ -864,4 +937,19 @@ function flattenRelations(data: Prisma.GameUpdateInput): Prisma.GameUpdateManyMu
     out.winnerId = winner.connect ? winner.connect.id : null;
   }
   return out;
+}
+
+/**
+ * Bộ trên bàn của các ván mở **trước khi** bàn giữ lịch sử.
+ *
+ * Khuôn cũ chỉ có `table` (một bộ), khuôn mới là `pile` (cả chồng). Tách ra một
+ * hàm riêng thay vì nới lỏng kiểu của `TienLenStoredState`: cột `state` cũ là
+ * chuyện của quá khứ, không nên để nó làm bẩn kiểu dữ liệu đang dùng.
+ */
+function legacyTable(raw: unknown): TienLenPlay | null {
+  const table = (raw as { table?: unknown } | null)?.table;
+  if (!table || typeof table !== 'object') return null;
+  const { userId, cards } = table as { userId?: unknown; cards?: unknown };
+  if (typeof userId !== 'string' || !Array.isArray(cards)) return null;
+  return { userId, cards: cards.filter((c): c is number => Number.isInteger(c)) };
 }

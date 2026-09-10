@@ -1,6 +1,8 @@
 # Thiết kế — Tiến lên miền Nam & Cờ caro cho 2 người
 
-> **Trạng thái (09/09): ĐÃ CODE XONG cả hai game.**
+> **Trạng thái (10/09): ĐÃ CODE XONG cả hai game.** Bàn Tiến lên được làm lại 10/09:
+> chồng bài giữ cả vòng (§4.4), thêm tới trắng & thối 3 bích (§4.6), gợi ý đổi sang tô màu
+> lá ghép được. Trace `trace-phase6-games.mjs`: **47/47**.
 > Schema, API/WS và ADR đã chuyển sang `ARCHITECTURE.md` (§6.5–6.7, §7.1, §7.2, §7.4, §10)
 > đúng theo R0. File này giữ lại phần **luật chơi chi tiết** — nguồn tra cứu khi sửa luật.
 
@@ -15,7 +17,7 @@
 | # | Điểm | Chốt | Hệ quả |
 |---|---|---|---|
 | Q1 | Chia bài Tiến lên | **13 lá mỗi người, 26 lá còn lại bỏ ra** | Ván ~4–6 phút. Không đếm được bài đối phương ⇒ luật "thối bài" mất ý nghĩa, càng hợp với Q2 |
-| Q2 | Phạm vi luật | **Cơ bản + chặt heo** | Không làm: tới trắng, thối bài/đền, ăn tiền theo số lá còn lại → ghi `docs/BACKLOG.md` |
+| Q2 | Phạm vi luật | ~~Cơ bản + chặt heo~~ → **cơ bản + chặt heo + tới trắng + thối 3 bích** (đảo 10/09) | Xem §4.6. Vẫn KHÔNG làm: ăn tiền theo số lá còn lại, đền bài |
 | Q3 | Đồng hồ | **30 giây mỗi lượt** | Xem §5 — cần cơ chế tạm dừng, nếu không sẽ phạt oan người bị iOS treo |
 | Q4 | Luật caro | **Luật Việt Nam: đúng 5 quân mà bị chặn hai đầu thì không thắng; từ 6 quân trở lên thắng dù bị chặn** | Thêm 4 case biên so với gomoku thường |
 
@@ -190,6 +192,44 @@ Chỉ chặn được **bộ cùng loại và lớn hơn** — trừ các nướ
 
 > Với 2 người, "vòng" đơn giản hơn hẳn bản 4 người: không cần theo dõi danh sách ai đã
 > bỏ lượt, chỉ cần biết đối phương vừa bỏ hay không.
+
+**Bàn giữ nguyên cả vòng.** `state.pile` là một MẢNG các bộ đã đánh trong vòng hiện tại,
+cũ → mới; bộ cuối là bộ phải chặn. Bỏ lượt là vòng khép lại và `pile` về `[]`. Trước 10/09
+chỗ này chỉ giữ đúng bộ cuối (`table`) nên đánh một cái là bộ trước biến mất — mất đúng
+thứ người chơi cần lúc cân nhắc.
+
+### 4.6 Tới trắng & thối 3 bích (chốt 10/09, đảo Q2)
+
+**Tới trắng** — chia bài xong là thắng luôn, không ai đánh lá nào. Server xét ngay lúc
+chia (`detectInstantWin()`), ván được tạo ra ở trạng thái `FINISHED` với
+`endReason = TOI_TRANG`. Cố tình KHÔNG làm nút "báo tới trắng": server đã nhìn thấy cả hai
+tay bài, còn một nút bấm thì tạo ra trạng thái "đang chờ khai báo" mà đồng hồ 30 giây
+không biết phải xử ra sao.
+
+| Tay bài | Điều kiện | Ghi chú |
+|---|---|---|
+| Sảnh rồng | đủ mặt 3 → A (12 bậc), mỗi bậc ≥1 lá | hiếm nhất, xét trước |
+| Tứ quý heo | đủ 4 con 2 | |
+| Sáu đôi thông | 6 bậc liền nhau, mỗi bậc ≥2 lá, không có heo | |
+| Năm đôi thông | 5 bậc liền nhau, mỗi bậc ≥2 lá, không có heo | |
+| Sáu đôi | 6 bậc bất kỳ, mỗi bậc ≥2 lá | 13 lá là trần tuyệt đối |
+
+Thoả nhiều điều kiện cùng lúc thì lấy tên **oách nhất** (thứ tự đúng như bảng trên) — 6 đôi
+thông cũng là 6 đôi, người chơi muốn nghe tên hiếm hơn. Cả hai cùng tới trắng thì người tạo
+ván thắng; xác suất gần như bằng không, nhưng để hoà ở đây là dựng một nhánh code không ai
+từng chạy tới mà vẫn phải bảo trì.
+
+> Bản 13 lá: mỗi người chỉ được chia 13 trong 52 lá nên các tay này hiếm hơn hẳn bản chia
+> hết bộ — nhưng vẫn dựng được đủ, và luật thì không đổi theo số lá bỏ ra.
+
+**Thối 3 bích** — ván kết thúc mà người thua còn ôm `3♠` (cardId 0). Chốt lại ngay lúc ván
+xong vào `state.thoiThreeSpade`, không tính lại lúc đọc: sau đó `hands` vẫn còn đó, nhưng
+"ai là người thua" của một ván kết thúc bằng đầu hàng lại do service quyết chứ không phải
+luật bài. Áp cho cả **hết bài** lẫn **đầu hàng** — không áp thì đầu hàng thành cách chạy
+trốn khỏi con bài thối.
+
+Ở app này thối 3 bích **chỉ là một cái nhãn** trên màn kết quả: không ăn tiền, không trừ
+điểm. Hai người chơi với nhau thì cái nhãn đã đủ vui.
 
 ### 4.5 Cờ caro — luật Việt Nam
 

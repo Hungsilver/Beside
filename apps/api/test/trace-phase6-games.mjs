@@ -451,9 +451,10 @@ const run = async () => {
 
     rec('G6-30', 'Danh la bat buoc thi di duoc, bai giam mot la',
       '12 la con lai · ban co bai · luot sang nguoi kia',
-      `${r.body?.state?.myHand?.length} la · table=${r.body?.state?.table?.cards?.length} · turn=${r.body?.turnUserId === second.id ? 'nguoi kia' : 'sai'}`,
+      `${r.body?.state?.myHand?.length} la · chong bai=${r.body?.state?.pile?.length} bo · turn=${r.body?.turnUserId === second.id ? 'nguoi kia' : 'sai'}`,
       r.body?.state?.myHand?.length === 12 &&
-        r.body?.state?.table?.cards?.length === 1 &&
+        r.body?.state?.pile?.length === 1 &&
+        r.body?.state?.pile?.[0]?.cards?.length === 1 &&
         r.body?.turnUserId === second.id);
 
     rec('G6-31', 'Rang buoc la bat buoc duoc go sau nuoc dau',
@@ -482,10 +483,10 @@ const run = async () => {
       body: { version: view.body.version, move: { pass: true } },
       token: second.token,
     });
-    rec('G6-33', 'Bo luot khi ban co bai: nguoi kia an vong, ban duoc don',
-      'table = null · luot ve nguoi ra bai truoc',
-      `table=${r.body?.state?.table} · turn=${r.body?.turnUserId === first.id ? 'nguoi ra bai' : 'sai'}`,
-      r.body?.state?.table === null && r.body?.turnUserId === first.id);
+    rec('G6-33', 'Bo luot khi ban co bai: nguoi kia an vong, chong bai duoc don sach',
+      'pile = [] · luot ve nguoi ra bai truoc',
+      `pile=${r.body?.state?.pile?.length} bo · turn=${r.body?.turnUserId === first.id ? 'nguoi ra bai' : 'sai'}`,
+      r.body?.state?.pile?.length === 0 && r.body?.turnUserId === first.id);
 
     const back = await call('GET', `/games/${tl.id}`, { token: first.token });
     rec('G6-34', 'Nguoi an vong thay co "doi phuong da bo luot"',
@@ -583,9 +584,9 @@ const run = async () => {
 
     rec('G6-43', 'Dang duoc ra bai tu do thi tu danh la le nho nhat, khong bo luot',
       'bai giam dung 1 la · ban co bai',
-      `bai ${handBefore} -> ${tlAfter.body?.state?.myHand?.length} · table=${tlAfter.body?.state?.table?.cards?.length ?? 0} la`,
+      `bai ${handBefore} -> ${tlAfter.body?.state?.myHand?.length} · bo tren cung=${tlAfter.body?.state?.pile?.at(-1)?.cards?.length ?? 0} la`,
       tlAfter.body?.state?.myHand?.length === handBefore - 1 &&
-        (tlAfter.body?.state?.table?.cards?.length ?? 0) === 1);
+        (tlAfter.body?.state?.pile?.at(-1)?.cards?.length ?? 0) === 1);
 
     rec('G6-44', 'Nuoc do duoc danh dau la do DONG HO sinh ra',
       'lastMoveAuto = true',
@@ -599,6 +600,74 @@ const run = async () => {
 
     cuongWs.close();
     firstWs.close();
+  }
+
+  // =====================================================================
+  // D · BAN GIU LICH SU CA VONG
+  // =====================================================================
+  //
+  // Danh mot bo roi bi chan thi bo CU van con tren ban. Truoc 10/09 `state`
+  // chi giu dung bo cuoi nen bo truoc bien mat — day la chot chan cho viec do
+  // khong quay lai.
+  //
+  // Khoi nay dat o CUOI cung vi no lam doi ai dang toi luot, ma phan dong ho
+  // o tren lai phai mo socket dung nguoi toi luot moi chay duoc.
+  {
+    /*
+     * Phan dong ho o tren vua de dong ho tu danh mot la, nen ban CO THE dang
+     * co bai. Khep vong lai truoc da — khoi nay can mot ban trong de bat dau.
+     */
+    let now = await call('GET', `/games/${tl.id}`, { token: first.token });
+    if ((now.body?.state?.pile?.length ?? 0) > 0) {
+      const passer = now.body.turnUserId === first.id ? first : second;
+      await call('POST', `/games/${tl.id}/moves`, {
+        body: { version: now.body.version, move: { pass: true } },
+        token: passer.token,
+      });
+      now = await call('GET', `/games/${tl.id}`, { token: first.token });
+    }
+
+    const leaderIsFirst = now.body?.turnUserId === first.id;
+    const leader = leaderIsFirst ? first : second;
+    const other = leaderIsFirst ? second : first;
+
+    const mine = await call('GET', `/games/${tl.id}`, { token: leader.token });
+    const low = [...(mine.body?.state?.myHand ?? [])].sort((a, b) => a - b)[0];
+    const p1 = await call('POST', `/games/${tl.id}/moves`, {
+      body: { version: mine.body.version, move: { cards: [low] } },
+      token: leader.token,
+    });
+
+    const theirs = await call('GET', `/games/${tl.id}`, { token: other.token });
+    const beat = (theirs.body?.state?.myHand ?? []).find((c) => c > low);
+    const p2 = beat === undefined
+      ? null
+      : await call('POST', `/games/${tl.id}/moves`, {
+          body: { version: theirs.body.version, move: { cards: [beat] } },
+          token: other.token,
+        });
+
+    rec('G6-46', 'Chan mot bo thi bo CU van nam tren ban, khong bien mat',
+      'pile = 2 bo · bo dau la cua nguoi ra bai',
+      p2 === null
+        ? 'khong co la nao chan duoc (bo qua)'
+        : `${p1.status}/${p2.status} · pile=${p2.body?.state?.pile?.length} bo · bo dau=${p2.body?.state?.pile?.[0]?.userId === leader.id ? 'nguoi ra bai' : 'sai'}`,
+      p1.status === 200 && (p2 === null ||
+        (p2.body?.state?.pile?.length === 2 &&
+          p2.body?.state?.pile?.[0]?.userId === leader.id &&
+          p2.body?.state?.pile?.[1]?.userId === other.id)));
+
+    const cleared = p2 === null
+      ? null
+      : await call('POST', `/games/${tl.id}/moves`, {
+          body: { version: p2.body.version, move: { pass: true } },
+          token: leader.token,
+        });
+
+    rec('G6-47', 'Bo luot la khep vong: ca chong bai duoc don sach mot lan',
+      'pile = []',
+      cleared === null ? 'khong chay duoc (bo qua)' : `pile=${cleared.body?.state?.pile?.length} bo`,
+      cleared === null || cleared.body?.state?.pile?.length === 0);
   }
 
   // ---------------------------------------------------------------- tổng kết

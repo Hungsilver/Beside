@@ -5,6 +5,8 @@ import {
   checkPass,
   checkPlay,
   detectCombo,
+  detectInstantWin,
+  holdsThreeSpade,
   isRedSuit,
   lowestCard,
   rankOf,
@@ -310,5 +312,82 @@ describe('lowestCard', () => {
 
   it('tay rỗng trả null', () => {
     expect(lowestCard([])).toBeNull();
+  });
+});
+
+describe('holdsThreeSpade — thối 3 bích', () => {
+  it('còn ôm 3♠ lúc ván xong là thối', () => {
+    expect(holdsThreeSpade(set('3♠', 'K♦'))).toBe(true);
+  });
+
+  it('3 chất khác KHÔNG phải 3 bích', () => {
+    expect(holdsThreeSpade(set('3♣', '3♦', '3♥'))).toBe(false);
+  });
+
+  it('tay rỗng thì không thối — đó là người thắng', () => {
+    expect(holdsThreeSpade([])).toBe(false);
+  });
+});
+
+describe('detectInstantWin — tới trắng', () => {
+  it('sảnh rồng: đủ mặt 3 → A', () => {
+    const hand = set(
+      '3♠', '4♣', '5♦', '6♥', '7♠', '8♣', '9♦', '10♥', 'J♠', 'Q♣', 'K♦', 'A♥', '2♠',
+    );
+    expect(detectInstantWin(hand)).toBe('SANH_RONG');
+  });
+
+  it('thiếu đúng một bậc thì KHÔNG phải sảnh rồng', () => {
+    // Không có lá 9 — thay bằng lá 3 thứ hai.
+    const hand = set(
+      '3♠', '3♣', '4♣', '5♦', '6♥', '7♠', '8♣', '10♥', 'J♠', 'Q♣', 'K♦', 'A♥', '2♠',
+    );
+    expect(detectInstantWin(hand)).toBeNull();
+  });
+
+  it('tứ quý heo', () => {
+    const hand = set('2♠', '2♣', '2♦', '2♥', '3♠', '4♣', '5♦', '7♥', '9♠', 'J♣', 'Q♦', 'K♥', 'A♠');
+    expect(detectInstantWin(hand)).toBe('TU_QUY_HEO');
+  });
+
+  it('năm đôi thông', () => {
+    const hand = set(
+      '3♠', '3♣', '4♦', '4♥', '5♠', '5♣', '6♦', '6♥', '7♠', '7♣', '9♦', 'J♥', 'K♠',
+    );
+    expect(detectInstantWin(hand)).toBe('DOI_THONG_5');
+  });
+
+  it('sáu đôi thông ăn trên năm đôi thông', () => {
+    const hand = set(
+      '3♠', '3♣', '4♦', '4♥', '5♠', '5♣', '6♦', '6♥', '7♠', '7♣', '8♦', '8♥', 'K♠',
+    );
+    expect(detectInstantWin(hand)).toBe('DOI_THONG_6');
+  });
+
+  it('sáu đôi rời rạc', () => {
+    const hand = set(
+      '3♠', '3♣', '5♦', '5♥', '7♠', '7♣', '9♦', '9♥', 'J♠', 'J♣', 'K♦', 'K♥', '2♠',
+    );
+    expect(detectInstantWin(hand)).toBe('SAU_DOI');
+  });
+
+  it('đôi heo KHÔNG nối vào chuỗi đôi thông', () => {
+    // 10-J-Q-K-A đủ 5 đôi... nhưng chỉ 4 đôi thật + đôi heo đứng ngoài.
+    const hand = set(
+      'J♠', 'J♣', 'Q♦', 'Q♥', 'K♠', 'K♣', 'A♦', 'A♥', '2♠', '2♣', '3♦', '5♥', '7♠',
+    );
+    expect(detectInstantWin(hand)).toBeNull();
+  });
+
+  it('tay bài thường thì không có gì', () => {
+    // Thiếu 8 và Q nên không phải sảnh rồng; chỉ có 2 đôi rời (3 và K).
+    const hand = set(
+      '3♠', '3♣', '4♦', '5♠', '6♥', '7♠', '9♣', '10♦', 'J♥', 'K♠', 'K♣', 'A♦', '2♥',
+    );
+    expect(detectInstantWin(hand)).toBeNull();
+  });
+
+  it('tay rỗng thì không tới trắng', () => {
+    expect(detectInstantWin([])).toBeNull();
   });
 });

@@ -26,9 +26,11 @@ function table(over: Partial<TienLenTableState> = {}): TienLenTableState {
       [AN]: set('3♠', '4♥', '7♠', '7♣', 'K♦'),
       [BINH]: set('5♦', '8♠', '8♥', 'A♣', '2♥'),
     },
-    table: null,
+    pile: [],
     passedBy: null,
     mustInclude: null,
+    thoiThreeSpade: null,
+    instantWin: null,
     ...over,
   };
 }
@@ -39,7 +41,7 @@ describe('stepTienLen — đánh bài', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
 
-    expect(r.step.state.table).toEqual({ userId: AN, cards: set('7♠', '7♣') });
+    expect(r.step.state.pile).toEqual([{ userId: AN, cards: set('7♠', '7♣') }]);
     expect(r.step.state.hands[AN]).toEqual(set('3♠', '4♥', 'K♦'));
     expect(r.step.nextTurnUserId).toBe(BINH);
     expect(r.step.finished).toBe(false);
@@ -59,7 +61,7 @@ describe('stepTienLen — đánh bài', () => {
   });
 
   it('bộ không chặn được bàn bị từ chối', () => {
-    const state = table({ table: { userId: BINH, cards: set('9♦', '9♥') } });
+    const state = table({ pile: [{ userId: BINH, cards: set('9♦', '9♥') }] });
     const r = stepTienLen(state, AN, BINH, { cards: set('7♠', '7♣') });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error.code).toBe('CANNOT_BEAT');
@@ -96,21 +98,41 @@ describe('stepTienLen — đánh bài', () => {
   it('thắng bằng nước CHẶT vẫn tính là hết bài', () => {
     const state = table({
       hands: { [AN]: set('5♠', '5♣', '5♦', '5♥'), [BINH]: set('3♥') },
-      table: { userId: BINH, cards: set('2♥') },
+      pile: [{ userId: BINH, cards: set('2♥') }],
     });
     const r = stepTienLen(state, AN, BINH, { cards: set('5♠', '5♣', '5♦', '5♥') });
     expect(r.ok && r.step.winnerId).toBe(AN);
   });
 });
 
+describe('stepTienLen — thối 3 bích', () => {
+  it('ván xong mà người thua còn ôm 3♠ → ghi tên họ', () => {
+    const state = table({ hands: { [AN]: set('7♠', '7♣'), [BINH]: set('3♠', 'K♦') } });
+    const r = stepTienLen(state, AN, BINH, { cards: set('7♠', '7♣') });
+    expect(r.ok && r.step.state.thoiThreeSpade).toBe(BINH);
+  });
+
+  it('người thua không cầm 3♠ thì không ai thối', () => {
+    const state = table({ hands: { [AN]: set('7♠', '7♣'), [BINH]: set('3♣', 'K♦') } });
+    const r = stepTienLen(state, AN, BINH, { cards: set('7♠', '7♣') });
+    expect(r.ok && r.step.state.thoiThreeSpade).toBeNull();
+  });
+
+  it('ván chưa xong thì chưa chốt thối — còn kịp đánh 3♠ đi', () => {
+    const state = table({ hands: { [AN]: set('7♠', '7♣', 'K♦'), [BINH]: set('3♠', 'K♥') } });
+    const r = stepTienLen(state, AN, BINH, { cards: set('7♠', '7♣') });
+    expect(r.ok && r.step.state.thoiThreeSpade).toBeNull();
+  });
+});
+
 describe('stepTienLen — bỏ lượt', () => {
   it('bỏ lượt khi bàn có bài: người kia ăn vòng, bàn được dọn', () => {
-    const state = table({ table: { userId: BINH, cards: set('9♦', '9♥') } });
+    const state = table({ pile: [{ userId: BINH, cards: set('9♦', '9♥') }] });
     const r = stepTienLen(state, AN, BINH, { pass: true });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
 
-    expect(r.step.state.table).toBeNull();
+    expect(r.step.state.pile).toEqual([]);
     expect(r.step.state.passedBy).toBe(AN);
     expect(r.step.nextTurnUserId).toBe(BINH);
     // Bỏ lượt không làm mất lá nào.
@@ -132,7 +154,7 @@ describe('stepTienLen — bỏ lượt', () => {
 
 describe('autoActionTienLen — nước đi khi hết giờ', () => {
   it('đang phải chặn → bỏ lượt', () => {
-    const state = table({ table: { userId: BINH, cards: set('9♦', '9♥') } });
+    const state = table({ pile: [{ userId: BINH, cards: set('9♦', '9♥') }] });
     expect(autoActionTienLen(state, AN)).toEqual({ pass: true });
   });
 
@@ -219,7 +241,10 @@ describe('một vòng đánh hoàn chỉnh', () => {
     expect(s2.ok).toBe(true);
     if (!s2.ok) return;
     state = s2.step.state;
-    expect(state.table).toEqual({ userId: BINH, cards: set('8♠') });
+    expect(state.pile).toEqual([
+      { userId: AN, cards: set('7♠') },
+      { userId: BINH, cards: set('8♠') },
+    ]);
 
     const s3 = stepTienLen(state, AN, BINH, { pass: true });
     expect(s3.ok).toBe(true);
@@ -227,7 +252,7 @@ describe('một vòng đánh hoàn chỉnh', () => {
     state = s3.step.state;
 
     // Bình ăn vòng: bàn trống, tới lượt Bình, và giờ Bình ra bài tự do.
-    expect(state.table).toBeNull();
+    expect(state.pile).toEqual([]);
     expect(s3.step.nextTurnUserId).toBe(BINH);
     expect(stepTienLen(state, BINH, AN, { cards: set('2♥') }).ok).toBe(true);
   });

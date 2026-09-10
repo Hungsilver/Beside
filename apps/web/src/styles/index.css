@@ -238,10 +238,147 @@ button {
     animation: tl-pulse 1s ease-in-out infinite;
   }
 
+  /* =======================================================
+     Tô bài trên tay theo gợi ý
+     Bốn trạng thái, và chúng phải phân biệt được bằng thứ
+     KHÁC màu nữa (viền dày, nét đứt, độ mờ) — khoảng 8% đàn
+     ông VN mù màu đỏ-lục, mà bàn bài thì nền xanh lá.
+     ======================================================= */
+
+  /* Đang chọn — nhô cao + viền hồng dày. */
+  .pcard-on {
+    box-shadow:
+      0 6px 20px rgba(255, 77, 125, 0.6),
+      0 0 0 2.5px #ff7a9c;
+  }
+  /* Ghép được / chặn được — viền bạc hà liền, sáng rõ. */
+  .pcard-hint {
+    box-shadow:
+      0 4px 14px rgba(63, 207, 166, 0.45),
+      0 0 0 2.5px #3fcfa6;
+  }
+  /* Đang nằm trong hàng chặt — viền tím NÉT ĐỨT: bấm được, nhưng là phá đồ quý. */
+  .pcard-keep {
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.3),
+      0 0 0 2px #a78bfa;
+    outline: 2px dashed rgba(167, 139, 250, 0.85);
+    outline-offset: 1px;
+  }
+  /* Ngoài tầm với ở nước này — lùi hẳn về sau, không cấm bấm. */
+  .pcard-dim {
+    opacity: 0.42;
+    filter: saturate(0.5);
+  }
+
+  /* Nhãn ghim trên lá bài: "bắt buộc" (3♠ của nước đầu) và "thối". */
+  .tl-pin {
+    position: absolute;
+    top: -7px;
+    left: 50%;
+    z-index: 2;
+    transform: translateX(-50%);
+    border-radius: 999px;
+    padding: 1px 6px;
+    background: #3fcfa6;
+    color: #06281c;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1.5;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .tl-pin-warn {
+    background: #1f2937;
+    color: #fca5a5;
+    box-shadow: inset 0 0 0 1px rgba(252, 165, 165, 0.6);
+  }
+
+  /* Tới lượt mình: viền hàng nút thở nhẹ. Đây là dấu hiệu chính báo tới lượt —
+     đồng hồ ở thanh trên nằm quá xa chỗ ngón tay đang đặt. */
+  @keyframes tl-turn-glow {
+    0%,
+    100% {
+      box-shadow: 0 0 0 1.5px rgba(63, 207, 166, 0.5);
+    }
+    50% {
+      box-shadow:
+        0 0 0 2px rgba(63, 207, 166, 0.95),
+        0 0 18px rgba(63, 207, 166, 0.4);
+    }
+  }
+  .tl-turn {
+    animation: tl-turn-glow 1.9s ease-in-out infinite;
+  }
+
+  /* Bộ đang chọn đã hợp lệ → nút "Đánh" nảy nhẹ một nhịp, mời bấm. */
+  @keyframes tl-ready-bounce {
+    50% {
+      transform: translateY(-2px) scale(1.02);
+    }
+  }
+  .tl-ready {
+    animation: tl-ready-bounce 1.1s ease-in-out infinite;
+  }
+
+  /* Câu hô "TỨ QUÝ" / "CHẶT!" — bật ra rồi tan. */
+  @keyframes tl-shout {
+    0% {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.7);
+    }
+    18% {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1.08);
+    }
+    30% {
+      transform: translate(-50%, -50%) scale(1);
+    }
+    78% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
+  .tl-shout {
+    animation: tl-shout 1700ms ease-out forwards;
+  }
+
+  /* Cùng cú bật ra, nhưng KHÔNG dời chỗ — dùng cho nhãn nằm trong luồng bố cục
+     (banner "TỚI TRẮNG" ở màn kết quả). `.tl-shout` tự căn giữa bằng transform,
+     dán nó lên một thẻ thường sẽ đẩy thẻ đó lệch đi nửa kích thước. */
+  @keyframes tl-pop {
+    0% {
+      opacity: 0;
+      transform: scale(0.72);
+    }
+    60% {
+      opacity: 1;
+      transform: scale(1.06);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  .tl-pop {
+    animation: tl-pop 420ms cubic-bezier(0.22, 1.2, 0.4, 1) backwards;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .tl-drop,
-    .tl-urgent {
+    .tl-urgent,
+    .tl-turn,
+    .tl-ready,
+    .tl-shout,
+    .tl-pop {
       animation: none;
+    }
+    /* Không có nhịp thở thì viền phải tự đứng — vẽ luôn viền tĩnh. */
+    .tl-turn {
+      box-shadow: 0 0 0 2px rgba(63, 207, 166, 0.9);
     }
   }
 

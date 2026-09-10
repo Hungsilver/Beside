@@ -270,3 +270,84 @@ export function lowestCard(hand: number[]): number | null {
   if (hand.length === 0) return null;
   return hand.reduce((min, c) => (c < min ? c : min), hand[0] as number);
 }
+
+// ---------------------------------------------------------------------------
+// Tới trắng · thối 3 bích
+// ---------------------------------------------------------------------------
+
+/**
+ * 3♠ — lá yếu nhất bộ bài, và là lá "thối" của luật miền Nam.
+ *
+ * `rank 0 * 4 + suit 0 = 0`, nên nó cũng chính là `cardId` nhỏ nhất. Đặt tên
+ * hằng thay vì viết số 0 rải rác: đọc `card === THREE_SPADE` thì biết ngay đang
+ * nói tới luật thối, còn `card === 0` thì không.
+ */
+export const THREE_SPADE = 0;
+
+/** Người thua còn ôm 3♠ lúc ván kết thúc — "thối 3 bích". */
+export function holdsThreeSpade(hand: number[]): boolean {
+  return hand.includes(THREE_SPADE);
+}
+
+export type InstantWinKind =
+  | 'SANH_RONG'
+  | 'TU_QUY_HEO'
+  | 'DOI_THONG_6'
+  | 'DOI_THONG_5'
+  | 'SAU_DOI';
+
+export const INSTANT_WIN_LABELS: Record<InstantWinKind, string> = {
+  SANH_RONG: 'Sảnh rồng',
+  TU_QUY_HEO: 'Tứ quý heo',
+  DOI_THONG_6: 'Sáu đôi thông',
+  DOI_THONG_5: 'Năm đôi thông',
+  SAU_DOI: 'Sáu đôi',
+};
+
+/** Bậc → số lá đang cầm. Dùng chung cho mấy phép đếm dưới đây. */
+function rankCounts(hand: number[]): number[] {
+  const counts = new Array<number>(RANK_LABELS.length).fill(0);
+  for (const card of hand) {
+    if (!isValidCard(card)) continue;
+    counts[rankOf(card)] = (counts[rankOf(card)] as number) + 1;
+  }
+  return counts;
+}
+
+/**
+ * Bài **tới trắng**: chia xong là thắng luôn, không phải đánh lá nào.
+ *
+ * Thứ tự xét đi từ hiếm nhất xuống — một tay bài có thể thoả nhiều điều kiện
+ * cùng lúc (6 đôi thông cũng là 6 đôi), và người chơi muốn nghe tên **oách
+ * nhất** chứ không phải tên đầu tiên tìm thấy.
+ *
+ * Lưu ý riêng của bản 13 lá: mỗi người chỉ được chia 13 trong 52 lá nên các tay
+ * này hiếm hơn hẳn bản chia hết bộ — nhưng vẫn dựng được đủ, và luật thì không
+ * đổi theo số lá bỏ ra.
+ */
+export function detectInstantWin(hand: number[]): InstantWinKind | null {
+  const counts = rankCounts(hand);
+
+  // Sảnh rồng: đủ mặt 3 → A, mỗi bậc ít nhất một lá. Heo không tính.
+  let dragon = true;
+  for (let r = 0; r < RANK_TWO; r++) {
+    if ((counts[r] as number) === 0) dragon = false;
+  }
+  if (dragon) return 'SANH_RONG';
+
+  if ((counts[RANK_TWO] as number) === 4) return 'TU_QUY_HEO';
+
+  // Chuỗi đôi thông dài nhất — heo không được vào đôi thông nên dừng ở RANK_TWO.
+  let run = 0;
+  let longest = 0;
+  for (let r = 0; r < RANK_TWO; r++) {
+    run = (counts[r] as number) >= 2 ? run + 1 : 0;
+    if (run > longest) longest = run;
+  }
+  if (longest >= 6) return 'DOI_THONG_6';
+  if (longest === 5) return 'DOI_THONG_5';
+
+  // Sáu đôi rời rạc — không cần thông, nhưng 13 lá thì đây là trần tuyệt đối.
+  const pairs = counts.filter((n) => n >= 2).length;
+  return pairs >= 6 ? 'SAU_DOI' : null;
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { detectCombo, type Combo } from './tien-len';
-import { autoPick, listPlays } from './tien-len-suggest';
+import { bombCards, companions, listPlays, suggestHighlight } from './tien-len-suggest';
 
 /** Dựng cardId từ nhãn cho dễ đọc: c('3♠') === 0. */
 const RANKS = ['3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A', '2'];
@@ -111,37 +111,109 @@ describe('listPlays — thứ tự gợi ý', () => {
   });
 });
 
-describe('autoPick — chạm một lá thì chọn sẵn cả bộ', () => {
-  it('bàn có đôi → chạm một lá 9 lấy luôn đôi 9', () => {
-    const hand = set('9♠', '9♥', '3♠', 'K♦');
-    expect(show(autoPick(hand, c('9♥'), combo('8♠', '8♣'), null))).toBe('9♠ 9♥');
+describe('bombCards — hàng chặt đang cầm', () => {
+  it('tứ quý là hàng chặt, kể cả tứ quý 3', () => {
+    expect(show(bombCards(set('3♠', '3♣', '3♦', '3♥', 'K♦')))).toBe('3♠ 3♣ 3♦ 3♥');
   });
 
-  it('bàn có sảnh → chạm một lá lấy luôn sảnh đủ dài', () => {
-    const hand = set('6♠', '7♥', '8♣', '2♥');
-    const picked = autoPick(hand, c('7♥'), combo('3♠', '4♥', '5♣'), null);
-    expect(show(picked)).toBe('6♠ 7♥ 8♣');
+  it('ba đôi liền nhau là hàng chặt, hai đôi thì không', () => {
+    expect(bombCards(set('5♠', '5♥', '6♣', '6♦', '7♠', '7♣'))).toHaveLength(6);
+    expect(bombCards(set('5♠', '5♥', '6♣', '6♦'))).toHaveLength(0);
   });
 
-  it('bàn trống → chỉ chọn đúng lá vừa chạm, không tự ghép bộ', () => {
-    const hand = set('9♠', '9♥', '3♠');
-    expect(show(autoPick(hand, c('9♥'), null, null))).toBe('9♥');
+  it('đôi heo KHÔNG nối vào đôi thông — heo không được vào bộ này', () => {
+    // A-2 liền nhau về bậc, nhưng dải phải dừng trước heo.
+    expect(bombCards(set('Q♠', 'Q♥', 'K♣', 'K♦', 'A♠', 'A♣', '2♦', '2♥'))).toHaveLength(6);
   });
 
-  it('nước đầu ván → tự kèm lá bắt buộc vào bộ', () => {
+  it('dải chạm đúng mép trên (Q-K-A) vẫn được chốt sổ', () => {
+    expect(show(bombCards(set('Q♠', 'Q♥', 'K♣', 'K♦', 'A♠', 'A♣')))).toBe(
+      'Q♠ Q♥ K♣ K♦ A♠ A♣',
+    );
+  });
+
+  it('tay rỗng thì không có hàng chặt nào', () => {
+    expect(bombCards([])).toEqual([]);
+  });
+});
+
+describe('suggestHighlight — tô sáng khi chưa chọn lá nào', () => {
+  it('chỉ sáng những lá thật sự chặn được', () => {
+    const hand = set('3♠', '9♠', 'K♦');
+    const { playable } = suggestHighlight(hand, combo('8♦'), null);
+    expect(show(playable)).toBe('9♠ K♦');
+  });
+
+  it('chặn được bằng bài thường thì KHÔNG mời phá tứ quý', () => {
+    // Trong tay có 2♥ chặn thẳng heo, và cả tứ quý 5 chặt được.
+    const hand = set('2♥', '5♠', '5♣', '5♦', '5♥');
+    const { playable, reserved } = suggestHighlight(hand, combo('2♠'), null);
+    expect(show(playable)).toBe('2♥');
+    expect(show(reserved)).toBe('5♠ 5♣ 5♦ 5♥');
+  });
+
+  it('không còn cách nào khác thì hàng chặt mới được mời bấm', () => {
+    const hand = set('3♥', '5♠', '5♣', '5♦', '5♥');
+    const { playable, reserved } = suggestHighlight(hand, combo('2♠'), null);
+    expect(show(playable)).toBe('5♠ 5♣ 5♦ 5♥');
+    expect(reserved).toEqual([]);
+  });
+
+  it('bí thật thì không sáng lá nào', () => {
+    const { playable, reserved } = suggestHighlight(set('3♠', '4♥'), combo('K♦'), null);
+    expect(playable).toEqual([]);
+    expect(reserved).toEqual([]);
+  });
+});
+
+describe('companions — chạm một lá thì lá nào còn ghép được', () => {
+  it('bàn trống: chạm 3♠ thì sáng cả lá cùng bậc lẫn lá nối sảnh', () => {
+    const hand = set('3♠', '3♥', '4♣', '5♦', 'K♦');
+    // 3♥ ghép đôi; 4♣ 5♦ nối thành sảnh 3-4-5. K♦ thì không dính gì.
+    expect(show(companions(hand, set('3♠'), null, null))).toBe('3♥ 4♣ 5♦');
+  });
+
+  it('chọn thêm một lá thì danh sách hẹp lại', () => {
+    const hand = set('3♠', '3♥', '4♣', '5♦', '6♠');
+    // Đã cầm 3♠4♣ → chỉ còn hướng sảnh, và 3♥ rơi ra ngoài.
+    expect(show(companions(hand, set('3♠', '4♣'), null, null))).toBe('5♦ 6♠');
+  });
+
+  it('đôi thông: chạm một lá 5 thì sáng nốt các lá dựng được 3 đôi thông', () => {
+    const hand = set('5♠', '5♥', '6♣', '6♦', '7♠', '7♣');
+    expect(show(companions(hand, set('5♠'), null, null))).toBe('5♥ 6♣ 6♦ 7♠ 7♣');
+  });
+
+  it('heo không ghép được sảnh hay đôi thông', () => {
+    const hand = set('K♠', 'A♥', '2♠', '2♥');
+    // Chạm 2♠: chỉ còn 2♥ (đôi heo), K-A không nối vào heo được.
+    expect(show(companions(hand, set('2♠'), null, null))).toBe('2♥');
+  });
+
+  it('đang phải chặn: chỉ sáng lá dẫn tới bộ CHẶN ĐƯỢC', () => {
+    const hand = set('9♠', '9♣', '9♥', '3♠');
+    // Bàn có đôi 8 → chạm 9♠ thì 9♣ 9♥ sáng, còn 3♠ thì không.
+    expect(show(companions(hand, set('9♠'), combo('8♦', '8♥'), null))).toBe('9♣ 9♥');
+  });
+
+  it('chặn sảnh: chỉ sáng lá dựng được sảnh ĐÚNG ĐỘ DÀI và lớn hơn', () => {
+    const hand = set('6♠', '7♥', '8♣', '9♦', '2♥');
+    // Bàn có sảnh 3 lá → 6-7-8 và 7-8-9 đều được, nhưng 2♥ thì không.
+    expect(show(companions(hand, set('7♥'), combo('3♠', '4♥', '5♣'), null))).toBe('6♠ 8♣ 9♦');
+  });
+
+  it('nước đầu ván: lá bắt buộc luôn ghép được vào bộ', () => {
     const hand = set('3♠', '3♥', 'K♦');
-    // Chạm 3♥ khi buộc phải có 3♠ → lấy luôn đôi 3.
-    expect(show(autoPick(hand, c('3♥'), null, c('3♠')))).toBe('3♠ 3♥');
-    // Chạm đúng lá bắt buộc thì để họ tự ghép tiếp.
-    expect(show(autoPick(hand, c('3♠'), null, c('3♠')))).toBe('3♠');
+    // Chạm 3♥ khi buộc phải có 3♠ → 3♠ sáng lên; K♦ thì không ghép được.
+    expect(show(companions(hand, set('3♥'), null, c('3♠')))).toBe('3♠');
   });
 
-  it('lá không ghép được bộ nào vẫn được chọn, để màn hình nói rõ lý do', () => {
-    const hand = set('3♠', '4♥');
-    expect(show(autoPick(hand, c('3♠'), combo('K♦'), null))).toBe('3♠');
+  it('lá không ghép được với gì thì không sáng lá nào', () => {
+    expect(companions(set('3♠', '9♥', 'K♦'), set('3♠'), null, null)).toEqual([]);
   });
 
-  it('lá không nằm trong bài thì không chọn gì', () => {
-    expect(autoPick(set('3♠'), c('K♦'), null, null)).toEqual([]);
+  it('lá không nằm trong bài thì bỏ qua', () => {
+    expect(companions(set('3♠'), set(), null, null)).toEqual([]);
+    expect(companions(set('3♠'), set('K♦'), null, null)).toEqual([]);
   });
 });
