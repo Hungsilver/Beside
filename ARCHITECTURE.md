@@ -7,7 +7,7 @@
 - **Tên app:** `Beside` (đã chốt)
 - **Domain:** `https://easytech.io.vn` (tạm dùng — đã mua). Sẽ đổi sang domain `beside` sau
   ⇒ **mọi URL phải lấy từ biến môi trường, không hardcode domain ở bất kỳ đâu**
-- **Cập nhật lần cuối:** 2026-09-11
+- **Cập nhật lần cuối:** 2026-09-12
 - **Trạng thái:** `PHASE 7` ✅ xong — bình luận trong khoảnh khắc, cờ caro & tiến lên, phòng học chung.
   Đã chạy trên máy chủ thật `https://easytech.io.vn` từ 2026-09-09 (commit `133e5fc`)
   - Phase 1: `docs/traces/phase-1-auth-pairing.md` — 53/53 case
@@ -72,7 +72,7 @@
 | F11 | Cờ caro | ✅ Bàn 15×15, luật Việt Nam (đúng 5 quân bị chặn hai đầu thì không thắng, ≥6 quân thắng), 30s/lượt |
 | F13 | Đang trên đường về | ✅ Bấm một nút khi bắt đầu về; người ấy nhận thông báo lúc khởi hành và lúc tới nơi, xem được giờ dự kiến. Điểm đến là một Địa điểm đã lưu (F6), chính hàng rào ảo của nó phát hiện "đã tới nơi" |
 | F14 | Chu kỳ kinh nguyệt | ✅ Ghi kỳ, dự đoán kỳ tới, nhắc trước 1 ngày. **Dữ liệu sức khoẻ của MỘT người** — mặc định người ấy không thấy gì; ba mức chia sẻ do chính chủ chọn; có nút xoá sạch |
-| F12 | Học cùng nhau | ✅ Phòng Pomodoro chung: **đồng hồ số lật** chạy đồng bộ hai máy, đặt tên môn cho buổi học, mục tiêu phút mỗi ngày, thống kê 7 ngày + phân bổ theo môn + chuỗi ngày, mốc đếm ngược, việc cần làm, nhật ký một dòng mỗi chặng. **Không có gọi video** — xem §1.1b |
+| F12 | Học cùng nhau | ✅ Phòng Pomodoro chung: **đồng hồ số lật** chạy đồng bộ hai máy, đặt tên môn cho buổi học, mục tiêu phút mỗi ngày, thống kê 7 ngày + phân bổ theo môn + chuỗi ngày, mốc đếm ngược, việc cần làm, nhật ký một dòng mỗi chặng, dải thời gian trong ngày, so kè tuần, tiếng ồn nền tổng hợp, cổ vũ thời gian thực. **Không có gọi video** — xem §1.1b |
 
 ### 1.1b Ngoài phạm vi (không làm)
 
@@ -511,6 +511,7 @@ model StudySession {                     // F12 — Pomodoro cho hai người
   status         StudyStatus @default(RUNNING) // RUNNING | DONE | CANCELLED
   focusMin       Int         @default(25)
   breakMin       Int         @default(5)
+  longBreakMin   Int         @default(15)      // nghỉ dài sau mỗi 4 chặng
   subject        String?                       // môn / việc đang học
   endsAt         DateTime                      // đồng hồ của SERVER
   roundsDone     Int         @default(0)
@@ -566,6 +567,11 @@ lệch giờ hoặc sai múi giờ, mà "còn mấy ngày nữa thi" thì không
 
 `User.studyGoalMin` (Int, mặc định `0`) giữ mục tiêu phút mỗi ngày. `0` nghĩa là chưa đặt —
 giao diện ẩn vòng tiến độ. Không dùng `NULL` vì mọi chỗ đọc ra đều đem đi cộng/so sánh.
+
+**Nghỉ dài KHÔNG phải pha thứ ba.** `StudyPhase` vẫn chỉ có `FOCUS | BREAK`; "đang nghỉ dài"
+được **suy ra** từ `roundsDone % 4 === 0` (`isLongBreak()` ở `packages/shared`). Thêm giá trị
+vào enum của Postgres là migration không lùi được, mà nghỉ dài xét cho cùng vẫn là nghỉ —
+chỉ khác độ dài. Suy ra thì không có cách nào để cột trong DB lệch khỏi luật.
 
 **Đồng hồ học chạy ngược với đồng hồ ván bài.** Đồng hồ ván bài *dừng* khi người tới lượt
 khoá màn hình (§6.6). Đồng hồ học phải *chạy tiếp*: khoá máy để khỏi bị phân tâm chính là
@@ -804,8 +810,11 @@ POST   /games/:id/resign           đầu hàng                                 
 GET    /study/current              phiên đang chạy, hoặc null                     🔸
 GET    /study/summary              tổng giờ + chuỗi ngày + "học cùng nhau"        🔸
                                    + 7 ngày gần nhất + phân bổ theo môn + mục tiêu
+                                   + mốc đếm ngược + việc cần làm + nhật ký
+                                   + dải thời gian hôm nay
 PUT    /study/goal                 {dailyGoalMin} — mục tiêu của CHÍNH mình        🔸
-POST   /study                      {focusMin, breakMin, subject?} — có phòng thì vào cùng 🔸
+POST   /study                      {focusMin, breakMin, longBreakMin, subject?}          🔸
+                                   — đã có phòng thì vào cùng luôn
 POST   /study/:id/join             vào học cùng                                   🔸
 POST   /study/:id/leave            rời phòng; người cuối rời thì phiên đóng lại    🔸
 POST   /study/:id/cancel           dừng hẳn — ai trong hai người cũng dừng được    🔸
@@ -909,6 +918,8 @@ khi đang ở màn game. **Nước đi KHÔNG đi qua đây** (xem §7.4).
 |---|---|---|
 | C→S | `s:watch` 🔸 | *(không tham số)* — nghe theo **couple**, không theo phiên |
 | S→C | `s:state` 🔸 | `StudySessionResponse` hoặc `null` |
+| C→S | `s:cheer` 🔸 | `{code}` — MÃ trong danh sách đóng, không nhận chữ tự do (§7.3: app không có chat). Chặn 3 giây/lần ở server |
+| S→C | `s:cheer` 🔸 | `StudyCheerEvent` — phát cho CẢ phòng kể cả người gửi; client tự bỏ tiếng vọng của mình qua `fromUserId` |
 | S→C | `s:error` 🔸 | `{code, message}` |
 
 Nghe theo couple chứ không theo phiên là có chủ ý: người kia bấm "bắt đầu" lúc mình đang
@@ -1187,6 +1198,11 @@ Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L
 | 2026-09-11 | **F12 đợt 2**: `daysLeft` tính ở SERVER, không để client tự trừ | Máy người dùng có thể lệch giờ hoặc đặt sai múi giờ. "Còn mấy ngày nữa thi" thì không được phép sai | Số ngày chỉ đổi khi tải lại — chấp nhận được, nó đổi mỗi ngày một lần |
 | 2026-09-11 | **F12 đợt 2**: nhật ký gắn vào `StudyLog` (một chặng), không vào `StudySession` | Một buổi Pomodoro có nhiều chặng và mỗi chặng làm một việc khác nhau. Gắn vào phiên thì bốn chặng chung một dòng ghi chú | Muốn xem nhật ký cả buổi phải gom nhiều dòng |
 | 2026-09-11 | **F12 đợt 2**: chỉ hỏi "vừa làm được gì" trong 3 giờ sau khi chặng kết thúc | Mở app sau một tuần mà bị hỏi về buổi học tuần trước thì chẳng ai còn nhớ để mà ghi — câu hỏi trở thành thứ phải gạt đi | Chặng cũ hơn 3 giờ không ghi chú được nữa qua đường hỏi tự động (vẫn ghi được bằng `PUT .../note`) |
+| 2026-09-12 | **F12 đợt 3**: nghỉ dài SUY RA từ `roundsDone`, không thêm giá trị vào enum `StudyPhase` | `ALTER TYPE ... ADD VALUE` là thao tác không lùi được, mà nghỉ dài vẫn là nghỉ — chỉ khác độ dài. Suy ra thì cột trong DB không có cách nào lệch khỏi luật | Mọi chỗ tính thời lượng chặng phải nhớ truyền cờ `longBreak`; `phaseDurationMs()` bắt truyền tường minh thay vì tự đoán |
+| 2026-09-12 | **F12 đợt 3**: tiếng ồn nền TỔNG HỢP bằng Web Audio, không dùng tệp âm thanh | Một vòng lặp mưa nghe không lộ mối nối thì nặng vài MB — đắt hơn cả phần còn lại của app cộng lại, trên mạng di động Việt Nam. Nhiễu tổng hợp tốn 0 byte, chạy offline, và không bao giờ lặp lại chính nó | Không có tiếng "thật" như mưa thu âm; và tiếng tắt khi khoá màn hình (trình duyệt treo `AudioContext`) — phải nói thẳng điều này trên giao diện |
+| 2026-09-12 | **F12 đợt 3**: cổ vũ chỉ gửi được MÃ trong danh sách đóng, và KHÔNG kèm thông báo đẩy | Cho gửi chữ tự do thì kênh này thành khung chat, mà app đã chốt không có chat (§7.3) — một ô chat hiện ra giữa lúc đang học phá đúng thứ phòng học phục vụ. Không đẩy vì cổ vũ chỉ có nghĩa khi người kia đang ngồi đó; rung máy của người đã cất điện thoại đi học là làm phiền | Bốn câu cố định, không nói được gì khác |
+| 2026-09-12 | **F12 đợt 3**: tên người gửi cổ vũ lấy từ SERVER, không nhận từ client | Để client tự khai tên thì ai cũng gửi được một lời cổ vũ mang tên người khác | Thêm một lượt đọc `getContext()` cho mỗi lời cổ vũ — đã bị chặn 3 giây/lần nên không đáng lo |
+| 2026-09-12 | **F12 đợt 3**: khung trục của dải thời gian LUÔN chia hết cho số khoảng | Các nhãn giờ được rải đều bằng `justify-between`. Không chia hết thì nhãn cuối nằm ở mép 100% trong khi giờ nó chỉ tới nằm ở 90% — cả trục nói dối mà nhìn vẫn thấy cân đối. Bản đầu dính đúng lỗi này | Khung có thể rộng hơn dữ liệu thật một chút |
 | 2026-09-11 | **F14**: không log nội dung chu kỳ, chỉ log số lượng | Nhật ký máy chủ đã cấm toạ độ chính xác (R3); dữ liệu sức khoẻ còn nhạy cảm hơn | Gỡ lỗi khó hơn một chút |
 | 2026-09-11 | Sửa gốc lỗi **"deploy xong vẫn thấy giao diện cũ"**: app tự đăng ký service worker và mời tải lại | `registerType: 'prompt'` + `injectRegister: 'auto'` = bản mới cài xong rồi NẰM CHỜ tới khi đóng hết tab — trên điện thoại thì gần như không bao giờ. Giờ app bắt `onNeedRefresh`, hiện dải "Đã có bản mới", tự hỏi lại server mỗi lần quay về tiền cảnh và mỗi 30 phút | Thêm một dải thông báo trên đỉnh màn hình; đổi lại không còn kẹt ở bản cũ |
 | 2026-09-11 | Vẫn giữ **không tự tải lại**, chỉ mời | Người dùng có thể đang gõ dở một lời nhắn hoặc đang giữa ván bài — cướp trang của họ để cập nhật tệ hơn hẳn việc chờ thêm vài phút | Ai bỏ qua dải thông báo thì vẫn ở bản cũ tới lần mở sau |

@@ -6,6 +6,7 @@ import {
   MAX_ROUNDS,
   MAX_SUBJECT_LEN,
   STATS_DAYS,
+  isLongBreak,
   nextPhase,
   normalizeSubject,
   phaseDurationMs,
@@ -42,11 +43,21 @@ describe('startStudySchema', () => {
 
 describe('nextPhase', () => {
   it('học xong thì nghỉ, và đếm thêm một chặng', () => {
-    expect(nextPhase('FOCUS', 0)).toEqual({ phase: 'BREAK', roundsDone: 1, finished: false });
+    expect(nextPhase('FOCUS', 0)).toEqual({
+      phase: 'BREAK',
+      roundsDone: 1,
+      finished: false,
+      longBreak: false,
+    });
   });
 
   it('nghỉ xong thì học tiếp, KHÔNG đếm thêm chặng', () => {
-    expect(nextPhase('BREAK', 1)).toEqual({ phase: 'FOCUS', roundsDone: 1, finished: false });
+    expect(nextPhase('BREAK', 1)).toEqual({
+      phase: 'FOCUS',
+      roundsDone: 1,
+      finished: false,
+      longBreak: false,
+    });
   });
 
   it('chạm trần số chặng thì phiên kết thúc', () => {
@@ -57,9 +68,56 @@ describe('nextPhase', () => {
 });
 
 describe('phaseDurationMs', () => {
+  const D = { focusMin: 25, breakMin: 5, longBreakMin: 15 };
+
   it('trả về đúng độ dài theo từng chặng', () => {
-    expect(phaseDurationMs('FOCUS', 25, 5)).toBe(25 * 60_000);
-    expect(phaseDurationMs('BREAK', 25, 5)).toBe(5 * 60_000);
+    expect(phaseDurationMs('FOCUS', D)).toBe(25 * 60_000);
+    expect(phaseDurationMs('BREAK', D)).toBe(5 * 60_000);
+  });
+
+  it('nghỉ DÀI dùng mốc riêng', () => {
+    expect(phaseDurationMs('BREAK', D, true)).toBe(15 * 60_000);
+  });
+
+  it('cờ nghỉ dài không ảnh hưởng chặng HỌC', () => {
+    // Chặng học dài lên vì một cờ của chặng nghỉ là loại lỗi rất khó nhìn ra:
+    // đồng hồ vẫn chạy, chỉ là sai số phút.
+    expect(phaseDurationMs('FOCUS', D, true)).toBe(25 * 60_000);
+  });
+});
+
+describe('isLongBreak', () => {
+  it('chỉ đúng ở pha NGHỈ, sau mỗi 4 chặng học', () => {
+    expect(isLongBreak('BREAK', 4)).toBe(true);
+    expect(isLongBreak('BREAK', 8)).toBe(true);
+    expect(isLongBreak('BREAK', 3)).toBe(false);
+    expect(isLongBreak('BREAK', 5)).toBe(false);
+  });
+
+  it('pha HỌC thì luôn sai, kể cả khi số chặng chia hết cho 4', () => {
+    expect(isLongBreak('FOCUS', 4)).toBe(false);
+  });
+
+  it('chưa học chặng nào thì chưa có nghỉ dài — 0 chia hết cho 4 nhưng không tính', () => {
+    expect(isLongBreak('BREAK', 0)).toBe(false);
+    expect(isLongBreak('BREAK', -4)).toBe(false);
+    expect(isLongBreak('BREAK', Number.NaN)).toBe(false);
+  });
+});
+
+describe('nextPhase — nghỉ dài', () => {
+  it('hết chặng thứ 4 thì chặng nghỉ kế là nghỉ dài', () => {
+    expect(nextPhase('FOCUS', 3).longBreak).toBe(true);
+    expect(nextPhase('FOCUS', 7).longBreak).toBe(true);
+  });
+
+  it('các chặng khác thì nghỉ ngắn', () => {
+    expect(nextPhase('FOCUS', 0).longBreak).toBe(false);
+    expect(nextPhase('FOCUS', 4).longBreak).toBe(false);
+  });
+
+  it('từ NGHỈ quay lại HỌC thì không bao giờ là nghỉ dài', () => {
+    expect(nextPhase('BREAK', 4).longBreak).toBe(false);
   });
 });
 

@@ -562,6 +562,11 @@ model StudySession {
   focusMin    Int         @default(25)
   breakMin    Int         @default(5)
 
+  /// Nghỉ DÀI sau mỗi 4 chặng học (luật Pomodoro gốc). Không thêm giá trị vào
+  /// enum `StudyPhase`: nghỉ dài vẫn là nghỉ, chỉ khác độ dài, và suy ra từ
+  /// `roundsDone` thì cột trong DB không có cách nào lệch khỏi luật.
+  longBreakMin Int @default(15)
+
   /// Môn / việc đang học, do người mở phòng gõ. `null` = buổi học không đặt tên.
   /// Có tên thì thông báo đẩy nói được "đang ôn Toán" thay vì "đang học", và
   /// thống kê mới tách được thời gian theo môn.

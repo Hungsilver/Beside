@@ -54,6 +54,33 @@ export function calendarDaysBetween(
   return Math.round((b - a) / MS_PER_DAY);
 }
 
+/**
+ * Số phút tính từ 00:00 của ngày, theo múi giờ hiển thị.
+ *
+ * Dùng để vẽ dải thời gian trong ngày. Hỏi `Intl` chứ không cộng cứng 7 tiếng:
+ * lệch múi giờ là loại lỗi chỉ lộ ra ở đúng một vài giờ trong ngày, và lúc đó
+ * thì chẳng ai nghĩ tới nó nữa.
+ */
+export function minutesOfDayInTimeZone(date: Date, timeZone = DISPLAY_TIMEZONE): number {
+  if (Number.isNaN(date.getTime())) {
+    throw new RangeError('minutesOfDayInTimeZone: ngày không hợp lệ');
+  }
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date);
+
+  const get = (type: Intl.DateTimeFormatPartTypes): number => {
+    const found = parts.find((p) => p.type === type);
+    if (!found) throw new RangeError(`minutesOfDayInTimeZone: thiếu thành phần ${type}`);
+    return Number(found.value);
+  };
+
+  return get('hour') * 60 + get('minute');
+}
+
 /** Số ngày trong tháng (month 1–12) — tự xử lý năm nhuận. */
 export function daysInMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();

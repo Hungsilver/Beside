@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { endOfDayMs, MS_PER_DAY, startOfDayMs } from './datetime';
+import {
+  MS_PER_DAY,
+  endOfDayMs,
+  minutesOfDayInTimeZone,
+  startOfDayMs,
+} from './datetime';
 
 /**
  * Giờ Việt Nam là UTC+7 cố định (không có giờ mùa hè), nên 00:00 ngày N ở VN
@@ -51,5 +56,27 @@ describe('endOfDayMs', () => {
   it('luôn đứng sau đầu ngày đúng một ngày trừ 1ms', () => {
     const d = new Date('2026-09-10T05:34:00.000Z');
     expect(endOfDayMs(d) - startOfDayMs(d)).toBe(MS_PER_DAY - 1);
+  });
+});
+
+describe('minutesOfDayInTimeZone', () => {
+  it('đọc giờ theo múi giờ Việt Nam, không theo UTC', () => {
+    // 02:00 UTC = 09:00 giờ VN.
+    expect(minutesOfDayInTimeZone(new Date('2026-09-11T02:00:00.000Z'))).toBe(9 * 60);
+  });
+
+  it('nửa đêm giờ VN là 0, không phải 420', () => {
+    // 17:00 UTC = 00:00 hôm sau ở VN.
+    expect(minutesOfDayInTimeZone(new Date('2026-09-11T17:00:00.000Z'))).toBe(0);
+  });
+
+  it('23:59 giờ VN ra 1439 — không bị Intl trả về "24"', () => {
+    // `hourCycle: 'h23'` là thứ chặn chuyện đó; mặc định `h24` cho ra 24 giờ
+    // ở đúng mốc nửa đêm và phép nhân sẽ ra 1440 cho một ngày đã hết.
+    expect(minutesOfDayInTimeZone(new Date('2026-09-11T16:59:00.000Z'))).toBe(23 * 60 + 59);
+  });
+
+  it('ngày không hợp lệ thì ném lỗi thay vì trả NaN', () => {
+    expect(() => minutesOfDayInTimeZone(new Date('hong'))).toThrow(RangeError);
   });
 });

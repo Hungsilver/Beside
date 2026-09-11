@@ -1,5 +1,6 @@
 import {
   ConnectedSocket,
+  MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
   OnGatewayInit,
@@ -8,7 +9,13 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
-import { STUDY_RT_EVENTS, STUDY_RT_NAMESPACE } from '@beside/shared';
+import {
+  CHEER_COOLDOWN_MS,
+  STUDY_RT_EVENTS,
+  STUDY_RT_NAMESPACE,
+  isStudyCheerCode,
+  type StudyCheerEvent,
+} from '@beside/shared';
 import { TokenService } from '../auth/token.service';
 import { StudyService } from './study.service';
 
@@ -32,6 +39,18 @@ export class StudyGateway implements OnGatewayInit, OnGatewayConnection, OnGatew
 
   /** socket.id → userId. */
   private readonly watchers = new Map<string, string>();
+
+  /**
+   * userId → thời điểm cổ vũ gần nhất, để chặn bấm liên tục.
+   *
+   * Giữ trong bộ nhớ tiến trình chứ không vào Redis: mất khi khởi động lại là
+   * chấp nhận được (tệ nhất là ai đó gửi thêm được một lời cổ vũ), và một vòng
+   * mạng cho việc này thì đắt hơn giá trị nó mang lại.
+   *
+   * Khoá theo userId chứ không theo socket.id — mở hai tab là có hai socket,
+   * và bộ đếm theo socket sẽ không chặn được gì cả.
+   */
+  private readonly lastCheerAt = new Map<string, number>();
 
   constructor(
     private readonly tokens: TokenService,
@@ -66,7 +85,14 @@ export class StudyGateway implements OnGatewayInit, OnGatewayConnection, OnGatew
   }
 
   handleDisconnect(client: Socket): void {
+    const userId = this.watchers.get(client.id);
     this.watchers.delete(client.id);
+
+    // Người đó không còn socket nào thì bỏ luôn bộ đếm — nếu không `Map` này
+    // sẽ phình dần theo số người từng vào phòng học.
+    if (userId && ![...this.watchers.values()].includes(userId)) {
+      this.lastCheerAt.delete(userId);
+    }
   }
 
   /**
@@ -92,6 +118,52 @@ export class StudyGateway implements OnGatewayInit, OnGatewayConnection, OnGatew
         message: 'Bạn chưa ghép đôi với ai cả',
       });
     }
+  }
+
+  /**
+   * Gửi một lời cổ vũ sang máy người ấy.
+   *
+   * Chỉ nhận MÃ trong danh sách đóng, không nhận chữ tự do: cho gửi chữ thì
+   * kênh này thành một khung chat, mà app đã chốt không có chat trong app
+   * (§7.3) — và một ô chat hiện ra giữa lúc đang học thì phá đúng thứ phòng
+   * học phục vụ.
+   *
+   * Không gửi thông báo đẩy. Cổ vũ chỉ có nghĩa khi người kia đang ngồi đó và
+   * đang mở app; rung điện thoại của người đã cất máy đi học là làm phiền.
+   */
+  @SubscribeMessage(STUDY_RT_EVENTS.CHEER)
+  async handleCheer(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() body: unknown,
+  ): Promise<void> {
+    const userId = this.watchers.get(client.id);
+    if (!userId) return;
+
+    const code = (body as { code?: unknown } | null)?.code;
+    // Mã lạ thì im lặng bỏ qua: đây là client của chính mình gửi sai, báo lỗi
+    // ra màn hình người dùng cũng chẳng giúp họ làm gì được.
+    if (!isStudyCheerCode(code)) return;
+
+    const now = Date.now();
+    const last = this.lastCheerAt.get(userId) ?? 0;
+    if (now - last < CHEER_COOLDOWN_MS) return;
+    this.lastCheerAt.set(userId, now);
+
+    let coupleId: string;
+    let fromName: string;
+    try {
+      const ctx = await this.study.senderContext(userId);
+      coupleId = ctx.coupleId;
+      fromName = ctx.displayName;
+    } catch {
+      return;
+    }
+
+    const event: StudyCheerEvent = { code, fromUserId: userId, fromName, at: now };
+    // Phát cho CẢ phòng, kể cả người gửi: client tự bỏ qua tiếng vọng của mình
+    // bằng `fromUserId`. Loại trừ ở server thì người mở hai tab sẽ không thấy
+    // gì ở tab còn lại.
+    this.server.in(room(coupleId)).emit(STUDY_RT_EVENTS.CHEER, event);
   }
 
   /**

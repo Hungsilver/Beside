@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client';
 import {
+  CHEER_COOLDOWN_MS,
   STUDY_RT_EVENTS,
   STUDY_RT_NAMESPACE,
   type CreateDDayInput,
@@ -13,6 +14,8 @@ import {
   type StudyNoteResponse,
   type StudySessionResponse,
   type StudySummaryResponse,
+  type StudyCheerCode,
+  type StudyCheerEvent,
   type StudyTaskResponse,
   type UpdateTaskInput,
 } from '@beside/shared';
@@ -150,10 +153,24 @@ export function useSetLogNote() {
  * **Không** báo "away" khi ẩn app, khác hẳn phòng game — đồng hồ học phải chạy
  * tiếp lúc người ta khoá màn hình để tập trung.
  */
-export function useStudyChannel(): { connected: boolean } {
+export function useStudyChannel(myId: string | null): StudyChannel {
   const qc = useQueryClient();
   const [connected, setConnected] = useState(false);
+  const [cheer, setCheer] = useState<StudyCheerEvent | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  const lastSentRef = useRef(0);
+  const clearRef = useRef<number | null>(null);
+
+  /*
+   * `myId` đọc qua ref chứ không đọc thẳng trong bộ lắng nghe.
+   *
+   * Bộ lắng nghe được gắn đúng một lần lúc mở socket, nên nó sẽ khoá cứng giá
+   * trị `myId` của lần dựng đầu tiên — mà lần đầu ấy rất có thể là `null` vì
+   * hồ sơ người dùng chưa tải xong. Lúc đó tiếng vọng của chính mình sẽ lọt
+   * qua bộ lọc.
+   */
+  const myIdRef = useRef(myId);
+  myIdRef.current = myId;
 
   useEffect(() => {
     let socket: Socket | null = null;
@@ -181,6 +198,15 @@ export function useStudyChannel(): { connected: boolean } {
         // Chặng vừa đổi — nạp lại tổng hợp để lấy cả thống kê mới.
         void qc.invalidateQueries({ queryKey: studyKeys.all });
       });
+
+      socket.on(STUDY_RT_EVENTS.CHEER, (event: StudyCheerEvent) => {
+        // Server phát cho cả phòng kể cả người gửi; bỏ qua tiếng vọng của
+        // chính mình, nếu không bấm một cái lại thấy hình nổi lên ở máy mình.
+        if (!event || event.fromUserId === myIdRef.current) return;
+        setCheer(event);
+        if (clearRef.current !== null) window.clearTimeout(clearRef.current);
+        clearRef.current = window.setTimeout(() => setCheer(null), CHEER_VISIBLE_MS);
+      });
     });
 
     return () => {
@@ -189,7 +215,11 @@ export function useStudyChannel(): { connected: boolean } {
       socket?.disconnect();
       socketRef.current = null;
       setConnected(false);
+      if (clearRef.current !== null) window.clearTimeout(clearRef.current);
     };
+    // `myId` cố tình không nằm trong danh sách phụ thuộc — đổi nó không đáng
+    // phải dựng lại cả kết nối; bộ lắng nghe đọc qua `myIdRef` để luôn thấy
+    // giá trị mới nhất.
   }, [qc]);
 
   /*
@@ -208,7 +238,35 @@ export function useStudyChannel(): { connected: boolean } {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [qc]);
 
-  return { connected };
+  /**
+   * Gửi một lời cổ vũ.
+   *
+   * Chặn bấm liên tục ở CẢ client, dù server cũng chặn: người dùng cần thấy nút
+   * mờ đi ngay lập tức, chứ không phải bấm ba lần rồi không hiểu vì sao chỉ một
+   * lần có tác dụng.
+   */
+  const sendCheer = useCallback((code: StudyCheerCode): boolean => {
+    const now = Date.now();
+    if (now - lastSentRef.current < CHEER_COOLDOWN_MS) return false;
+    const socket = socketRef.current;
+    if (!socket?.connected) return false;
+    lastSentRef.current = now;
+    socket.emit(STUDY_RT_EVENTS.CHEER, { code });
+    return true;
+  }, []);
+
+  return { connected, cheer, sendCheer };
+}
+
+/** Lời cổ vũ nằm trên màn hình bao lâu trước khi tự tan. */
+const CHEER_VISIBLE_MS = 4000;
+
+export interface StudyChannel {
+  connected: boolean;
+  /** Lời cổ vũ vừa nhận từ người ấy, `null` khi không có gì đang hiện. */
+  cheer: StudyCheerEvent | null;
+  /** Trả `false` khi bị chặn vì bấm quá nhanh hoặc socket đang rớt. */
+  sendCheer: (code: StudyCheerCode) => boolean;
 }
 
 /** Số giây còn lại của chặng hiện tại, làm tròn lên. */

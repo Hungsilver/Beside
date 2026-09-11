@@ -4,11 +4,15 @@ import {
   BREAK_OPTIONS,
   DEFAULT_BREAK_MIN,
   DEFAULT_FOCUS_MIN,
+  DEFAULT_LONG_BREAK_MIN,
   FOCUS_OPTIONS,
+  LONG_BREAK_OPTIONS,
   MAX_SUBJECT_LEN,
+  ROUNDS_PER_LONG_BREAK,
   STUDY_PHASE_LABELS,
   STUDY_SUBJECT_PRESETS,
   normalizeSubject,
+  type StudyCheerCode,
   type StudyPersonStats,
   type StudySessionResponse,
 } from '@beside/shared';
@@ -24,25 +28,33 @@ import {
   useStudySummary,
 } from '@/lib/study-api';
 import FlipClock from '@/components/FlipClock';
+import StudyCheerBar, { CheerToast } from '@/components/StudyCheer';
 import StudyDDays from '@/components/StudyDDays';
+import StudyNoise from '@/components/StudyNoise';
 import StudyNotes from '@/components/StudyNotes';
 import StudyStats from '@/components/StudyStats';
 import StudyTasks from '@/components/StudyTasks';
+import StudyTimeline from '@/components/StudyTimeline';
+import StudyVersus from '@/components/StudyVersus';
 import TabBar from '@/components/TabBar';
+import { useNoise } from '@/lib/use-noise';
 import { Screen, Spinner } from '@/components/ui';
 
 export default function StudyScreen() {
   const { user } = useAuth();
+  const myId = user?.id ?? null;
   const summary = useStudySummary();
   const session = summary.data?.current ?? null;
   // Nghe ngay cả khi chưa có phiên: người kia bấm bắt đầu là mình thấy liền.
-  useStudyChannel();
+  const channel = useStudyChannel(myId);
+  // Đặt ở màn, không ở `ActiveRoom`: phiên kết thúc thì `ActiveRoom` bị gỡ khỏi
+  // cây, và tiếng nền sẽ tắt phụt ngay giữa lúc người ta đang nghỉ.
+  const noise = useNoise();
 
   const [error, setError] = useState<string | null>(null);
 
   if (summary.isLoading) return <Spinner label="Đang mở phòng học..." />;
 
-  const myId = user?.id ?? null;
   const people = summary.data?.people ?? [];
   const me = people.find((p) => p.userId === myId) ?? null;
   const partner = people.find((p) => p.userId !== myId) ?? null;
@@ -63,10 +75,18 @@ export default function StudyScreen() {
       )}
 
       {session ? (
-        <ActiveRoom session={session} myId={myId} onError={setError} />
+        <ActiveRoom
+          session={session}
+          myId={myId}
+          onError={setError}
+          onCheer={channel.sendCheer}
+          canCheer={channel.connected}
+        />
       ) : (
         <StartRoom onError={setError} lastSubject={lastSubjectOf(me)} />
       )}
+
+      <StudyNoise noise={noise} />
 
       {/*
         Thứ tự trên màn là thứ tự người ta cần tới: hỏi về chặng vừa xong (chỉ
@@ -86,6 +106,14 @@ export default function StudyScreen() {
         partnerName={partner?.displayName ?? null}
       />
 
+      {me && partner && <StudyVersus me={me} partner={partner} />}
+
+      <StudyTimeline
+        blocks={summary.data?.timeline ?? []}
+        myId={myId}
+        partnerName={partner?.displayName ?? null}
+      />
+
       <StudyStats
         me={me}
         partner={partner}
@@ -98,6 +126,7 @@ export default function StudyScreen() {
 
       <div className="flex-1" />
       <div className="h-[100px]" />
+      <CheerToast cheer={channel.cheer} />
       <TabBar />
     </Screen>
   );
@@ -125,12 +154,18 @@ function StartRoom({
   const start = useStartStudy();
   const [focusMin, setFocusMin] = useState<number>(DEFAULT_FOCUS_MIN);
   const [breakMin, setBreakMin] = useState<number>(DEFAULT_BREAK_MIN);
+  const [longBreakMin, setLongBreakMin] = useState<number>(DEFAULT_LONG_BREAK_MIN);
   const [subject, setSubject] = useState<string>(lastSubject ?? '');
 
   async function begin() {
     onError(null);
     try {
-      await start.mutateAsync({ focusMin, breakMin, subject: normalizeSubject(subject) });
+      await start.mutateAsync({
+        focusMin,
+        breakMin,
+        longBreakMin,
+        subject: normalizeSubject(subject),
+      });
     } catch (e) {
       onError(e instanceof ApiRequestError ? e.message : 'Không mở được phòng học');
     }
@@ -222,6 +257,29 @@ function StartRoom({
         </div>
       </div>
 
+      <div className="mt-3">
+        <span className="text-[11.5px] font-bold text-ink-700">
+          Nghỉ dài sau {ROUNDS_PER_LONG_BREAK} chặng
+        </span>
+        <div className="mt-2 flex gap-2">
+          {LONG_BREAK_OPTIONS.map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setLongBreakMin(m)}
+              aria-pressed={longBreakMin === m}
+              className={`h-11 flex-1 rounded-2xl text-[14px] font-bold transition ${
+                longBreakMin === m
+                  ? 'bg-love-100 text-love-700 ring-[1.5px] ring-love-300'
+                  : 'bg-ink-100 text-ink-600'
+              }`}
+            >
+              {m} phút
+            </button>
+          ))}
+        </div>
+      </div>
+
       <button
         type="button"
         disabled={start.isPending}
@@ -245,10 +303,14 @@ function ActiveRoom({
   session,
   myId,
   onError,
+  onCheer,
+  canCheer,
 }: {
   session: StudySessionResponse;
   myId: string | null;
   onError: (m: string | null) => void;
+  onCheer: (code: StudyCheerCode) => boolean;
+  canCheer: boolean;
 }) {
   const join = useJoinStudy();
   const leave = useLeaveStudy();
@@ -259,7 +321,14 @@ function ActiveRoom({
   const inRoom = myId !== null && session.presentUserIds.includes(myId);
   const focus = session.phase === 'FOCUS';
 
-  const totalSec = (focus ? session.focusMin : session.breakMin) * 60;
+  // Chặng nghỉ DÀI dùng mốc khác — lấy nhầm `breakMin` thì thanh tiến độ chạy
+  // hết trong 5 phút rồi đứng im suốt 10 phút còn lại.
+  const phaseMin = focus
+    ? session.focusMin
+    : session.longBreak
+      ? session.longBreakMin
+      : session.breakMin;
+  const totalSec = phaseMin * 60;
   const progress = totalSec > 0 ? Math.min(100, ((totalSec - secondsLeft) / totalSec) * 100) : 0;
 
   async function act(fn: () => Promise<unknown>, fallback: string) {
@@ -277,7 +346,7 @@ function ActiveRoom({
     >
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-[12px] font-bold tracking-[1.2px] opacity-90">
-          {STUDY_PHASE_LABELS[session.phase].toUpperCase()}
+          {(session.longBreak ? 'Nghỉ dài' : STUDY_PHASE_LABELS[session.phase]).toUpperCase()}
           {session.roundsDone > 0 && ` · CHẶNG ${session.roundsDone + (focus ? 1 : 0)}`}
         </p>
         {session.subject && (
@@ -302,6 +371,11 @@ function ActiveRoom({
             ? 'Bạn đang học một mình — chờ người ấy vào'
             : 'Người ấy đang học'}
       </p>
+
+      {/* Chỉ có nghĩa khi có người kia ở đầu bên kia để mà nhận. */}
+      {session.presentUserIds.length >= 2 && (
+        <StudyCheerBar onSend={onCheer} disabled={!canCheer} />
+      )}
 
       <div className="mt-4 flex gap-2">
         {!inRoom && (

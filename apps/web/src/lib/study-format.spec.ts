@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { dayLabel, formatMinutes, splitClock, spokenTime, weekdayLabel } from './study-format';
+import {
+  TICK_SEGMENTS,
+  buildAxis,
+  dayLabel,
+  formatMinutes,
+  formatShortDuration,
+  splitClock,
+  spokenTime,
+  weekdayLabel,
+} from './study-format';
 
 describe('formatMinutes', () => {
   it('dưới một giờ thì chỉ nói phút', () => {
@@ -83,5 +92,65 @@ describe('dayLabel', () => {
 
   it('khoá hỏng thì trả nguyên chuỗi', () => {
     expect(dayLabel('hong')).toBe('hong');
+  });
+});
+
+describe('formatShortDuration', () => {
+  it('dạng ngắn cho cột hẹp', () => {
+    expect(formatShortDuration(45)).toBe('45p');
+    expect(formatShortDuration(60)).toBe('1h');
+    expect(formatShortDuration(100)).toBe('1h40');
+    expect(formatShortDuration(605)).toBe('10h05');
+  });
+
+  it('số âm và số hỏng quy về 0', () => {
+    expect(formatShortDuration(-5)).toBe('0p');
+    expect(formatShortDuration(Number.NaN)).toBe('0p');
+  });
+});
+
+describe('buildAxis', () => {
+  it('khung LUÔN chia hết cho số khoảng — nếu không cả trục nói dối', () => {
+    // Đây là bất biến quan trọng nhất: các nhãn được rải đều bằng
+    // `justify-between`, nên span không chia hết thì nhãn cuối chỉ sai chỗ.
+    for (const [lo, hi] of [
+      [8 * 60 + 10, 14 * 60 + 50],
+      [0, 30],
+      [22 * 60, 23 * 60 + 59],
+      [9 * 60, 9 * 60 + 25],
+    ] as const) {
+      const a = buildAxis(lo, hi);
+      expect(a.span % TICK_SEGMENTS).toBe(0);
+      expect(a.ticks).toHaveLength(TICK_SEGMENTS + 1);
+      expect(a.ticks[0]).toBe(a.from);
+      expect(a.ticks[a.ticks.length - 1]).toBe(a.to);
+    }
+  });
+
+  it('khung bao trọn dữ liệu và nới ra mỗi bên', () => {
+    const a = buildAxis(8 * 60 + 10, 14 * 60 + 50);
+    expect(a.from).toBeLessThanOrEqual(8 * 60 + 10);
+    expect(a.to).toBeGreaterThanOrEqual(14 * 60 + 50);
+    // 8:10–14:50 nới ra mỗi bên một giờ là 7h–16h, và 9 giờ chia hết cho 3.
+    expect(a.from).toBe(7 * 60);
+    expect(a.to).toBe(16 * 60);
+  });
+
+  it('học sát nửa đêm thì lùi mép TRÁI, không tràn quá 24h', () => {
+    const a = buildAxis(22 * 60 + 30, 23 * 60 + 50);
+    expect(a.to).toBeLessThanOrEqual(24 * 60);
+    expect(a.from).toBeGreaterThanOrEqual(0);
+    expect(a.to).toBeGreaterThanOrEqual(23 * 60 + 50);
+  });
+
+  it('một chặng rất ngắn vẫn cho khung tối thiểu 3 giờ', () => {
+    const a = buildAxis(10 * 60, 10 * 60 + 15);
+    expect(a.span).toBeGreaterThanOrEqual(3 * 60);
+  });
+
+  it('số hỏng không làm vỡ trục', () => {
+    const a = buildAxis(Number.NaN, Number.NaN);
+    expect(a.span).toBeGreaterThan(0);
+    expect(a.ticks).toHaveLength(TICK_SEGMENTS + 1);
   });
 });

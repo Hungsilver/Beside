@@ -36,9 +36,34 @@ export type StudyStatus = (typeof STUDY_STATUSES)[number];
 /** Các mức thời gian cho chọn. 25 phút là Pomodoro chuẩn; 50 cho bài dài. */
 export const FOCUS_OPTIONS = [15, 25, 50] as const;
 export const BREAK_OPTIONS = [5, 10] as const;
+export const LONG_BREAK_OPTIONS = [15, 20, 30] as const;
 
 export const DEFAULT_FOCUS_MIN = 25;
 export const DEFAULT_BREAK_MIN = 5;
+export const DEFAULT_LONG_BREAK_MIN = 15;
+
+/**
+ * Cứ mấy chặng học thì được nghỉ dài. Bốn là con số của Pomodoro gốc.
+ *
+ * Nghỉ dài KHÔNG phải một pha thứ ba trong `StudyPhase`. Thêm giá trị vào một
+ * enum của Postgres là một migration không lùi được, mà xét cho cùng nó vẫn là
+ * nghỉ — chỉ khác độ dài. Suy ra từ `roundsDone` là đủ, và nhờ vậy không có
+ * cách nào để cột trong DB lệch khỏi luật.
+ */
+export const ROUNDS_PER_LONG_BREAK = 4;
+
+/**
+ * Chặng nghỉ hiện tại có phải nghỉ DÀI không.
+ *
+ * Chỉ đúng khi đang ở pha nghỉ: ở pha học thì câu hỏi vô nghĩa. `roundsDone`
+ * được cộng NGAY khi chặng học kết thúc, nên lúc vào nghỉ nó đã là số chặng đã
+ * học xong — chia hết cho 4 thì đây là lần nghỉ dài.
+ */
+export function isLongBreak(phase: StudyPhase, roundsDone: number): boolean {
+  if (phase !== 'BREAK') return false;
+  if (!Number.isFinite(roundsDone) || roundsDone <= 0) return false;
+  return Math.floor(roundsDone) % ROUNDS_PER_LONG_BREAK === 0;
+}
 
 /**
  * Trần một phiên. Không phải để chặn ai, mà để một client hỏng không đặt được
@@ -107,6 +132,14 @@ export const startStudySchema = z.object({
     .int()
     .refine((v) => (BREAK_OPTIONS as readonly number[]).includes(v), 'Thời lượng nghỉ không hợp lệ')
     .default(DEFAULT_BREAK_MIN),
+  longBreakMin: z
+    .number()
+    .int()
+    .refine(
+      (v) => (LONG_BREAK_OPTIONS as readonly number[]).includes(v),
+      'Thời lượng nghỉ dài không hợp lệ',
+    )
+    .default(DEFAULT_LONG_BREAK_MIN),
   /** Môn / việc sắp học. Bỏ trống cũng được. */
   subject: z
     .string()
@@ -122,6 +155,12 @@ export interface StudySessionResponse {
   phase: StudyPhase;
   focusMin: number;
   breakMin: number;
+  longBreakMin: number;
+  /**
+   * Chặng nghỉ đang chạy có phải nghỉ DÀI không. Suy ra từ `roundsDone` ở
+   * server để hai máy không thể hiểu khác nhau.
+   */
+  longBreak: boolean;
   /** Môn / việc đang học, `null` khi buổi học không đặt tên. */
   subject: string | null;
   /** Mốc kết thúc chặng hiện tại (epoch ms). Client đếm ngược từ đây. */
@@ -139,6 +178,20 @@ export interface StudyDayBucket {
   /** `YYYY-MM-DD` theo ngày lịch giờ Việt Nam. */
   day: string;
   minutes: number;
+}
+
+/**
+ * Một khối trên dải thời gian trong ngày.
+ *
+ * `startMin`/`endMin` là số phút tính từ 00:00 giờ Việt Nam. Chặng bắt đầu từ
+ * hôm trước (học xuyên nửa đêm) bị cắt về 0 — dải chỉ vẽ phần thuộc hôm nay,
+ * cho một khối chạy âm thì nó sẽ lòi ra ngoài khung.
+ */
+export interface StudyTimelineBlock {
+  userId: string;
+  startMin: number;
+  endMin: number;
+  subject: string | null;
 }
 
 /** Một dòng trong bảng phân bổ theo môn. */
@@ -195,6 +248,10 @@ export interface StudySummaryResponse {
   pendingNote: StudyNoteResponse | null;
   /** Vài dòng nhật ký gần nhất của mình, mới → cũ. */
   recentNotes: StudyNoteResponse[];
+
+  // --- Đợt 3 ---------------------------------------------------------------
+  /** Các chặng học HÔM NAY của cả hai, để vẽ dải thời gian trong ngày. */
+  timeline: StudyTimelineBlock[];
 }
 
 /** Đặt mục tiêu phút mỗi ngày cho CHÍNH MÌNH. */
@@ -296,21 +353,39 @@ export function studyStreak(days: string[], now: Date = new Date()): number {
 export function nextPhase(
   phase: StudyPhase,
   roundsDone: number,
-): { phase: StudyPhase; roundsDone: number; finished: boolean } {
+): { phase: StudyPhase; roundsDone: number; finished: boolean; longBreak: boolean } {
   if (phase === 'FOCUS') {
     const done = roundsDone + 1;
-    return { phase: 'BREAK', roundsDone: done, finished: done >= MAX_ROUNDS };
+    return {
+      phase: 'BREAK',
+      roundsDone: done,
+      finished: done >= MAX_ROUNDS,
+      longBreak: isLongBreak('BREAK', done),
+    };
   }
-  return { phase: 'FOCUS', roundsDone, finished: false };
+  return { phase: 'FOCUS', roundsDone, finished: false, longBreak: false };
 }
 
-/** Độ dài chặng, tính bằng mili-giây. */
+/** Ba mức thời lượng của một phiên, tính bằng phút. */
+export interface PhaseDurations {
+  focusMin: number;
+  breakMin: number;
+  longBreakMin: number;
+}
+
+/**
+ * Độ dài chặng, tính bằng mili-giây.
+ *
+ * `longBreak` truyền vào tường minh chứ không tự suy trong này: hàm không biết
+ * `roundsDone`, mà đoán mò từ pha thì mọi chỗ gọi sẽ ra kết quả khác nhau.
+ */
 export function phaseDurationMs(
   phase: StudyPhase,
-  focusMin: number,
-  breakMin: number,
+  durations: PhaseDurations,
+  longBreak = false,
 ): number {
-  return (phase === 'FOCUS' ? focusMin : breakMin) * 60_000;
+  if (phase === 'FOCUS') return durations.focusMin * 60_000;
+  return (longBreak ? durations.longBreakMin : durations.breakMin) * 60_000;
 }
 
 // ---------------------------------------------------------------------------
@@ -318,6 +393,44 @@ export function phaseDurationMs(
 // ---------------------------------------------------------------------------
 
 export const STUDY_RT_NAMESPACE = '/rts';
+
+/**
+ * Các kiểu cổ vũ gửi được sang máy người ấy.
+ *
+ * Danh sách ĐÓNG, client chỉ gửi mã. Cho gửi chữ tự do thì kênh này thành một
+ * khung chat — mà app đã chốt không có chat trong app (§7.3), và một ô chat
+ * hiện ra giữa lúc đang học thì phá đúng thứ phòng học phục vụ.
+ */
+export const STUDY_CHEERS = [
+  { code: 'FIGHTING', emoji: '💪', label: 'Cố lên!' },
+  { code: 'HEART', emoji: '❤️', label: 'Thương' },
+  { code: 'COFFEE', emoji: '☕', label: 'Nghỉ chút đi' },
+  { code: 'STAR', emoji: '🌟', label: 'Giỏi quá' },
+] as const;
+
+export type StudyCheerCode = (typeof STUDY_CHEERS)[number]['code'];
+
+export function isStudyCheerCode(value: unknown): value is StudyCheerCode {
+  return (
+    typeof value === 'string' && STUDY_CHEERS.some((c) => c.code === value)
+  );
+}
+
+/**
+ * Khoảng cách tối thiểu giữa hai lần cổ vũ của cùng một người.
+ *
+ * Ba giây. Không có nó thì một ngón tay bấm liên tục sẽ rải hàng chục hình
+ * nổi lên màn hình người đang học — thành quấy rối chứ không còn là cổ vũ.
+ */
+export const CHEER_COOLDOWN_MS = 3000;
+
+export interface StudyCheerEvent {
+  code: StudyCheerCode;
+  /** Ai gửi. Client dùng để bỏ qua tiếng vọng của chính mình. */
+  fromUserId: string;
+  fromName: string;
+  at: number;
+}
 
 export const STUDY_RT_EVENTS = {
   /**
@@ -331,5 +444,7 @@ export const STUDY_RT_EVENTS = {
   WATCH: 's:watch',
   /** Trạng thái phiên hiện tại, hoặc `null` khi không có phiên nào. */
   STATE: 's:state',
+  /** C→S: gửi một lời cổ vũ. S→C: cổ vũ vừa nhận được. */
+  CHEER: 's:cheer',
   ERROR: 's:error',
 } as const;

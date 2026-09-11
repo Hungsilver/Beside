@@ -5,6 +5,8 @@ import {
   ERROR_CODES,
   MAX_DAILY_GOAL_MIN,
   STATS_DAYS,
+  isLongBreak,
+  minutesOfDayInTimeZone,
   nextPhase,
   normalizeSubject,
   phaseDurationMs,
@@ -18,6 +20,7 @@ import {
   type StudySessionResponse,
   type StudySubjectBucket,
   type StudySummaryResponse,
+  type StudyTimelineBlock,
 } from '@beside/shared';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { StudyPlanService } from './study-plan.service';
@@ -75,6 +78,7 @@ export class StudyService {
         phase: StudyPhase.FOCUS,
         focusMin: input.focusMin,
         breakMin: input.breakMin,
+        longBreakMin: input.longBreakMin,
         subject,
         endsAt: new Date(now + input.focusMin * 60_000),
         presentUserIds: [userId] as unknown as Prisma.InputJsonValue,
@@ -170,29 +174,31 @@ export class StudyService {
      * Đây là lượt gọi duy nhất của màn học nên nó gánh tất cả; xếp tuần tự thì
      * độ trễ cộng dồn và người dùng nhìn vòng quay lâu gấp mấy lần.
      */
-    const [running, logs, members, ddays, tasks, pendingNote, recentNotes] = await Promise.all([
-      this.findRunning(ctx.coupleId),
-      this.prisma.studyLog.findMany({
-        where: { coupleId: ctx.coupleId },
-        select: {
-          userId: true,
-          minutes: true,
-          day: true,
-          sessionId: true,
-          round: true,
-          subject: true,
-        },
-      }),
-      this.prisma.user.findMany({
-        where: { coupleId: ctx.coupleId },
-        select: { id: true, displayName: true, studyGoalMin: true },
-        orderBy: { createdAt: 'asc' },
-      }),
-      this.plan.ddaysOf(ctx.coupleId),
-      this.plan.tasksOf(ctx.coupleId, userId),
-      this.plan.pendingNote(ctx.coupleId, userId),
-      this.plan.recentNotes(ctx.coupleId, userId),
-    ]);
+    const [running, logs, members, timeline, ddays, tasks, pendingNote, recentNotes] =
+      await Promise.all([
+        this.findRunning(ctx.coupleId),
+        this.prisma.studyLog.findMany({
+          where: { coupleId: ctx.coupleId },
+          select: {
+            userId: true,
+            minutes: true,
+            day: true,
+            sessionId: true,
+            round: true,
+            subject: true,
+          },
+        }),
+        this.prisma.user.findMany({
+          where: { coupleId: ctx.coupleId },
+          select: { id: true, displayName: true, studyGoalMin: true },
+          orderBy: { createdAt: 'asc' },
+        }),
+        this.timelineOf(ctx.coupleId),
+        this.plan.ddaysOf(ctx.coupleId),
+        this.plan.tasksOf(ctx.coupleId, userId),
+        this.plan.pendingNote(ctx.coupleId, userId),
+        this.plan.recentNotes(ctx.coupleId, userId),
+      ]);
 
     const windowKeys = recentDayKeys(STATS_DAYS);
     const todayKey = windowKeys[windowKeys.length - 1] ?? ymdKey(new Date());
@@ -243,7 +249,35 @@ export class StudyService {
       tasks,
       pendingNote,
       recentNotes,
+      timeline,
     };
+  }
+
+  /**
+   * Các chặng học HÔM NAY của cả hai người, quy về số phút trong ngày.
+   *
+   * `StudyLog` chỉ ghi lúc chặng KẾT THÚC, nên điểm bắt đầu suy ngược ra bằng
+   * `createdAt - minutes`. Chặng bắt đầu từ hôm trước (học xuyên nửa đêm) bị
+   * cắt về 0 — dải chỉ vẽ phần thuộc hôm nay, để một khối chạy âm không lòi ra
+   * ngoài khung.
+   */
+  private async timelineOf(coupleId: string): Promise<StudyTimelineBlock[]> {
+    const today = new Date(ymdToUtcMidnight(ymdInTimeZone(new Date())));
+    const rows = await this.prisma.studyLog.findMany({
+      where: { coupleId, day: today },
+      select: { userId: true, minutes: true, subject: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return rows.map((r) => {
+      const endMin = minutesOfDayInTimeZone(r.createdAt);
+      return {
+        userId: r.userId,
+        startMin: Math.max(0, endMin - r.minutes),
+        endMin,
+        subject: r.subject,
+      };
+    });
   }
 
   /**
@@ -266,6 +300,17 @@ export class StudyService {
   async coupleIdOf(userId: string): Promise<string> {
     const ctx = await this.locations.getContext(userId);
     return ctx.coupleId;
+  }
+
+  /**
+   * Couple + tên hiển thị của người gửi cổ vũ.
+   *
+   * Tên lấy từ SERVER, không nhận từ client: để client tự khai tên thì ai cũng
+   * gửi được một lời cổ vũ mang tên người khác.
+   */
+  async senderContext(userId: string): Promise<{ coupleId: string; displayName: string }> {
+    const ctx = await this.locations.getContext(userId);
+    return { coupleId: ctx.coupleId, displayName: ctx.displayName };
   }
 
   async current(userId: string): Promise<StudySessionResponse | null> {
@@ -338,22 +383,40 @@ export class StudyService {
             phase: next.phase,
             roundsDone: next.roundsDone,
             endsAt: new Date(
-              now + phaseDurationMs(next.phase, session.focusMin, session.breakMin),
+              now +
+                phaseDurationMs(
+                  next.phase,
+                  {
+                    focusMin: session.focusMin,
+                    breakMin: session.breakMin,
+                    longBreakMin: session.longBreakMin,
+                  },
+                  next.longBreak,
+                ),
             ),
           },
       include: COUPLE_INCLUDE,
     });
 
+    const breakMin = next.longBreak ? session.longBreakMin : session.breakMin;
     const body = next.finished
       ? 'Phiên học đã xong. Nghỉ ngơi thôi!'
       : next.phase === 'BREAK'
-        ? `Hết ${session.focusMin} phút học — nghỉ ${session.breakMin} phút nhé`
+        ? next.longBreak
+          ? `Xong ${next.roundsDone} chặng rồi — nghỉ dài ${breakMin} phút nhé`
+          : `Hết ${session.focusMin} phút học — nghỉ ${breakMin} phút nhé`
         : `Hết giờ nghỉ — quay lại học ${session.focusMin} phút tiếp nào`;
 
     for (const uid of present) {
       void this.push.sendToUser(uid, {
         kind: 'STUDY_PHASE',
-        title: next.finished ? 'Xong buổi học rồi 🎉' : wasFocus ? 'Giải lao thôi ☕' : 'Vào học tiếp 📚',
+        title: next.finished
+          ? 'Xong buổi học rồi 🎉'
+          : !wasFocus
+            ? 'Vào học tiếp 📚'
+            : next.longBreak
+              ? 'Nghỉ dài thôi 🛋️'
+              : 'Giải lao thôi ☕',
         body,
         url: '/hoc-cung-nhau',
         // Gộp theo PHIÊN: nhiều chặng liên tiếp thì trong khay chỉ còn thông
@@ -404,6 +467,8 @@ export class StudyService {
       phase: session.phase,
       focusMin: session.focusMin,
       breakMin: session.breakMin,
+      longBreakMin: session.longBreakMin,
+      longBreak: isLongBreak(session.phase, session.roundsDone),
       subject: session.subject,
       endsAt: session.endsAt.getTime(),
       roundsDone: session.roundsDone,
