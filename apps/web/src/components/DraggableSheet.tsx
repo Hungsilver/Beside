@@ -16,17 +16,28 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 export type SheetSnap = 'collapsed' | 'half' | 'full';
 
-/** Chiều cao mỗi nấc, tính theo phần trăm chiều cao khung nhìn. */
+/**
+ * Chiều cao mỗi nấc.
+ *
+ * Nấc thu gọn phải CỘNG THÊM chiều cao thanh tab. Bảng neo `bottom-0` nên đáy
+ * của nó nằm khuất dưới thanh tab (`z-30`, cao hơn bảng `z-20`). Trước đây nấc
+ * này đặt cứng 84px — xấp xỉ đúng chiều cao thanh tab trên iPhone có tai thỏ,
+ * nên thanh nắm bị che gần hết và không còn chỗ đặt ngón tay vào kéo.
+ * Cộng thêm 100px là đủ cho thanh nắm (48px) + dòng tên/avatar (48px).
+ */
 const SNAP_HEIGHT: Record<SheetSnap, string> = {
-  collapsed: '84px',
+  collapsed: 'calc(var(--tabbar-h) + 100px)',
   half: '46%',
   full: '82%',
 };
 
 const ORDER: SheetSnap[] = ['collapsed', 'half', 'full'];
 
-/** Vuốt ngắn hơn ngần này coi như chạm nhầm, không đổi nấc. */
-const DRAG_THRESHOLD_PX = 44;
+/** Vuốt ngắn hơn ngần này coi như chạm, không phải kéo. */
+const DRAG_THRESHOLD_PX = 28;
+
+/** Giới hạn quãng kéo để một cú vung tay không lôi bảng đi quá đà. */
+const MAX_DRAG_PX = 240;
 
 const SNAP_KEY = 'beside:map-sheet-snap';
 
@@ -39,6 +50,12 @@ function readSavedSnap(): SheetSnap {
   }
 }
 
+const SNAP_LABEL: Record<SheetSnap, string> = {
+  collapsed: 'thu gọn',
+  half: 'vừa',
+  full: 'mở rộng',
+};
+
 export default function DraggableSheet({
   children,
   onSnapChange,
@@ -48,8 +65,10 @@ export default function DraggableSheet({
   onSnapChange?: (snap: SheetSnap) => void;
 }) {
   const [snap, setSnap] = useState<SheetSnap>(readSavedSnap);
-  const [dragOffset, setDragOffset] = useState(0);
+  /** `null` = không kéo. Số dương = đang kéo xuống. */
+  const [dragOffset, setDragOffset] = useState<number | null>(null);
   const startYRef = useRef<number | null>(null);
+  const gestureHandledRef = useRef(false);
 
   useEffect(() => {
     try {
@@ -66,57 +85,98 @@ export default function DraggableSheet({
     if (next) setSnap(next);
   }
 
+  /** Chạm (không kéo): đang mở hết thì gập về thu gọn, còn lại thì lên một nấc. */
+  function tap() {
+    move(snap === 'full' ? -2 : 1);
+  }
+
   function onPointerDown(e: React.PointerEvent) {
     startYRef.current = e.clientY;
+    setDragOffset(0);
+    gestureHandledRef.current = false;
     // Bắt con trỏ để ngón tay trượt ra ngoài thanh nắm vẫn nhận được sự kiện.
     e.currentTarget.setPointerCapture(e.pointerId);
   }
 
   function onPointerMove(e: React.PointerEvent) {
     if (startYRef.current === null) return;
-    // Kéo xuống = số dương. Giới hạn để bảng không bị lôi đi quá tay.
-    setDragOffset(Math.max(-90, Math.min(90, e.clientY - startYRef.current)));
+    // Kéo xuống = số dương.
+    const raw = e.clientY - startYRef.current;
+    setDragOffset(Math.max(-MAX_DRAG_PX, Math.min(MAX_DRAG_PX, raw)));
   }
 
   function onPointerUp() {
-    const delta = dragOffset;
+    if (startYRef.current === null) return;
+    const delta = dragOffset ?? 0;
     startYRef.current = null;
-    setDragOffset(0);
-    if (Math.abs(delta) < DRAG_THRESHOLD_PX) return;
-    // Kéo XUỐNG (delta > 0) là thu gọn ⇒ lùi một nấc.
-    move(delta > 0 ? -1 : 1);
+    setDragOffset(null);
+    /*
+     * Con trỏ đang bị bắt nên cùng một phần tử nhận cả `pointerdown` lẫn
+     * `pointerup` ⇒ trình duyệt vẫn bắn `click` SAU khi kéo xong. Không chặn
+     * thì cú kéo vừa đổi nấc xong bị chính cú click đó đổi ngược lại, bảng
+     * đứng yên y như hỏng — đúng triệu chứng "vuốt mãi không lên".
+     */
+    gestureHandledRef.current = true;
+    if (Math.abs(delta) >= DRAG_THRESHOLD_PX) {
+      // Kéo XUỐNG (delta > 0) là thu gọn ⇒ lùi một nấc.
+      move(delta > 0 ? -1 : 1);
+    } else {
+      tap();
+    }
   }
 
-  const dragging = startYRef.current !== null;
+  /** Huỷ giữa chừng (cuộc gọi đến, gesture hệ thống): trả về nguyên trạng. */
+  function onPointerCancel() {
+    startYRef.current = null;
+    setDragOffset(null);
+  }
+
+  const dragging = dragOffset !== null;
 
   return (
     <div
       className="pointer-events-auto absolute inset-x-0 bottom-0 z-20 mx-auto flex w-full max-w-[430px] flex-col rounded-t-[34px] bg-white shadow-[0_-10px_40px_rgba(35,19,32,0.16)]"
       style={{
-        height: SNAP_HEIGHT[snap],
-        transform: dragging ? `translateY(${Math.max(0, dragOffset)}px)` : undefined,
+        /*
+         * Kéo thì đổi CHIỀU CAO chứ không `translateY`: trước đây chỉ dịch khi
+         * kéo xuống, nên vuốt LÊN không có phản hồi gì cả — người dùng tưởng
+         * cử chỉ không ăn rồi thả tay sớm.
+         */
+        height: dragging
+          ? `clamp(${SNAP_HEIGHT.collapsed}, calc(${SNAP_HEIGHT[snap]} - ${dragOffset}px), ${SNAP_HEIGHT.full})`
+          : SNAP_HEIGHT[snap],
         transition: dragging ? 'none' : 'height .28s cubic-bezier(.4,0,.2,1)',
       }}
     >
       {/*
-        Thanh nắm. Vạch kẻ nhìn thấy chỉ cao 6px, nhưng vùng CHẠM phải đủ 44px
+        Thanh nắm. Vạch kẻ nhìn thấy chỉ cao 5px, nhưng vùng CHẠM phải đủ 48px
         theo R2 — đây là chỗ ngón cái đặt vào để kéo, hụt một chút là trượt tay.
         `touch-action: none` để trình duyệt không cuộn trang khi đang kéo.
       */}
       <button
         type="button"
-        aria-label={`Kéo để thay đổi kích thước bảng — đang ở nấc ${snap === 'collapsed' ? 'thu gọn' : snap === 'half' ? 'vừa' : 'mở rộng'}`}
+        aria-label={`Kéo để thay đổi kích thước bảng — đang ở nấc ${SNAP_LABEL[snap]}`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onClick={() => move(snap === 'full' ? -2 : 1)}
-        className="flex min-h-11 w-full shrink-0 cursor-grab touch-none items-center justify-center active:cursor-grabbing"
+        onPointerCancel={onPointerCancel}
+        onClick={() => {
+          // Chuột/cảm ứng đã xử lý xong ở `pointerup`. Chỉ bàn phím
+          // (Enter/Space) mới thật sự cần nhánh này.
+          if (gestureHandledRef.current) {
+            gestureHandledRef.current = false;
+            return;
+          }
+          tap();
+        }}
+        className="flex min-h-12 w-full shrink-0 cursor-grab touch-none select-none items-center justify-center active:cursor-grabbing"
       >
-        <span className="block h-1.5 w-11 rounded-full bg-ink-200" />
+        <span className="block h-[5px] w-12 rounded-full bg-ink-300" />
       </button>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-[112px]">{children}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-[calc(var(--tabbar-h)+16px)]">
+        {children}
+      </div>
     </div>
   );
 }

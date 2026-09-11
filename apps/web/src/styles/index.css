@@ -40,6 +40,14 @@
 
 :root {
   color-scheme: light;
+
+  /*
+   * Chiều cao thật của thanh tab dưới đáy (`TabBar`): pt-2 + một ô tab cao 45px
+   * + vùng an toàn. Để ở đây vì không chỉ `TabBar` cần biết — mọi thứ neo vào
+   * đáy màn hình (bảng kéo được ở màn Bản đồ, nút nổi...) đều phải né nó.
+   * Sửa chiều cao thanh tab thì sửa luôn số này.
+   */
+  --tabbar-h: calc(54px + max(env(safe-area-inset-bottom), 20px));
 }
 
 html,

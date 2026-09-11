@@ -271,8 +271,10 @@ export default function MapScreen() {
       {/*
         Cụm nút nổi. Bám mép PHẢI và cách đáy một khoảng cố định, không bám theo
         bảng thông tin — bảng giờ kéo được nên chiều cao của nó thay đổi liên tục.
+        Khoảng cách đáy tính từ thanh tab để ở nấc thu gọn cụm nút vẫn nằm TRÊN
+        bảng, không đè lên dòng tên người ấy.
       */}
-      <div className="pointer-events-none absolute bottom-[120px] right-4 z-30">
+      <div className="pointer-events-none absolute bottom-[calc(var(--tabbar-h)+116px)] right-4 z-30">
         <MapControls
           styleId={styleId}
           onStyleChange={(id) => {
