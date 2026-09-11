@@ -28,6 +28,7 @@ import {
   useStudySummary,
 } from '@/lib/study-api';
 import FlipClock from '@/components/FlipClock';
+import FullscreenClock from '@/components/FullscreenClock';
 import StudyCheerBar, { CheerToast } from '@/components/StudyCheer';
 import StudyDDays from '@/components/StudyDDays';
 import StudyNoise from '@/components/StudyNoise';
@@ -52,6 +53,7 @@ export default function StudyScreen() {
   const noise = useNoise();
 
   const [error, setError] = useState<string | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
 
   if (summary.isLoading) return <Spinner label="Đang mở phòng học..." />;
 
@@ -81,9 +83,24 @@ export default function StudyScreen() {
           onError={setError}
           onCheer={channel.sendCheer}
           canCheer={channel.connected}
+          onExpand={() => setFullscreen(true)}
         />
       ) : (
-        <StartRoom onError={setError} lastSubject={lastSubjectOf(me)} />
+        <>
+          <StartRoom onError={setError} lastSubject={lastSubjectOf(me)} />
+          {/*
+            Lối vào đồng hồ khi CHƯA học. Đây là thứ dùng thường xuyên nhất của
+            một app đồng hồ số lật: dựng máy trên bàn mà xem giờ, không cần phải
+            mở một phiên học nào trước.
+          */}
+          <button
+            type="button"
+            onClick={() => setFullscreen(true)}
+            className="btn-ghost mt-3.5 w-full"
+          >
+            🕐 Xem đồng hồ toàn màn hình
+          </button>
+        </>
       )}
 
       <StudyNoise noise={noise} />
@@ -128,6 +145,10 @@ export default function StudyScreen() {
       <div className="h-[100px]" />
       <CheerToast cheer={channel.cheer} />
       <TabBar />
+
+      {fullscreen && (
+        <FullscreenClock session={session} onClose={() => setFullscreen(false)} />
+      )}
     </Screen>
   );
 }
@@ -305,12 +326,14 @@ function ActiveRoom({
   onError,
   onCheer,
   canCheer,
+  onExpand,
 }: {
   session: StudySessionResponse;
   myId: string | null;
   onError: (m: string | null) => void;
   onCheer: (code: StudyCheerCode) => boolean;
   canCheer: boolean;
+  onExpand: () => void;
 }) {
   const join = useJoinStudy();
   const leave = useLeaveStudy();
@@ -349,16 +372,36 @@ function ActiveRoom({
           {(session.longBreak ? 'Nghỉ dài' : STUDY_PHASE_LABELS[session.phase]).toUpperCase()}
           {session.roundsDone > 0 && ` · CHẶNG ${session.roundsDone + (focus ? 1 : 0)}`}
         </p>
-        {session.subject && (
-          <span className="min-w-0 truncate rounded-full bg-white/25 px-2.5 py-1 text-[11.5px] font-bold">
-            {session.subject}
-          </span>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {session.subject && (
+            <span className="min-w-0 truncate rounded-full bg-white/25 px-2.5 py-1 text-[11.5px] font-bold">
+              {session.subject}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={onExpand}
+            aria-label="Mở đồng hồ toàn màn hình"
+            className="-mr-1 flex size-9 items-center justify-center rounded-full bg-white/25 text-[14px]"
+          >
+            ⛶
+          </button>
+        </div>
       </div>
 
-      <div className="mt-3">
+      {/*
+        Chạm vào mặt đồng hồ là mở toàn màn hình — vùng chạm lớn nhất trên màn,
+        và đúng chỗ ngón tay đang nhìn vào. Nút ⛶ giữ lại cho người dùng trình
+        đọc màn hình, vì một khối số không tự nói được là nó bấm được.
+      */}
+      <button
+        type="button"
+        onClick={onExpand}
+        aria-label="Mở đồng hồ toàn màn hình"
+        className="mt-3 block w-full"
+      >
         <FlipClock seconds={secondsLeft} />
-      </div>
+      </button>
 
       <div className="mt-4 h-[7px] overflow-hidden rounded-full bg-white/30">
         <i className="block h-full rounded-full bg-white transition-all" style={{ width: `${progress}%` }} />

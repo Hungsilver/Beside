@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { splitClock, spokenTime } from '@/lib/study-format';
+import { splitClock, spokenTime, type ClockPart } from '@/lib/study-format';
 
 /**
  * Đồng hồ số lật (flip clock) cho phòng học.
@@ -14,40 +14,92 @@ import { splitClock, spokenTime } from '@/lib/study-format';
  */
 export default function FlipClock({
   seconds,
+  parts: given,
   tone = 'light',
   size = 'lg',
+  layout = 'row',
+  label,
 }: {
-  /** Số giây còn lại. Số âm được kẹp về 0. */
-  seconds: number;
+  /**
+   * Số giây còn lại, cho đồng hồ ĐẾM NGƯỢC. Số âm được kẹp về 0.
+   * Bỏ qua khi đã truyền `parts` sẵn.
+   */
+  seconds?: number;
+  /**
+   * Các nhóm chữ số dựng sẵn — dùng cho đồng hồ xem GIỜ HIỆN TẠI, thứ không
+   * quy ra "số giây còn lại" được.
+   */
+  parts?: ClockPart[];
   /** `light` cho nền màu đậm (chữ trắng), `dark` cho nền trắng. */
   tone?: 'light' | 'dark';
-  size?: 'lg' | 'sm';
+  /** `fluid` = phình theo khung nhìn, dành cho chế độ toàn màn hình. */
+  size?: 'lg' | 'sm' | 'fluid';
+  /**
+   * `row` = nằm ngang một hàng. `stack` = mỗi nhóm một hàng, xếp chồng.
+   *
+   * Xếp chồng chỉ có nghĩa ở `fluid`: khổ dọc rộng 390px mà xếp sáu thẻ một
+   * hàng thì mỗi thẻ còn 45px, trong khi phía trên và dưới thừa cả nửa màn hình.
+   */
+  layout?: 'row' | 'stack';
+  /** Đè nhãn cho trình đọc màn hình. Mặc định là "Còn lại ...". */
+  label?: string;
 }) {
-  const parts = splitClock(seconds);
-  const digitClass = size === 'lg' ? 'text-[56px]' : 'text-[26px]';
-  const sepClass =
-    size === 'lg' ? 'text-[40px] px-[3px] pb-[6px]' : 'text-[20px] px-[2px] pb-[3px]';
+  const shown = given ?? splitClock(seconds ?? 0);
+  const fluid = size === 'fluid';
+  // Xếp chồng chỉ áp dụng ở cỡ linh hoạt — hai cỡ cố định luôn nằm trong một
+  // thẻ hẹp, dựng đứng ở đó chỉ làm vỡ bố cục xung quanh.
+  const stacked = fluid && layout === 'stack';
+
+  const digitClass = fluid ? '' : size === 'lg' ? 'text-[56px]' : 'text-[26px]';
+  const sepClass = fluid
+    ? 'px-[0.06em] pb-[0.1em] text-[0.7em]'
+    : size === 'lg'
+      ? 'text-[40px] px-[3px] pb-[6px]'
+      : 'text-[20px] px-[2px] pb-[3px]';
   const sepColor = tone === 'light' ? 'text-white/70' : 'text-ink-400';
 
   return (
     <div
-      className={`flex items-end justify-center ${digitClass} font-extrabold leading-none tracking-tight`}
+      className={
+        stacked
+          ? `flex flex-col items-center gap-[0.08em] ${digitClass} font-extrabold leading-none tracking-tight`
+          : `flex items-end justify-center ${digitClass} font-extrabold leading-none tracking-tight`
+      }
       // Người khiếm thị nghe "12:34" chứ không phải bốn con số rời rạc.
       role="timer"
-      aria-label={`Còn lại ${spokenTime(seconds)}`}
+      aria-label={label ?? `Còn lại ${spokenTime(seconds ?? 0)}`}
+      style={fluid ? { fontSize: fluidFontSize(shown, stacked) } : undefined}
     >
-      {parts.map((part, groupIndex) => (
+      {shown.map((part, groupIndex) => (
         <div key={part.id} className="flex items-end">
-          {groupIndex > 0 && (
+          {/* Xếp chồng thì bỏ dấu hai chấm: xuống dòng đã tách nhóm rồi, thêm
+              dấu vào chỉ làm hàng lệch tâm. */}
+          {groupIndex > 0 && !stacked && (
             <span aria-hidden className={`${sepClass} ${sepColor} font-bold`}>
               :
             </span>
           )}
-          <div className="flex gap-[3px]" aria-hidden>
+          <div className={`flex ${fluid ? 'gap-[0.05em]' : 'gap-[3px]'}`} aria-hidden>
             {part.digits.map((d, i) => (
               <FlipDigit key={`${part.id}-${i}`} value={d} />
             ))}
           </div>
+
+          {/*
+            Nhãn đơn vị, CHỈ ở chế độ xếp chồng. Không có dấu hai chấm thì hai
+            hàng `18` và `07` có thể đọc thành giờ:phút thay vì phút:giây — mà
+            đây là màn hình người ta liếc qua chứ không đọc kỹ.
+          */}
+          {stacked && (
+            <span
+              aria-hidden
+              className={`ml-[0.1em] pb-[0.3em] text-[0.13em] font-bold uppercase tracking-[0.1em] ${
+                tone === 'light' ? 'text-white/35' : 'text-ink-300'
+              }`}
+            >
+              {UNIT_LABEL[part.id]}
+            </span>
+          )}
         </div>
       ))}
     </div>
@@ -55,6 +107,42 @@ export default function FlipClock({
 }
 
 // ---------------------------------------------------------------------------
+
+const UNIT_LABEL: Record<ClockPart['id'], string> = {
+  h: 'giờ',
+  m: 'phút',
+  s: 'giây',
+};
+
+/**
+ * Cỡ chữ cho chế độ toàn màn hình, tính theo SỐ THẺ đang hiện.
+ *
+ * Không dùng một `clamp()` cố định: `12:34` có bốn thẻ còn `1:23:45` có sáu,
+ * và một cỡ chữ vừa cho bốn thẻ sẽ tràn ra ngoài mép khi sang sáu. Tính ngược
+ * từ chiều rộng khả dụng nên đồng hồ luôn vừa khung, ở cả dọc lẫn ngang.
+ *
+ * Mỗi thẻ rộng `1em` cộng khe `0.05em`; mỗi dấu hai chấm chiếm khoảng `0.82em`
+ * kể cả đệm hai bên. Chặn thêm theo chiều cao (`vh`) để lúc xoay ngang đồng hồ
+ * không cao quá khung.
+ */
+function fluidFontSize(parts: ClockPart[], stacked: boolean): string {
+  if (stacked) {
+    // Mỗi hàng hai thẻ; chiều CAO mới là thứ giới hạn. `1.42` là tỉ lệ cao/rộng
+    // của một thẻ, `0.08` là khe giữa hai hàng.
+    const rows = Math.max(1, parts.length);
+    const widest = Math.max(...parts.map((p) => p.digits.length), 1);
+    // Trừ hao 0.45em cho nhãn đơn vị bên phải, nếu không cụm số bị đẩy lệch tâm.
+    const byWidth = (92 / (widest * 1.05 + 0.38)).toFixed(2);
+    const byHeight = (64 / (rows * 1.42 + (rows - 1) * 0.08)).toFixed(2);
+    return `min(${byWidth}vw, ${byHeight}vh, 220px)`;
+  }
+
+  const digits = parts.reduce((sum, p) => sum + p.digits.length, 0);
+  const separators = Math.max(0, parts.length - 1);
+  const widthEm = digits * 1.05 + separators * 0.82;
+  const byWidth = (92 / widthEm).toFixed(2);
+  return `min(${byWidth}vw, 46vh, 220px)`;
+}
 
 /** Thời gian lật, phải khớp `animation-duration + delay` của `.flip-flap-*`. */
 const FLIP_MS = 620;
