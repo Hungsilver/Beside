@@ -18,6 +18,9 @@ export const PUSH_KINDS = [
   'GAME_TURN', // tới lượt bạn trong ván đang chơi
   'STUDY_INVITE', // người ấy vừa mở phòng học
   'STUDY_PHASE', // hết giờ học hoặc hết giờ nghỉ
+  'TRIP_STARTED', // người ấy bắt đầu một chuyến "đang trên đường về"
+  'TRIP_ARRIVED', // người ấy đã tới nơi
+  'CYCLE_REMINDER', // sắp tới kỳ (F14)
   'TEST', // bấm "gửi thử" trong màn Cài đặt
 ] as const;
 export type PushKind = (typeof PUSH_KINDS)[number];

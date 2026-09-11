@@ -1,5 +1,6 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { LocationsModule } from '../locations/locations.module';
+import { TripsModule } from '../trips/trips.module';
 import { PlacesController } from './places.controller';
 import { PlacesService } from './places.service';
 import { GeofenceService } from './geofence.service';
@@ -13,7 +14,7 @@ import { GeofenceService } from './geofence.service';
  * niệm "địa điểm" chứ không phải "vị trí" — để chung ở đây dễ tìm hơn.
  */
 @Module({
-  imports: [forwardRef(() => LocationsModule)],
+  imports: [forwardRef(() => LocationsModule), forwardRef(() => TripsModule)],
   controllers: [PlacesController],
   providers: [PlacesService, GeofenceService],
   exports: [GeofenceService],

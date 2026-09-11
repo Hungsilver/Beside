@@ -15,6 +15,8 @@ import { PostsModule } from './posts/posts.module';
 import { EventsModule } from './events/events.module';
 import { PushModule } from './push/push.module';
 import { PlacesModule } from './places/places.module';
+import { TripsModule } from './trips/trips.module';
+import { CycleModule } from './cycle/cycle.module';
 import { MilestonesModule } from './milestones/milestones.module';
 import { GamesModule } from './games/games.module';
 import { StudyModule } from './study/study.module';
@@ -44,6 +46,8 @@ import { HealthController } from './health/health.controller';
     EventsModule,
     PushModule,
     PlacesModule,
+    TripsModule,
+    CycleModule,
     MilestonesModule,
     GamesModule,
     StudyModule,

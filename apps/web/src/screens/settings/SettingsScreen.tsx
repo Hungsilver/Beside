@@ -165,6 +165,21 @@ export default function SettingsScreen() {
                 desc="Nhà, công ty, quán quen"
               />
             )}
+            <SettingsLink
+              to="/chu-ky"
+              icon="🌙"
+              tone="plum"
+              title="Chu kỳ của bạn"
+              desc="Riêng tư — mặc định người ấy không thấy"
+            />
+            <SettingsLink
+              to="/cai-dat/bo-nho"
+              icon="🧹"
+              tone="ink"
+              title="Bộ nhớ & cập nhật"
+              desc="Xoá bộ nhớ đệm khi giao diện không đổi"
+              value={`bản ${__BUILD_ID__}`}
+            />
           </SettingsGroup>
 
           <SettingsGroup>

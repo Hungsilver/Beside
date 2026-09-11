@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '@/lib/auth-context';
+import { initAppUpdate } from '@/lib/app-update';
 import App from '@/App';
 import './styles/index.css';
 
@@ -22,6 +23,13 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+/*
+ * Đăng ký service worker và theo dõi bản mới. Phải gọi TRƯỚC khi dựng React:
+ * `registerSW` chỉ được chạy một lần cho cả vòng đời trang, mà component thì
+ * StrictMode dựng hai lần ngay ở chế độ dev.
+ */
+initAppUpdate();
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('Không tìm thấy #root trong index.html');

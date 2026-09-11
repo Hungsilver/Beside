@@ -235,6 +235,8 @@ test.describe('Các màn dựng được, không màn trắng', () => {
     { path: '/cai-dat', marker: /Quyền riêng tư/i },
     { path: '/cai-dat/rieng-tu', marker: /Chế độ ẩn danh/i },
     { path: '/cai-dat/thong-bao', marker: /Thông báo đẩy/i },
+    { path: '/cai-dat/bo-nho', marker: /Xoá bộ nhớ đệm/i },
+    { path: '/chu-ky', marker: /Chu kỳ của bạn/i },
     { path: '/check-in', marker: /Khoảnh khắc mới/i },
   ];
 
@@ -1115,6 +1117,94 @@ test.describe('Bộ lọc thời gian & xem ảnh (bổ sung 10/09)', () => {
     await page.getByRole('button', { name: /Toạ độ & chỉ đường tới/ }).click();
     await expect(page.getByRole('dialog', { name: 'Chi tiết vị trí' })).toBeVisible();
     await page.getByRole('button', { name: 'Xong' }).click();
+
+    expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
+  });
+});
+
+test.describe('Đang trên đường về (F13)', () => {
+  test('VD-01 — bắt đầu chuyến tới một địa điểm rồi báo đã tới nơi', async () => {
+    await page.goto('/ban-do');
+
+    const startBtn = page.getByRole('button', { name: /Tôi đang về/ });
+    await expect(startBtn).toBeVisible({ timeout: 20_000 });
+    await startBtn.click();
+
+    // Điểm đến BẮT BUỘC là một địa điểm đã lưu — chính hàng rào ảo của nó là
+    // thứ phát hiện "đã tới nơi".
+    const sheet = page.getByRole('dialog', { name: 'Chọn điểm đến' });
+    await expect(sheet).toBeVisible();
+    await sheet.getByRole('button', { name: /Nhà em/ }).click();
+    await expect(sheet).toHaveCount(0, { timeout: 15_000 });
+
+    // Thẻ chuyến hiện ra kèm điểm đến.
+    await expect(page.getByText(/Bạn đang về/)).toBeVisible({ timeout: 15_000 });
+
+    // Kết thúc chuyến — dọn luôn dữ liệu test.
+    await page.getByRole('button', { name: /Đã tới nơi/ }).click();
+    await expect(page.getByRole('button', { name: /Tôi đang về/ })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
+  });
+});
+
+test.describe('Chu kỳ (F14)', () => {
+  test('CK-01 — bật theo dõi, mặc định KHÔNG chia sẻ, rồi xoá sạch', async () => {
+    await page.goto('/chu-ky');
+
+    // Màn giới thiệu phải nói luật riêng tư trước khi người dùng ghi gì.
+    await expect(page.getByText(/người ấy không thấy gì cả/i)).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByText(/không phải biện pháp tránh thai/i)).toBeVisible();
+
+    await page.getByRole('button', { name: /Hôm nay là ngày đầu kỳ/ }).click();
+
+    // Ghi xong là vào màn theo dõi, hôm nay là ngày 1.
+    await expect(page.getByText(/^Ngày 1$/)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText('Đang trong kỳ').first()).toBeVisible();
+
+    // Mặc định phải là KHÔNG chia sẻ.
+    await expect(page.getByRole('button', { name: /Không chia sẻ/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    // Chưa chia sẻ thì không nhắc người ấy được.
+    await expect(page.getByRole('switch', { name: /Nhắc người ấy/ })).toBeDisabled();
+
+    // Bật chia sẻ rồi kiểm công tắc mở ra.
+    await page.getByRole('button', { name: /Chỉ báo giai đoạn/ }).click();
+    await expect(page.getByRole('switch', { name: /Nhắc người ấy/ })).toBeEnabled({
+      timeout: 15_000,
+    });
+
+    // Dọn: xoá sạch để không để lại dữ liệu sức khoẻ trong bộ dữ liệu demo.
+    await page.getByRole('button', { name: /Xoá sạch dữ liệu chu kỳ/ }).click();
+    await page.getByRole('button', { name: 'Xoá hết' }).click();
+    await expect(page.getByRole('button', { name: /Hôm nay là ngày đầu kỳ/ })).toBeVisible({
+      timeout: 20_000,
+    });
+
+    expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
+  });
+});
+
+test.describe('Bộ nhớ & cập nhật', () => {
+  test('BN-01 — màn bộ nhớ nói rõ bản dựng và hỏi lại trước khi xoá', async () => {
+    await page.goto('/cai-dat/bo-nho');
+
+    // Mã bản dựng do Vite chèn lúc build — nhờ nó biết máy đang chạy bản nào.
+    await expect(page.getByText(/bản dựng \d{12}/)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: /Kiểm tra bản mới/ })).toBeVisible();
+
+    // Xoá bộ nhớ đệm phải hỏi lại — bấm nhầm là tải lại cả app.
+    await page.getByRole('button', { name: /Xoá bộ nhớ đệm & tải lại/ }).click();
+    await expect(page.getByRole('button', { name: 'Xoá & tải lại' })).toBeVisible();
+    await page.getByRole('button', { name: 'Thôi' }).click();
+    await expect(page.getByRole('button', { name: 'Xoá & tải lại' })).toHaveCount(0);
 
     expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
   });

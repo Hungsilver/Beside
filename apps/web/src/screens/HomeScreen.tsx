@@ -12,6 +12,8 @@ import { useRealtime } from '@/lib/realtime';
 import { Screen, Spinner } from '@/components/ui';
 import TabBar from '@/components/TabBar';
 import Avatar from '@/components/Avatar';
+import { CYCLE_PHASE_LABELS } from '@beside/shared';
+import { useCyclePartner } from '@/lib/cycle-api';
 
 /**
  * Trang chủ — Phase 1 mới dựng phần đếm ngày yêu và thẻ người ấy.
@@ -168,6 +170,8 @@ export default function HomeScreen() {
         </section>
       )}
 
+      <PartnerCycleCard />
+
       {/* Dẫn thẳng tới đúng màn cần sửa, không bắt người dùng tự dò trong Cài đặt. */}
       {!user?.messagingHandle && (
         <Link to="/cai-dat/nhan-tin" className="card mt-3.5 block">
@@ -263,4 +267,45 @@ function formatDate(iso: string): string {
     month: '2-digit',
     year: 'numeric',
   });
+}
+
+/**
+ * Thẻ chu kỳ của người ấy (F14) — CHỈ hiện khi họ đã bật chia sẻ.
+ *
+ * Nội dung do server cắt gọt theo mức họ chọn: mức "chỉ báo giai đoạn" không
+ * kèm ngày nào cả. Client không bao giờ nhận phần bị ẩn rồi tự giấu đi.
+ */
+function PartnerCycleCard() {
+  const query = useCyclePartner();
+  const data = query.data;
+
+  if (!data?.shared || !data.phase) return null;
+
+  const inPeriod = data.phase === 'PERIOD';
+
+  return (
+    <section className="card mt-3.5 flex items-center gap-3">
+      <span
+        className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-plum-100 text-[20px]"
+        aria-hidden
+      >
+        {inPeriod ? '🩸' : '🌙'}
+      </span>
+      <div className="min-w-0 flex-1">
+        <b className="block text-[14px]">
+          {inPeriod ? `${data.name} đang trong kỳ` : `Kỳ của ${data.name} sắp tới`}
+        </b>
+        <p className="mt-0.5 text-[12px] leading-relaxed text-ink-500">
+          {data.level === 'FULL' && data.nextStartDate && !inPeriod
+            ? `Dự kiến ${formatDate(data.nextStartDate)}${
+                data.daysUntilNext !== null && data.daysUntilNext >= 0
+                  ? ` · còn ${data.daysUntilNext} ngày`
+                  : ''
+              }`
+            : CYCLE_PHASE_LABELS[data.phase]}
+          {' · '}nhẹ nhàng với người ấy nhé 💕
+        </p>
+      </div>
+    </section>
+  );
 }

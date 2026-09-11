@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { GeofenceEventType } from '@prisma/client';
 import {
   accuracyUsableFor,
@@ -8,6 +8,7 @@ import {
   type PushPayload,
 } from '@beside/shared';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { TripsService } from '../trips/trips.service';
 import { PushService } from '../push/push.service';
 
 export interface GeofencePoint {
@@ -47,6 +48,8 @@ export class GeofenceService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly push: PushService,
+    @Inject(forwardRef(() => TripsService))
+    private readonly trips: TripsService,
   ) {}
 
   /**
@@ -124,6 +127,9 @@ export class GeofenceService {
         }
         await this.saveState(ctx.userId, place.id, true, null);
         await this.record(ctx, place, GeofenceEventType.ARRIVED, point.at);
+        // Đây cũng là thứ đóng một chuyến "đang trên đường về" (F13): tới đúng
+        // điểm đến thì chuyến tự kết thúc, không phải nhớ bấm nút.
+        await this.trips.onArrivedAtPlace(ctx.userId, place.id, point.at);
         continue;
       }
 

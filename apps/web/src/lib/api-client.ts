@@ -41,7 +41,7 @@ export class ApiRequestError extends Error {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   /** Không tự gọi refresh khi gặp 401 (dùng cho chính endpoint refresh/login). */
   skipRefresh?: boolean;
@@ -154,6 +154,8 @@ export const api = {
     apiRequest<T>(path, { method: 'POST', body, ...opts }),
   patch: <T>(path: string, body?: unknown) =>
     apiRequest<T>(path, { method: 'PATCH', body }),
+  put: <T>(path: string, body?: unknown) =>
+    apiRequest<T>(path, { method: 'PUT', body }),
   delete: <T>(path: string, body?: unknown) =>
     apiRequest<T>(path, { method: 'DELETE', body }),
 };

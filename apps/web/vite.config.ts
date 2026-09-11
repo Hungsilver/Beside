@@ -4,7 +4,22 @@ import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath, URL } from 'node:url';
 
+/**
+ * Mã số bản dựng — hiện ở màn "Bộ nhớ & cập nhật".
+ *
+ * Có nó thì câu hỏi "máy mình đã nhận bản mới chưa?" trả lời được bằng mắt,
+ * không phải đoán qua việc giao diện trông khác hay giống.
+ */
+const BUILD_ID = new Date()
+  .toISOString()
+  .replace(/[-:T]/g, '')
+  .slice(0, 12);
+
 export default defineConfig({
+  define: {
+    __BUILD_ID__: JSON.stringify(BUILD_ID),
+  },
+
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -25,7 +40,18 @@ export default defineConfig({
       srcDir: 'src',
       filename: 'sw.ts',
       registerType: 'prompt', // Không tự nạp lại giữa chừng khi người dùng đang xem bản đồ
-      injectRegister: 'auto',
+      /*
+       * `null` chứ KHÔNG phải 'auto': app tự đăng ký service worker bằng
+       * `virtual:pwa-register` trong `lib/app-update.ts`, vì chỉ ở đó mới bắt
+       * được sự kiện "có bản mới" để hiện dải mời tải lại.
+       *
+       * Để 'auto' thì plugin chèn sẵn một đoạn đăng ký vào index.html, bản
+       * service worker mới cài xong rồi NẰM CHỜ mãi mãi (registerType 'prompt'
+       * không tự kích hoạt) — và vì trên điện thoại người dùng gần như không
+       * bao giờ đóng hết tab, giao diện cũ ở lại sau mỗi lần deploy. Đúng lỗi
+       * chủ dự án gặp.
+       */
+      injectRegister: null,
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         // KHÔNG nạp sẵn MapLibre khi cài app: gần 1MB mà đa số lần mở app

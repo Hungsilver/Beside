@@ -5,6 +5,7 @@ import { useCouple } from '@/lib/couple-api';
 import { RealtimeProvider } from '@/lib/realtime';
 import { sendPassivePing } from '@/lib/use-live-location';
 import { Spinner } from '@/components/ui';
+import UpdateBanner from '@/components/UpdateBanner';
 import LoginScreen from '@/screens/LoginScreen';
 import RegisterScreen from '@/screens/RegisterScreen';
 import PairScreen from '@/screens/PairScreen';
@@ -15,6 +16,7 @@ import MessagingScreen from '@/screens/settings/MessagingScreen';
 import NotificationsScreen from '@/screens/settings/NotificationsScreen';
 import PrivacyScreen from '@/screens/settings/PrivacyScreen';
 import CoupleScreen from '@/screens/settings/CoupleScreen';
+import StorageScreen from '@/screens/settings/StorageScreen';
 
 // MapLibre nặng gần 1MB — chỉ tải khi người dùng thật sự mở bản đồ,
 // để lần mở app đầu tiên trên mạng di động không phải chờ.
@@ -28,6 +30,7 @@ const GamesScreen = lazy(() => import('@/screens/GamesScreen'));
 // Màn ván kéo theo socket riêng của trò chơi — chỉ tải khi thật sự mở một ván.
 const GameScreen = lazy(() => import('@/screens/GameScreen'));
 const StudyScreen = lazy(() => import('@/screens/StudyScreen'));
+const CycleScreen = lazy(() => import('@/screens/CycleScreen'));
 
 export default function App() {
   const { user, isRestoring } = useAuth();
@@ -38,16 +41,20 @@ export default function App() {
 
   if (!user) {
     return (
-      <Routes>
-        <Route path="/dang-nhap" element={<LoginScreen />} />
-        <Route path="/dang-ky" element={<RegisterScreen />} />
-        <Route path="*" element={<Navigate to="/dang-nhap" replace />} />
-      </Routes>
+      <>
+        <UpdateBanner />
+        <Routes>
+          <Route path="/dang-nhap" element={<LoginScreen />} />
+          <Route path="/dang-ky" element={<RegisterScreen />} />
+          <Route path="*" element={<Navigate to="/dang-nhap" replace />} />
+        </Routes>
+      </>
     );
   }
 
   return (
     <RealtimeProvider>
+      <UpdateBanner />
       <PassivePing />
       <Routes>
         <Route path="/ghep-doi" element={<PairScreen />} />
@@ -61,6 +68,7 @@ export default function App() {
         <Route path="/cai-dat/thong-bao" element={<NotificationsScreen />} />
         <Route path="/cai-dat/rieng-tu" element={<PrivacyScreen />} />
         <Route path="/cai-dat/ca-doi" element={<CoupleScreen />} />
+        <Route path="/cai-dat/bo-nho" element={<StorageScreen />} />
         <Route
           path="/ban-do"
           element={
@@ -149,6 +157,18 @@ export default function App() {
                 <StudyScreen />
               </Suspense>
             </RequireCouple>
+          }
+        />
+        {/*
+          Chu kỳ là dữ liệu CỦA MỘT NGƯỜI, không phải của couple — mở được cả
+          khi chưa ghép đôi, không bọc trong RequireCouple.
+        */}
+        <Route
+          path="/chu-ky"
+          element={
+            <Suspense fallback={<Spinner label="Đang mở..." />}>
+              <CycleScreen />
+            </Suspense>
           }
         />
         <Route path="/" element={<RequireCouple>{<HomeScreen />}</RequireCouple>} />

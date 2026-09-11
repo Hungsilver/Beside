@@ -38,14 +38,18 @@
     **danh sách nhóm + 5 màn con** (`src/screens/settings/`), mỗi hàng nói luôn giá trị
     đang dùng; thẻ hồ sơ gradient ở đầu màn; thanh Lưu neo đáy chỉ sáng khi có thay đổi;
     huỷ ghép đôi dời vào màn "Chuyện của hai đứa". 4 E2E (CD-01, CD-02 + PF-01…04 viết lại)
-  - Tổng: **541 unit test** + **336 case trace** + **55 E2E**, typecheck + lint sạch cả 3 workspace
+  - 11/09 — **F13 Đang trên đường về** · **F14 Chu kỳ kinh nguyệt** · **sửa lỗi app không cập nhật
+    sau deploy** (service worker mới nằm chờ vĩnh viễn vì `registerType: 'prompt'` mà không có
+    chỗ nào mời tải lại) + màn **Bộ nhớ & cập nhật** có nút xoá bộ nhớ đệm.
+    37 unit test mới (`trip.schema`, `cycle`) + 3 E2E (VD-01, CK-01, BN-01), 2 migration
+  - Tổng: **578 unit test** + **336 case trace** + **58 E2E**, typecheck + lint sạch cả 3 workspace
   - ✅ `npm run verify:local` → **41/41 mục đạt** trên Docker thật (gồm chốt ESLint và E2E trình duyệt)
     (6/6 container healthy: db · redis · api · web · caddy · minio), đi qua Caddy HTTPS
     — chạy lại ngày 09/09 sau khi thêm bình luận và hai trò chơi: 13 migration, 41 E2E
   - ⚠️ 10–11/09: chạy `npm run e2e` trên Docker thật. **TL-05 hỏng** (lá 4♠ chắn mất lá 3♣
     đang được ghim ở bàn Tiến lên) và nó chặn các test xếp sau — lỗi nằm ở màn Tiến lên,
     **không liên quan** tới phần bản đồ / khoảnh khắc, đã ghi `docs/BACKLOG.md`.
-    Chạy cả bộ trừ nhóm Tiến lên: **50/50 đạt** (gồm BD-01…BD-05 và CD-01/CD-02)
+    Chạy cả bộ trừ nhóm Tiến lên: **55/55 đạt** (gồm BD-01…BD-05, CD-01/CD-02, VD-01, CK-01, BN-01)
 - **Triển khai:** chủ dự án tự deploy — hướng dẫn ở `docs/DEPLOY.md`
 
 ---
@@ -66,6 +70,8 @@
 | F9 | Nhắn tin | **Không làm chat trong app.** Chỉ 1 nút deep-link mở Zalo / Messenger / gọi điện |
 | F10 | Tiến lên miền Nam | ✅ 2 người, 13 lá mỗi bên, luật cơ bản + chặt heo, 30s/lượt |
 | F11 | Cờ caro | ✅ Bàn 15×15, luật Việt Nam (đúng 5 quân bị chặn hai đầu thì không thắng, ≥6 quân thắng), 30s/lượt |
+| F13 | Đang trên đường về | ✅ Bấm một nút khi bắt đầu về; người ấy nhận thông báo lúc khởi hành và lúc tới nơi, xem được giờ dự kiến. Điểm đến là một Địa điểm đã lưu (F6), chính hàng rào ảo của nó phát hiện "đã tới nơi" |
+| F14 | Chu kỳ kinh nguyệt | ✅ Ghi kỳ, dự đoán kỳ tới, nhắc trước 1 ngày. **Dữ liệu sức khoẻ của MỘT người** — mặc định người ấy không thấy gì; ba mức chia sẻ do chính chủ chọn; có nút xoá sạch |
 | F12 | Học cùng nhau | ✅ Phòng Pomodoro chung: đồng hồ chạy đồng bộ hai máy, thống kê giờ học + chuỗi ngày. **Không có gọi video** — xem §1.1b |
 
 ### 1.1b Ngoài phạm vi (không làm)
@@ -761,6 +767,19 @@ POST   /study/:id/join             vào học cùng                             
 POST   /study/:id/leave            rời phòng; người cuối rời thì phiên đóng lại    🔸
 POST   /study/:id/cancel           dừng hẳn — ai trong hai người cũng dừng được    🔸
 
+POST   /trips                      {placeId} — bắt đầu chuyến "đang trên đường về"  ✅
+GET    /trips/current               chuyến đang chạy của couple (mình hoặc người ấy) ✅
+POST   /trips/:id/arrive            tự bấm "đã tới nơi"                              ✅
+DELETE /trips/:id                   huỷ chuyến                                       ✅
+
+GET    /cycle/me                    hồ sơ chu kỳ CỦA MÌNH + dự đoán                  ✅
+PUT    /cycle/settings              {shareLevel, avgCycleDays?, remindMe, ...}        ✅
+POST   /cycle/periods               {startDate, endDate?}                            ✅
+PATCH  /cycle/periods/:id           sửa một kỳ                                       ✅
+DELETE /cycle/periods/:id           xoá một kỳ                                       ✅
+DELETE /cycle/me                    XOÁ SẠCH dữ liệu chu kỳ                          ✅
+GET    /cycle/partner               phần người ấy chia sẻ — server cắt gọt sẵn       ✅
+
 GET    /push/public-key            khoá công khai VAPID — endpoint PUBLIC        ✅
 POST   /push/subscribe             {endpoint, keys, userAgent?}                  ✅
 DELETE /push/subscribe             {endpoint} — chỉ gỡ được đăng ký của mình      ✅
@@ -1103,6 +1122,16 @@ Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L
 | 2026-09-11 | Công tắc (riêng tư, thông báo) **lưu ngay**, không có nút Lưu | Đây là thứ người ta bật lúc đang cần ẩn NGAY. Bắt bấm thêm một nút là một khoảng thời gian họ tưởng mình đã ẩn mà thực ra chưa | Không hoàn tác được bằng cách "không bấm Lưu"; bù lại mỗi công tắc tự khoá khi vô nghĩa (ẩn danh bật thì khoá chia sẻ trực tiếp) |
 | 2026-09-11 | **Huỷ ghép đôi** dời vào trong màn "Chuyện của hai đứa" | Nó xoá vĩnh viễn toàn bộ dữ liệu chung, không được ngồi ngay cạnh những nút bấm hằng ngày ở màn Cài đặt | Ai thật sự muốn huỷ phải đi thêm một lớp — đúng ý đồ |
 | 2026-09-11 | `AvatarPicker` nâng lên **component cấp module** | Định nghĩa component bên trong component khác sinh ra một kiểu mới sau mỗi lần vẽ ⇒ React tháo và dựng lại liên tục: gõ một chữ vào ô tên là mất trạng thái "Đang tải lên…" và mất câu lỗi vừa hiện. Bản cũ dính đúng lỗi này, phát hiện lúc thiết kế lại | Phải truyền `user` / `patchUser` xuống bằng props |
+| 2026-09-11 | **F13**: điểm đến của chuyến đi BẮT BUỘC là một `Place` đã lưu, không phải toạ độ tuỳ ý | Hàng rào ảo của địa điểm đó (F6) chính là thứ phát hiện "đã tới nơi" — không cần thêm cơ chế nào. Và người đang chuẩn bị ra về thì không muốn chấm toạ độ trên bản đồ | Muốn chia sẻ chuyến tới một chỗ lạ thì phải lưu nó thành địa điểm trước |
+| 2026-09-11 | **F13**: giờ dự kiến tính LÚC ĐỌC, không lưu trong bảng | Lưu thì phải có một job cập nhật liên tục, và mỗi lần server ngủ dậy là một con số cũ nằm chình ình trên màn hình người kia | Mỗi lần đọc tốn thêm một truy vấn điểm vị trí mới nhất — rẻ hơn nhiều so với một job |
+| 2026-09-11 | **F13**: dùng REST + hỏi lại mỗi 20 giây, KHÔNG thêm sự kiện WebSocket | Giờ dự kiến đổi rất chậm. Thêm một loại sự kiện vào `LocationsGateway` là gánh theo mọi bài học về đua sự kiện trong §10 cho thứ không cần độ trễ mili-giây. Hai khoảnh khắc thật sự cần biết ngay (khởi hành, tới nơi) đã có thông báo đẩy lo, kể cả khi app đóng | Người ấy mở sẵn app thì thấy chậm nhất 20 giây |
+| 2026-09-11 | **F13**: ẩn danh thì KHÔNG cho bắt đầu chuyến | Chuyến đi là lời mời "nhìn tôi về tới nơi", ẩn danh là "server không phát vị trí nào". Bật cả hai chỉ tạo ra một thanh trạng thái đứng im mãi mãi | Muốn chia sẻ chuyến thì phải tắt ẩn danh — nói rõ trong câu báo lỗi |
+| 2026-09-11 | **F14**: dữ liệu chu kỳ thuộc về MỘT NGƯỜI, không thuộc về couple | Đây là dữ liệu sức khoẻ. Mặc định `OFF`; ba mức chia sẻ do chính chủ đặt; mức `SUMMARY` không lộ ngày nào kể cả "còn mấy ngày" (từ đó suy ngược ra ngày cụ thể) | Người ấy có thể không thấy gì — đúng ý đồ. Có `partnerView()` ở `packages/shared` là nơi DUY NHẤT cắt gọt, 25 unit test soi vào nó |
+| 2026-09-11 | **F14**: trễ kỳ thì trả `daysUntilNext` ÂM, không nhảy sang chu kỳ kế | "Trễ 5 ngày" là thông tin người dùng cần nhất lúc đó. Lặng lẽ dời dự đoán sang chu kỳ sau là giả vờ mọi thứ vẫn đúng lịch | Giao diện phải xử lý số âm ở mọi chỗ hiển thị |
+| 2026-09-11 | **F14**: bỏ qua khoảng cách trên 90 ngày khi tính chu kỳ trung bình | Đó là lúc người dùng quên ghi vài kỳ liên tiếp, không phải một chu kỳ 4 tháng. Gộp vào trung bình sẽ đẩy mọi dự đoán sau đó sai hàng tuần | Người có chu kỳ thật sự dài bất thường sẽ phải tự đặt độ dài trong cài đặt |
+| 2026-09-11 | **F14**: không log nội dung chu kỳ, chỉ log số lượng | Nhật ký máy chủ đã cấm toạ độ chính xác (R3); dữ liệu sức khoẻ còn nhạy cảm hơn | Gỡ lỗi khó hơn một chút |
+| 2026-09-11 | Sửa gốc lỗi **"deploy xong vẫn thấy giao diện cũ"**: app tự đăng ký service worker và mời tải lại | `registerType: 'prompt'` + `injectRegister: 'auto'` = bản mới cài xong rồi NẰM CHỜ tới khi đóng hết tab — trên điện thoại thì gần như không bao giờ. Giờ app bắt `onNeedRefresh`, hiện dải "Đã có bản mới", tự hỏi lại server mỗi lần quay về tiền cảnh và mỗi 30 phút | Thêm một dải thông báo trên đỉnh màn hình; đổi lại không còn kẹt ở bản cũ |
+| 2026-09-11 | Vẫn giữ **không tự tải lại**, chỉ mời | Người dùng có thể đang gõ dở một lời nhắn hoặc đang giữa ván bài — cướp trang của họ để cập nhật tệ hơn hẳn việc chờ thêm vài phút | Ai bỏ qua dải thông báo thì vẫn ở bản cũ tới lần mở sau |
 
 ---
 

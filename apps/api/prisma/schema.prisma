@@ -116,6 +116,9 @@ model User {
   locationPoints LocationPoint[]
   geofenceEvents GeofenceEvent[]
   geofenceStates GeofenceState[]
+  trips          Trip[]
+  cycleSettings  CycleSettings?
+  periodEntries  PeriodEntry[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -141,6 +144,7 @@ model Couple {
 
   members        User[]
   places         Place[]
+  trips          Trip[]
   posts          Post[]
   events         Event[]
   milestones     Milestone[]
@@ -246,12 +250,55 @@ model Place {
 
   geofenceEvents GeofenceEvent[]
   geofenceStates GeofenceState[]
+  trips          Trip[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([coupleId])
   @@map("places")
+}
+
+enum TripStatus {
+  ACTIVE
+  ARRIVED
+  CANCELLED
+  /// Quá hạn: đi mãi không tới nơi và cũng không ai bấm gì.
+  EXPIRED
+}
+
+/// Một chuyến "đang trên đường về" (F13).
+///
+/// Điểm đến LUÔN là một `Place` đã lưu, không phải toạ độ tuỳ ý. Hai lý do:
+/// hàng rào ảo của địa điểm đó (F6) chính là thứ phát hiện "đã tới nơi" mà
+/// không cần thêm cơ chế nào; và người dùng không phải chọn toạ độ trên bản đồ
+/// giữa lúc đang chuẩn bị ra về.
+///
+/// Giờ dự kiến KHÔNG lưu trong bảng: nó được tính lúc đọc, từ điểm vị trí mới
+/// nhất của người đang đi. Lưu lại thì phải có một job cập nhật liên tục, và
+/// mỗi lần server ngủ dậy là một con số cũ nằm chình ình trên màn hình người kia.
+model Trip {
+  id       String @id @default(uuid())
+  coupleId String
+  couple   Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  /// Người đang trên đường.
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  placeId  String
+  place    Place  @relation(fields: [placeId], references: [id], onDelete: Cascade)
+
+  status TripStatus @default(ACTIVE)
+
+  startedAt  DateTime  @default(now())
+  arrivedAt  DateTime?
+  endedAt    DateTime?
+  updatedAt  DateTime  @updatedAt
+
+  /// Mỗi người chỉ có MỘT chuyến đang chạy: bắt đầu chuyến mới thì chuyến cũ
+  /// tự huỷ. Chỉ số này phục vụ truy vấn "chuyến đang chạy của couple".
+  @@index([coupleId, status])
+  @@index([userId, status])
+  @@map("trips")
 }
 
 /// Trạng thái hiện tại của một người với một hàng rào.
@@ -553,4 +600,65 @@ model StudyLog {
 
   @@index([coupleId, userId, day])
   @@map("study_logs")
+}
+
+/// Người ấy được thấy gì về chu kỳ (F14). Mặc định KHÔNG chia sẻ.
+enum CycleShareLevel {
+  /// Không ai ngoài chủ dữ liệu thấy gì.
+  OFF
+  /// Chỉ "đang trong kỳ" / "sắp tới kỳ" — KHÔNG kèm ngày cụ thể.
+  SUMMARY
+  /// Thấy cả ngày dự kiến của kỳ tới.
+  FULL
+}
+
+/// Cài đặt theo dõi chu kỳ của MỘT người (F14).
+///
+/// Đây là dữ liệu sức khoẻ: không có cột nào của bảng này được đi ra ngoài
+/// couple, và mức chia sẻ do chính chủ dữ liệu đặt — kiểm ở tầng service, xem
+/// `partnerView()` trong packages/shared.
+///
+/// Bản ghi được tạo LƯỜI (lúc ghi lần đầu), nên "chưa có hàng" = "chưa bật
+/// theo dõi" và không cần thêm cột cờ bật/tắt.
+model CycleSettings {
+  userId String          @id
+  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shareLevel CycleShareLevel @default(OFF)
+
+  /// Người dùng tự đặt, để trống thì tính từ lịch sử.
+  avgCycleDays  Int?
+  avgPeriodDays Int?
+
+  /// Nhắc chính mình trước khi tới kỳ.
+  remindMe      Boolean @default(true)
+  /// Nhắc người ấy. Chỉ có tác dụng khi đang chia sẻ.
+  remindPartner Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("cycle_settings")
+}
+
+/// Một kỳ hành kinh đã ghi.
+///
+/// `startDate` / `endDate` là NGÀY TRÔI NỔI (§6.3): lưu 00:00 UTC của ngày lịch
+/// đó và đọc lại theo UTC, không đổi múi giờ. "Ngày 10/09" là một ô trên tờ
+/// lịch chứ không phải một khoảnh khắc.
+model PeriodEntry {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  startDate DateTime  @db.Date
+  /// `null` = kỳ đang diễn ra, chưa ghi ngày kết thúc.
+  endDate   DateTime? @db.Date
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Một ngày bắt đầu chỉ ghi được một lần — chặn bấm hai lần thành hai kỳ.
+  @@unique([userId, startDate])
+  @@index([userId, startDate])
+  @@map("period_entries")
 }

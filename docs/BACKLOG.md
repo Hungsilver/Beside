@@ -195,3 +195,7 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 | 11/09 | **Chấm vị trí của chính mình chưa bấm được** — chỉ chấm của người ấy mở được chi tiết. Toạ độ của mình thì điện thoại nào cũng có sẵn và chỉ đường tới chỗ mình đang đứng là vô nghĩa, nhưng "sao chép toạ độ chỗ tôi đang đứng" thì vẫn có ích | Thấp | `apps/web/src/screens/MapScreen.tsx` |
 | 11/09 | **Màn ghép đôi (`/ghep-doi`) chưa được thiết kế lại** theo ngôn ngữ mới của Cài đặt — vẫn là bố cục cũ từ Phase 1 | Thấp | `apps/web/src/screens/PairScreen.tsx` |
 | 11/09 | **Chưa dùng lại `PhotoCropper` cho ảnh đại diện** ở màn Hồ sơ mới — ảnh vẫn bị cắt giữa theo `object-cover` (gộp với mục 08/09 và 10/09 ở trên) | Trung bình | `apps/web/src/screens/settings/ProfileScreen.tsx` |
+| 11/09 | **F13 chưa có lịch sử chuyến đi** — chuyến xong là biến mất khỏi giao diện, dù DB vẫn giữ. Một danh sách "tuần này hai đứa đi lại thế nào" là thứ dùng lại được dữ liệu đã có | Thấp | `apps/api/src/trips/trips.service.ts` |
+| 11/09 | **F13 chưa báo khi người đi lệch hẳn khỏi hướng về** — hiện chỉ tính khoảng cách thẳng tới đích | Thấp | `apps/api/src/trips/trips.service.ts` |
+| 11/09 | **F14 chưa ghi triệu chứng / tâm trạng** theo ngày — mới chỉ có ngày bắt đầu và kết thúc | Chờ quyết định | `apps/web/src/screens/CycleScreen.tsx` |
+| 11/09 | **F14 chưa có trace API** như các phase trước — hiện có 25 unit test cho phần logic thuần và 1 E2E | Trung bình | `apps/api/test/` |

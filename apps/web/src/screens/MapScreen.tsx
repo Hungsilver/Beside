@@ -5,6 +5,7 @@ import {
   LIVE_STALE_AFTER_MS,
   type PartnerLocationEvent,
 } from '@beside/shared';
+import { useAuth } from '@/lib/auth-context';
 import { useCouple } from '@/lib/couple-api';
 import { usePartnerLatest, usePartnerTrail } from '@/lib/location-api';
 import { useRealtime } from '@/lib/realtime';
@@ -33,12 +34,15 @@ import {
   type MapRangeState,
 } from '@/lib/map-filter';
 import MapTimeFilter from '@/components/MapTimeFilter';
+import { TripCard, TripStartSheet } from '@/components/TripPanel';
+import { useCurrentTrip } from '@/lib/trips-api';
 import LocationDetailSheet from '@/components/LocationDetailSheet';
 import PostDetailSheet from '@/components/PostDetailSheet';
 import TabBar from '@/components/TabBar';
 import Avatar from '@/components/Avatar';
 
 export default function MapScreen() {
+  const { user } = useAuth();
   const coupleQuery = useCouple();
   const partnerQuery = usePartnerLatest();
   const [styleId, setStyleId] = useState<MapStyleId>(readSavedStyle);
@@ -56,6 +60,10 @@ export default function MapScreen() {
   const [openPostId, setOpenPostId] = useState<string | null>(null);
   /** Đang mở chi tiết vị trí của người ấy (chạm vào chấm trên bản đồ). */
   const [partnerSheet, setPartnerSheet] = useState(false);
+  /** Đang chọn điểm đến cho chuyến "đang trên đường về". */
+  const [tripPicker, setTripPicker] = useState(false);
+
+  const tripQuery = useCurrentTrip();
 
   /*
    * Ngày hôm nay theo giờ VN. Dùng làm phụ thuộc để mốc "7 ngày gần đây" tự
@@ -88,6 +96,10 @@ export default function MapScreen() {
   }, []);
 
   const partner = coupleQuery.data?.partner ?? null;
+  const trip = tripQuery.data?.trip ?? null;
+  // So với CHÍNH MÌNH chứ không phải "khác id người ấy": chưa tải xong hồ sơ
+  // người ấy thì phép so kia sẽ nhận nhầm chuyến của họ thành chuyến của mình.
+  const myTrip = Boolean(trip && user && trip.userId === user.id);
 
   /**
    * Vị trí đối phương: ưu tiên điểm đến từ WebSocket (mới nhất), rơi về
@@ -231,6 +243,12 @@ export default function MapScreen() {
           </Link>
         </div>
 
+        {trip && !myTrip && (
+          <p className="pointer-events-auto mt-2 inline-block rounded-full bg-plum-500 px-3 py-1.5 text-[11.5px] font-bold text-white shadow-sm">
+            🚗 {trip.userName} đang về {trip.placeEmoji} {trip.placeName}
+          </p>
+        )}
+
         {partnerPoint?.fuzzed && (
           <p className="pointer-events-auto mt-2 inline-block rounded-full bg-white/95 px-3 py-1.5 text-[11.5px] font-semibold text-ink-500 shadow-sm">
             🔒 {partner?.displayName} đang bật làm mờ vị trí
@@ -313,6 +331,21 @@ export default function MapScreen() {
           />
         </div>
 
+        {/* Chuyến "đang trên đường về" (F13) — của ai cũng hiện ở đây. */}
+        {trip ? (
+          <div className="mt-3">
+            <TripCard trip={trip} mine={myTrip} onEnded={() => void tripQuery.refetch()} />
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setTripPicker(true)}
+            className="btn-ghost mt-3 w-full"
+          >
+            🚗 Tôi đang về...
+          </button>
+        )}
+
         {/*
           Cùng một việc với cú chạm vào chấm trên bản đồ, nhưng ở chỗ dễ thấy:
           chấm vị trí chỉ rộng 44px và thường nằm khuất dưới bảng này.
@@ -358,6 +391,8 @@ export default function MapScreen() {
       {openPost && (
         <PostDetailSheet post={openPost} onClose={() => setOpenPostId(null)} />
       )}
+
+      {tripPicker && <TripStartSheet onClose={() => setTripPicker(false)} />}
 
       {partnerSheet && partnerPoint && partner && (
         <LocationDetailSheet
