@@ -20,6 +20,7 @@ import {
   type StudySummaryResponse,
 } from '@beside/shared';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { StudyPlanService } from './study-plan.service';
 import { AppError } from '../common/errors/app-error';
 import { LocationsService } from '../locations/locations.service';
 import { PushService } from '../push/push.service';
@@ -47,6 +48,7 @@ export class StudyService {
     private readonly prisma: PrismaService,
     private readonly locations: LocationsService,
     private readonly push: PushService,
+    private readonly plan: StudyPlanService,
   ) {}
 
   // ------------------------------------------------------------------
@@ -162,7 +164,13 @@ export class StudyService {
   async summary(userId: string): Promise<StudySummaryResponse> {
     const ctx = await this.locations.getContext(userId);
 
-    const [running, logs, members] = await Promise.all([
+    /*
+     * Sáu truy vấn chạy SONG SONG, không nối đuôi.
+     *
+     * Đây là lượt gọi duy nhất của màn học nên nó gánh tất cả; xếp tuần tự thì
+     * độ trễ cộng dồn và người dùng nhìn vòng quay lâu gấp mấy lần.
+     */
+    const [running, logs, members, ddays, tasks, pendingNote, recentNotes] = await Promise.all([
       this.findRunning(ctx.coupleId),
       this.prisma.studyLog.findMany({
         where: { coupleId: ctx.coupleId },
@@ -180,6 +188,10 @@ export class StudyService {
         select: { id: true, displayName: true, studyGoalMin: true },
         orderBy: { createdAt: 'asc' },
       }),
+      this.plan.ddaysOf(ctx.coupleId),
+      this.plan.tasksOf(ctx.coupleId, userId),
+      this.plan.pendingNote(ctx.coupleId, userId),
+      this.plan.recentNotes(ctx.coupleId, userId),
     ]);
 
     const windowKeys = recentDayKeys(STATS_DAYS);
@@ -227,6 +239,10 @@ export class StudyService {
       people,
       togetherMinutes,
       statsFrom: windowKeys[0] ?? todayKey,
+      ddays,
+      tasks,
+      pendingNote,
+      recentNotes,
     };
   }
 

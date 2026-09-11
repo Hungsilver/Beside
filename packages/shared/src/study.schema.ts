@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import { calendarDaysBetween, ymdInTimeZone, ymdToUtcMidnight } from './datetime';
+import type {
+  StudyDDayResponse,
+  StudyNoteResponse,
+  StudyTaskResponse,
+} from './study-plan.schema';
 
 /**
  * Phòng học chung (F12) — Pomodoro cho hai người.
@@ -177,6 +182,19 @@ export interface StudySummaryResponse {
   togetherMinutes: number;
   /** Ngày đầu của khoảng biểu đồ, `YYYY-MM-DD`. Client dựng nhãn trục từ đây. */
   statsFrom: string;
+
+  // --- Đợt 2 ---------------------------------------------------------------
+  /** Mốc đếm ngược của CẢ HAI, gần tới hạn xếp trước. */
+  ddays: StudyDDayResponse[];
+  /** Việc đang mở của mình + việc mình đã xong hôm nay. */
+  tasks: StudyTaskResponse[];
+  /**
+   * Chặng vừa học xong mà mình chưa kịp ghi nhật ký, `null` nếu không có.
+   * Giao diện lấy nó để hỏi "vừa rồi làm được gì".
+   */
+  pendingNote: StudyNoteResponse | null;
+  /** Vài dòng nhật ký gần nhất của mình, mới → cũ. */
+  recentNotes: StudyNoteResponse[];
 }
 
 /** Đặt mục tiêu phút mỗi ngày cho CHÍNH MÌNH. */

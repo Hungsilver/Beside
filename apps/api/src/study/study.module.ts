@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import { LocationsModule } from '../locations/locations.module';
 import { StudyController } from './study.controller';
 import { StudyService } from './study.service';
+import { StudyPlanService } from './study-plan.service';
 import { StudyGateway } from './study.gateway';
 import { StudyClockJob } from './study-clock.job';
 
@@ -12,7 +13,7 @@ import { StudyClockJob } from './study-clock.job';
   // một nguồn sự thật cho "ai thuộc couple nào".
   imports: [AuthModule, LocationsModule],
   controllers: [StudyController],
-  providers: [StudyService, StudyGateway, StudyClockJob],
+  providers: [StudyService, StudyPlanService, StudyGateway, StudyClockJob],
   exports: [StudyService],
 })
 export class StudyModule {}

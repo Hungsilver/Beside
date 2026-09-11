@@ -116,6 +116,8 @@ model User {
   gameMoves      GameMove[]
   studyStarted   StudySession[]     @relation("StudyStarter")
   studyLogs      StudyLog[]
+  studyDDays     StudyDDay[]
+  studyTasks     StudyTask[]
   locationPoints LocationPoint[]
   geofenceEvents GeofenceEvent[]
   geofenceStates GeofenceState[]
@@ -154,6 +156,8 @@ model Couple {
   games          Game[]
   studySessions  StudySession[]
   studyLogs      StudyLog[]
+  studyDDays     StudyDDay[]
+  studyTasks     StudyTask[]
   locationPoints LocationPoint[]
   geofenceEvents GeofenceEvent[]
 
@@ -599,6 +603,10 @@ model StudyLog {
   round     Int
   minutes   Int
 
+  /// Nhật ký một dòng: "vừa rồi làm được gì". Người học tự ghi sau khi chặng
+  /// kết thúc. `null` = chưa ghi hoặc đã bỏ qua.
+  note String?
+
   /// CHÉP LẠI tên môn tại thời điểm ghi công, không tra ngược qua `session`.
   /// Phiên bị xoá (`onDelete: SetNull`) hoặc đổi tên giữa chừng thì lịch sử vẫn
   /// phải nói đúng thứ đã học lúc đó.
@@ -615,6 +623,54 @@ model StudyLog {
   /// Thống kê 7 ngày gom theo (ngày, môn) cho cả couple — không lọc theo user.
   @@index([coupleId, day])
   @@map("study_logs")
+}
+
+/// F12 — mốc đếm ngược ("còn 30 ngày nữa thi").
+///
+/// Thuộc về MỘT NGƯỜI nhưng cả hai đều thấy: biết người ấy còn mười hai ngày
+/// nữa thi chính là lý do mốc này tồn tại trong một app cho hai người.
+model StudyDDay {
+  id       String @id @default(uuid())
+  coupleId String
+  couple   Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title String
+
+  /// Ngày diễn ra, theo lịch GIỜ VIỆT NAM. Cùng lý do với `StudyLog.day`: lưu
+  /// timestamp rồi so sau sẽ lệch một ngày trong khoảng 00:00–07:00 giờ VN.
+  date DateTime @db.Date
+
+  createdAt DateTime @default(now())
+
+  @@index([coupleId, date])
+  @@map("study_ddays")
+}
+
+/// F12 — việc cần làm trong ngày.
+model StudyTask {
+  id       String @id @default(uuid())
+  coupleId String
+  couple   Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title String
+
+  /// Ngày việc được TẠO, theo lịch giờ VN. Việc chưa xong vẫn hiện ở hôm sau —
+  /// cột này chỉ để nói "từ hôm nào", không phải hạn chót.
+  day DateTime @db.Date
+
+  /// `null` = chưa xong. Dùng mốc thời gian thay cờ boolean: biết luôn xong lúc
+  /// nào mà không tốn thêm cột.
+  doneAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([coupleId, userId, day])
+  @@index([coupleId, userId, doneAt])
+  @@map("study_tasks")
 }
 
 /// Người ấy được thấy gì về chu kỳ (F14). Mặc định KHÔNG chia sẻ.

@@ -24,7 +24,10 @@ import {
   useStudySummary,
 } from '@/lib/study-api';
 import FlipClock from '@/components/FlipClock';
+import StudyDDays from '@/components/StudyDDays';
+import StudyNotes from '@/components/StudyNotes';
 import StudyStats from '@/components/StudyStats';
+import StudyTasks from '@/components/StudyTasks';
 import TabBar from '@/components/TabBar';
 import { Screen, Spinner } from '@/components/ui';
 
@@ -64,6 +67,24 @@ export default function StudyScreen() {
       ) : (
         <StartRoom onError={setError} lastSubject={lastSubjectOf(me)} />
       )}
+
+      {/*
+        Thứ tự trên màn là thứ tự người ta cần tới: hỏi về chặng vừa xong (chỉ
+        hiện ngay sau khi học) → việc đang làm dở → mốc đang đếm ngược → thống
+        kê. Thống kê đứng cuối vì nó để nhìn lại, không phải để hành động.
+      */}
+      <StudyNotes
+        pending={summary.data?.pendingNote ?? null}
+        recent={summary.data?.recentNotes ?? []}
+      />
+
+      <StudyTasks tasks={summary.data?.tasks ?? []} />
+
+      <StudyDDays
+        ddays={summary.data?.ddays ?? []}
+        myId={myId}
+        partnerName={partner?.displayName ?? null}
+      />
 
       <StudyStats
         me={me}

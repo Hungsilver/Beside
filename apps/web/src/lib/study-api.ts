@@ -4,10 +4,17 @@ import type { Socket } from 'socket.io-client';
 import {
   STUDY_RT_EVENTS,
   STUDY_RT_NAMESPACE,
+  type CreateDDayInput,
+  type CreateTaskInput,
+  type SetLogNoteInput,
   type SetStudyGoalInput,
   type StartStudyInput,
+  type StudyDDayResponse,
+  type StudyNoteResponse,
   type StudySessionResponse,
   type StudySummaryResponse,
+  type StudyTaskResponse,
+  type UpdateTaskInput,
 } from '@beside/shared';
 import { api, getAccessToken } from './api-client';
 
@@ -68,6 +75,64 @@ export function useCancelStudy() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.post<StudySessionResponse>(`/study/${id}/cancel`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: studyKeys.all }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Đợt 2 — mốc đếm ngược · việc cần làm · nhật ký
+//
+// Tất cả đều nạp lại `studyKeys.all` sau khi ghi: ba thứ này đi chung một lượt
+// gọi `/study/summary`, nên làm mới cả cụm là đúng một vòng mạng chứ không phải
+// ba. Bù lại con số thống kê cũng luôn khớp với thứ vừa bấm.
+// ---------------------------------------------------------------------------
+
+export function useCreateDDay() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateDDayInput) => api.post<StudyDDayResponse>('/study/ddays', input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: studyKeys.all }),
+  });
+}
+
+export function useDeleteDDay() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/study/ddays/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: studyKeys.all }),
+  });
+}
+
+export function useCreateTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateTaskInput) => api.post<StudyTaskResponse>('/study/tasks', input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: studyKeys.all }),
+  });
+}
+
+export function useUpdateTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: UpdateTaskInput & { id: string }) =>
+      api.patch<StudyTaskResponse>(`/study/tasks/${id}`, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: studyKeys.all }),
+  });
+}
+
+export function useDeleteTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/study/tasks/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: studyKeys.all }),
+  });
+}
+
+export function useSetLogNote() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ logId, ...input }: SetLogNoteInput & { logId: string }) =>
+      api.put<StudyNoteResponse>(`/study/logs/${logId}/note`, input),
     onSuccess: () => qc.invalidateQueries({ queryKey: studyKeys.all }),
   });
 }

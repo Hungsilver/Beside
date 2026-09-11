@@ -72,7 +72,7 @@
 | F11 | Cờ caro | ✅ Bàn 15×15, luật Việt Nam (đúng 5 quân bị chặn hai đầu thì không thắng, ≥6 quân thắng), 30s/lượt |
 | F13 | Đang trên đường về | ✅ Bấm một nút khi bắt đầu về; người ấy nhận thông báo lúc khởi hành và lúc tới nơi, xem được giờ dự kiến. Điểm đến là một Địa điểm đã lưu (F6), chính hàng rào ảo của nó phát hiện "đã tới nơi" |
 | F14 | Chu kỳ kinh nguyệt | ✅ Ghi kỳ, dự đoán kỳ tới, nhắc trước 1 ngày. **Dữ liệu sức khoẻ của MỘT người** — mặc định người ấy không thấy gì; ba mức chia sẻ do chính chủ chọn; có nút xoá sạch |
-| F12 | Học cùng nhau | ✅ Phòng Pomodoro chung: **đồng hồ số lật** chạy đồng bộ hai máy, đặt tên môn cho buổi học, mục tiêu phút mỗi ngày, thống kê 7 ngày + phân bổ theo môn + chuỗi ngày. **Không có gọi video** — xem §1.1b |
+| F12 | Học cùng nhau | ✅ Phòng Pomodoro chung: **đồng hồ số lật** chạy đồng bộ hai máy, đặt tên môn cho buổi học, mục tiêu phút mỗi ngày, thống kê 7 ngày + phân bổ theo môn + chuỗi ngày, mốc đếm ngược, việc cần làm, nhật ký một dòng mỗi chặng. **Không có gọi video** — xem §1.1b |
 
 ### 1.1b Ngoài phạm vi (không làm)
 
@@ -527,11 +527,42 @@ model StudyLog {                         // một chặng HỌC đã hoàn thàn
   round     Int                          // (sessionId, round) = khoá của một chặng
   minutes   Int
   subject   String?                      // BẢN CHÉP tên môn lúc ghi công
+  note      String?                      // nhật ký một dòng cho chặng này
   day       DateTime @db.Date            // ngày lịch GIỜ VN
   @@index([coupleId, userId, day])
   @@index([coupleId, day])               // biểu đồ 7 ngày của cả couple
 }
+
+model StudyDDay {                        // mốc đếm ngược ("còn 12 ngày nữa thi")
+  id       String   @id @default(uuid())
+  coupleId String
+  userId   String                        // của MỘT người, nhưng cả hai đều thấy
+  title    String
+  date     DateTime @db.Date             // ngày lịch GIỜ VN
+  @@index([coupleId, date])
+}
+
+model StudyTask {                        // việc cần làm trong ngày
+  id       String    @id @default(uuid())
+  coupleId String
+  userId   String                        // RIÊNG tư — người ấy không thấy
+  title    String
+  day      DateTime  @db.Date            // ngày TẠO, không phải hạn chót
+  doneAt   DateTime?                     // null = chưa xong
+  @@index([coupleId, userId, day])
+  @@index([coupleId, userId, doneAt])
+}
 ```
+
+**Việc chưa xong không biến mất lúc nửa đêm.** `tasksOf()` trả về mọi việc `doneAt = null`
+(tạo từ hôm nào cũng được) cộng với việc đã xong **hôm nay**; việc cũ chưa xong được đánh
+dấu `carriedOver` để giao diện nói rõ "còn lại từ 10/09". Danh sách bó cứng vào "hôm nay"
+nghe gọn hơn, nhưng nó âm thầm nuốt đúng những việc người ta đang nợ.
+
+**Mốc đếm ngược chung, việc cần làm riêng.** Biết người ấy còn mười hai ngày nữa thi là lý
+do mốc tồn tại trong một app cho hai người; còn danh sách việc vặt của một người thì người
+kia không có lý do gì để đọc. Số ngày còn lại do **server** tính — máy người dùng có thể
+lệch giờ hoặc sai múi giờ, mà "còn mấy ngày nữa thi" thì không được phép sai.
 
 `User.studyGoalMin` (Int, mặc định `0`) giữ mục tiêu phút mỗi ngày. `0` nghĩa là chưa đặt —
 giao diện ẩn vòng tiến độ. Không dùng `NULL` vì mọi chỗ đọc ra đều đem đi cộng/so sánh.
@@ -778,6 +809,12 @@ POST   /study                      {focusMin, breakMin, subject?} — có phòng
 POST   /study/:id/join             vào học cùng                                   🔸
 POST   /study/:id/leave            rời phòng; người cuối rời thì phiên đóng lại    🔸
 POST   /study/:id/cancel           dừng hẳn — ai trong hai người cũng dừng được    🔸
+POST   /study/ddays                {title, date} — tối đa 5 mốc mỗi người         🔸
+DELETE /study/ddays/:id            chỉ xoá được mốc của CHÍNH mình                🔸
+POST   /study/tasks                {title} — tối đa 40 việc đang mở               🔸
+PATCH  /study/tasks/:id            {title?, done?}                                🔸
+DELETE /study/tasks/:id                                                           🔸
+PUT    /study/logs/:logId/note     {note} — nhật ký một dòng, chuỗi rỗng = gỡ     🔸
 
 POST   /trips                      {placeId} — bắt đầu chuyến "đang trên đường về"  ✅
 GET    /trips/current               chuyến đang chạy của couple (mình hoặc người ấy) ✅
@@ -1145,6 +1182,11 @@ Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L
 | 2026-09-11 | **F12 đợt 1**: biểu đồ tuần dùng **một thang đo chung** cho cả hai người | Mỗi người một thang riêng thì hai cột cao bằng nhau lại đang là 20 phút và 3 tiếng — người xem hiểu ngược hoàn toàn | Người học ít hơn hẳn sẽ thấy cột của mình gần như phẳng |
 | 2026-09-11 | **F12 đợt 1**: thống kê 7 ngày gắn vào `GET /study/summary`, không tách endpoint riêng | `summary()` đã nạp sẵn toàn bộ `StudyLog` của couple để tính tổng và chuỗi ngày. Tách ra là quét bảng lần thứ hai cho đúng bộ dữ liệu đó | Khi cần khung tháng/năm sẽ phải tách — lúc đó mới tách |
 | 2026-09-11 | **F12 đợt 1**: đồng hồ số lật viết bằng CSS thuần trong `index.css`, không kéo thư viện | Cần `@keyframes` + `backface-visibility` + `perspective` đi cùng nhau; nhét vào class tiện ích thì mỗi chỗ dùng phải chép lại cả cụm. Thư viện flip-clock nào cũng gánh theo phần đếm giờ riêng, mà đồng hồ ở đây do SERVER giữ mốc | Thêm ~90 dòng CSS vào tệp chung |
+| 2026-09-11 | **F12 đợt 2**: việc chưa xong KHÔNG hết hạn lúc nửa đêm, chỉ được đánh dấu `carriedOver` | Danh sách bó cứng vào "hôm nay" gọn hơn nhưng âm thầm nuốt mất đúng những việc người ta đang nợ — và người dùng chỉ phát hiện khi đã quên hẳn. Truy vấn "chưa xong (mọi ngày) HOẶC xong hôm nay" cũng chỉ là một câu | Danh sách có thể dài dần nếu không ai dọn; chặn bằng trần 40 việc đang mở |
+| 2026-09-11 | **F12 đợt 2**: mốc đếm ngược CẢ HAI cùng thấy, việc cần làm thì RIÊNG | Biết người ấy còn mười hai ngày nữa thi là lý do mốc tồn tại trong app cho hai người. Danh sách việc vặt thì người kia không có lý do gì để đọc | Hai bảng gần giống nhau lại có hai luật quyền khác nhau — phải nhớ khi thêm truy vấn mới |
+| 2026-09-11 | **F12 đợt 2**: `daysLeft` tính ở SERVER, không để client tự trừ | Máy người dùng có thể lệch giờ hoặc đặt sai múi giờ. "Còn mấy ngày nữa thi" thì không được phép sai | Số ngày chỉ đổi khi tải lại — chấp nhận được, nó đổi mỗi ngày một lần |
+| 2026-09-11 | **F12 đợt 2**: nhật ký gắn vào `StudyLog` (một chặng), không vào `StudySession` | Một buổi Pomodoro có nhiều chặng và mỗi chặng làm một việc khác nhau. Gắn vào phiên thì bốn chặng chung một dòng ghi chú | Muốn xem nhật ký cả buổi phải gom nhiều dòng |
+| 2026-09-11 | **F12 đợt 2**: chỉ hỏi "vừa làm được gì" trong 3 giờ sau khi chặng kết thúc | Mở app sau một tuần mà bị hỏi về buổi học tuần trước thì chẳng ai còn nhớ để mà ghi — câu hỏi trở thành thứ phải gạt đi | Chặng cũ hơn 3 giờ không ghi chú được nữa qua đường hỏi tự động (vẫn ghi được bằng `PUT .../note`) |
 | 2026-09-11 | **F14**: không log nội dung chu kỳ, chỉ log số lượng | Nhật ký máy chủ đã cấm toạ độ chính xác (R3); dữ liệu sức khoẻ còn nhạy cảm hơn | Gỡ lỗi khó hơn một chút |
 | 2026-09-11 | Sửa gốc lỗi **"deploy xong vẫn thấy giao diện cũ"**: app tự đăng ký service worker và mời tải lại | `registerType: 'prompt'` + `injectRegister: 'auto'` = bản mới cài xong rồi NẰM CHỜ tới khi đóng hết tab — trên điện thoại thì gần như không bao giờ. Giờ app bắt `onNeedRefresh`, hiện dải "Đã có bản mới", tự hỏi lại server mỗi lần quay về tiền cảnh và mỗi 30 phút | Thêm một dải thông báo trên đỉnh màn hình; đổi lại không còn kẹt ở bản cũ |
 | 2026-09-11 | Vẫn giữ **không tự tải lại**, chỉ mời | Người dùng có thể đang gõ dở một lời nhắn hoặc đang giữa ván bài — cướp trang của họ để cập nhật tệ hơn hẳn việc chờ thêm vài phút | Ai bỏ qua dải thông báo thì vẫn ở bản cũ tới lần mở sau |
