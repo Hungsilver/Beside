@@ -9,7 +9,12 @@ import LoginScreen from '@/screens/LoginScreen';
 import RegisterScreen from '@/screens/RegisterScreen';
 import PairScreen from '@/screens/PairScreen';
 import HomeScreen from '@/screens/HomeScreen';
-import SettingsScreen from '@/screens/SettingsScreen';
+import SettingsScreen from '@/screens/settings/SettingsScreen';
+import ProfileScreen from '@/screens/settings/ProfileScreen';
+import MessagingScreen from '@/screens/settings/MessagingScreen';
+import NotificationsScreen from '@/screens/settings/NotificationsScreen';
+import PrivacyScreen from '@/screens/settings/PrivacyScreen';
+import CoupleScreen from '@/screens/settings/CoupleScreen';
 
 // MapLibre nặng gần 1MB — chỉ tải khi người dùng thật sự mở bản đồ,
 // để lần mở app đầu tiên trên mạng di động không phải chờ.
@@ -46,8 +51,16 @@ export default function App() {
       <PassivePing />
       <Routes>
         <Route path="/ghep-doi" element={<PairScreen />} />
-        {/* Cài đặt mở được ngay cả khi chưa ghép đôi — để sửa hồ sơ trước cũng được */}
+        {/*
+          Cài đặt mở được ngay cả khi chưa ghép đôi — để sửa hồ sơ trước cũng được.
+          Màn con nào thuộc về couple thì TỰ nó quay về danh sách khi chưa ghép.
+        */}
         <Route path="/cai-dat" element={<SettingsScreen />} />
+        <Route path="/cai-dat/ho-so" element={<ProfileScreen />} />
+        <Route path="/cai-dat/nhan-tin" element={<MessagingScreen />} />
+        <Route path="/cai-dat/thong-bao" element={<NotificationsScreen />} />
+        <Route path="/cai-dat/rieng-tu" element={<PrivacyScreen />} />
+        <Route path="/cai-dat/ca-doi" element={<CoupleScreen />} />
         <Route
           path="/ban-do"
           element={

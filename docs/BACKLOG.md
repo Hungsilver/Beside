@@ -193,3 +193,5 @@ Không tự ý làm những việc ở đây khi chưa được duyệt.
 | 10/09 | **Màn cắt ảnh chưa xoay được ảnh** — hướng ảnh đã đúng nhờ EXIF, nhưng ai muốn xoay thêm 90° thì chưa có nút | Thấp | `apps/web/src/components/PhotoCropper.tsx` |
 | 10/09 | **Chuỗi hiển thị của phần bản đồ / khoảnh khắc mới vẫn hardcode trong component** — cùng lý do với mục game ở trên: web chưa có `src/i18n/vi.ts` nên gom riêng vài màn sẽ lệch với phần còn lại | Thấp | `apps/web/src/components/MapTimeFilter.tsx` |
 | 11/09 | **Chấm vị trí của chính mình chưa bấm được** — chỉ chấm của người ấy mở được chi tiết. Toạ độ của mình thì điện thoại nào cũng có sẵn và chỉ đường tới chỗ mình đang đứng là vô nghĩa, nhưng "sao chép toạ độ chỗ tôi đang đứng" thì vẫn có ích | Thấp | `apps/web/src/screens/MapScreen.tsx` |
+| 11/09 | **Màn ghép đôi (`/ghep-doi`) chưa được thiết kế lại** theo ngôn ngữ mới của Cài đặt — vẫn là bố cục cũ từ Phase 1 | Thấp | `apps/web/src/screens/PairScreen.tsx` |
+| 11/09 | **Chưa dùng lại `PhotoCropper` cho ảnh đại diện** ở màn Hồ sơ mới — ảnh vẫn bị cắt giữa theo `object-cover` (gộp với mục 08/09 và 10/09 ở trên) | Trung bình | `apps/web/src/screens/settings/ProfileScreen.tsx` |

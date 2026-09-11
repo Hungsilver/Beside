@@ -34,14 +34,18 @@
     còn một chip ghi khoảng đang lọc). Chạm **chấm vị trí của người ấy** → tấm trượt chi tiết:
     khoảng cách · sai số · pin/tốc độ · toạ độ · nút chỉ đường Google Maps; có lối vào thứ hai
     từ bảng thông tin ở đáy. 5 unit test mới + 1 E2E (BD-05)
-  - Tổng: **541 unit test** + **336 case trace** + **51 E2E**, typecheck + lint sạch cả 3 workspace
+  - 11/09 — **Cài đặt & Hồ sơ thiết kế lại**: một trang cuộn dài 688 dòng tách thành
+    **danh sách nhóm + 5 màn con** (`src/screens/settings/`), mỗi hàng nói luôn giá trị
+    đang dùng; thẻ hồ sơ gradient ở đầu màn; thanh Lưu neo đáy chỉ sáng khi có thay đổi;
+    huỷ ghép đôi dời vào màn "Chuyện của hai đứa". 4 E2E (CD-01, CD-02 + PF-01…04 viết lại)
+  - Tổng: **541 unit test** + **336 case trace** + **55 E2E**, typecheck + lint sạch cả 3 workspace
   - ✅ `npm run verify:local` → **41/41 mục đạt** trên Docker thật (gồm chốt ESLint và E2E trình duyệt)
     (6/6 container healthy: db · redis · api · web · caddy · minio), đi qua Caddy HTTPS
     — chạy lại ngày 09/09 sau khi thêm bình luận và hai trò chơi: 13 migration, 41 E2E
   - ⚠️ 10–11/09: chạy `npm run e2e` trên Docker thật. **TL-05 hỏng** (lá 4♠ chắn mất lá 3♣
     đang được ghim ở bàn Tiến lên) và nó chặn các test xếp sau — lỗi nằm ở màn Tiến lên,
     **không liên quan** tới phần bản đồ / khoảnh khắc, đã ghi `docs/BACKLOG.md`.
-    Chạy cả bộ trừ nhóm Tiến lên: **46/46 đạt** (gồm BD-01…BD-05)
+    Chạy cả bộ trừ nhóm Tiến lên: **50/50 đạt** (gồm BD-01…BD-05 và CD-01/CD-02)
 - **Triển khai:** chủ dự án tự deploy — hướng dẫn ở `docs/DEPLOY.md`
 
 ---
@@ -1094,6 +1098,11 @@ Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L
 | 2026-09-11 | Thêm **lối vào thứ hai** từ bảng thông tin ở đáy, không chỉ dựa vào cú chạm lên chấm | Chấm chỉ rộng 44px và rất hay nằm khuất dưới bảng thông tin (bảng nhớ nấc "mở rộng" 82% của lần trước) — bắt được ngay khi viết E2E BD-05 | Thêm một nút trong bảng vốn đã khá dày |
 | 2026-09-11 | Khối toạ độ tách thành `CoordinateCard` dùng chung cho khoảnh khắc và vị trí | Ba thứ dễ lệch nếu chép đôi: định dạng toạ độ (dấu CHẤM thập phân, nếu không Google Maps hiểu sai), cách dựng link, và cách xử lý khi trình duyệt không cho sao chép | Thêm một component nhỏ |
 | 2026-09-11 | Tấm trượt vị trí **nói rõ khi toạ độ đang bị làm mờ** (F8) | Không nói thì người xem tin vào một toạ độ lệch tới vài trăm mét và tưởng người kia đứng đúng chỗ đó — làm mờ là tính năng riêng tư, không phải cái bẫy | Người bật làm mờ lộ ra là mình đang bật; đây vốn đã hiện ở thanh trên cùng từ Phase 2 |
+| 2026-09-11 | Cài đặt đổi từ **một trang cuộn dài** sang **danh sách + màn con** | 688 dòng trong một tệp, bảy thẻ và BỐN nút "Lưu thay đổi" trên cùng một trang: ở khổ 390px không ai biết nút Lưu nào thuộc ô mình vừa gõ, và không liếc một cái mà biết app đang bật những gì. Danh sách có giá trị ở mép phải ("Zalo · 0912…", "Đang ẩn danh") trả lời câu hỏi đó ngay | Thêm 5 route con và một lần chạm nữa để sửa một mục; đổi lại mỗi màn chỉ làm một việc |
+| 2026-09-11 | Nút Lưu **neo ở đáy khung nhìn** và chỉ sáng khi thật sự có thay đổi | Nút Lưu nằm cuối biểu mẫu thì phải cuộn mới thấy. Bản cũ còn luôn cho bấm và bấm khi không sửa gì vẫn hiện "✓ Đã lưu" — một câu nói dối nhỏ làm người dùng hết tin vào dấu tích đó | Nút nằm NGOÀI `<form>`, nối bằng thuộc tính `form="id"`; mỗi màn phải tự tính `dirty` |
+| 2026-09-11 | Công tắc (riêng tư, thông báo) **lưu ngay**, không có nút Lưu | Đây là thứ người ta bật lúc đang cần ẩn NGAY. Bắt bấm thêm một nút là một khoảng thời gian họ tưởng mình đã ẩn mà thực ra chưa | Không hoàn tác được bằng cách "không bấm Lưu"; bù lại mỗi công tắc tự khoá khi vô nghĩa (ẩn danh bật thì khoá chia sẻ trực tiếp) |
+| 2026-09-11 | **Huỷ ghép đôi** dời vào trong màn "Chuyện của hai đứa" | Nó xoá vĩnh viễn toàn bộ dữ liệu chung, không được ngồi ngay cạnh những nút bấm hằng ngày ở màn Cài đặt | Ai thật sự muốn huỷ phải đi thêm một lớp — đúng ý đồ |
+| 2026-09-11 | `AvatarPicker` nâng lên **component cấp module** | Định nghĩa component bên trong component khác sinh ra một kiểu mới sau mỗi lần vẽ ⇒ React tháo và dựng lại liên tục: gõ một chữ vào ô tên là mất trạng thái "Đang tải lên…" và mất câu lỗi vừa hiện. Bản cũ dính đúng lỗi này, phát hiện lúc thiết kế lại | Phải truyền `user` / `patchUser` xuống bằng props |
 
 ---
 

@@ -168,8 +168,9 @@ export default function HomeScreen() {
         </section>
       )}
 
+      {/* Dẫn thẳng tới đúng màn cần sửa, không bắt người dùng tự dò trong Cài đặt. */}
       {!user?.messagingHandle && (
-        <Link to="/cai-dat" className="card mt-3.5 block">
+        <Link to="/cai-dat/nhan-tin" className="card mt-3.5 block">
           <p className="text-[11px] font-bold uppercase tracking-[1.4px] text-love-500">
             Còn thiếu một chút
           </p>

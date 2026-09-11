@@ -233,6 +233,8 @@ test.describe('Các màn dựng được, không màn trắng', () => {
     { path: '/dia-diem', marker: /Địa điểm quen/i },
     { path: '/ngay-yeu', marker: /Ngày yêu/i },
     { path: '/cai-dat', marker: /Quyền riêng tư/i },
+    { path: '/cai-dat/rieng-tu', marker: /Chế độ ẩn danh/i },
+    { path: '/cai-dat/thong-bao', marker: /Thông báo đẩy/i },
     { path: '/check-in', marker: /Khoảnh khắc mới/i },
   ];
 
@@ -436,22 +438,39 @@ test.describe('Đợt 1 — điều khiển bản đồ', () => {
 });
 
 test.describe('Đợt 2 — hồ sơ cá nhân', () => {
-  test('PF-01 — màn Cài đặt có đủ ô ảnh, giới thiệu, địa chỉ', async () => {
+  test('PF-01 — vào được màn Hồ sơ từ danh sách Cài đặt, có đủ ô', async () => {
     await page.goto('/cai-dat');
 
-    const pick = page.getByRole('button', { name: /^(Chọn ảnh|Đổi ảnh)$/ });
+    // Cài đặt giờ là một DANH SÁCH; hồ sơ nằm ở màn con.
+    await page.getByRole('link', { name: /Chỉnh sửa hồ sơ cá nhân/ }).click();
+    await expect(page).toHaveURL(/\/cai-dat\/ho-so/);
+
+    const pick = page.getByRole('button', { name: /^(Chọn|Đổi) ảnh đại diện$/ });
     await expect(pick).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByLabel('Tên hiển thị')).toBeVisible();
     await expect(page.getByLabel('Vài dòng về bạn')).toBeVisible();
     await expect(page.getByLabel('Địa chỉ')).toBeVisible();
 
     // R2: mọi vùng chạm tối thiểu 44px.
     const box = (await pick.boundingBox())!;
     expect(box.height, `nut chon anh cao ${box.height}px`).toBeGreaterThanOrEqual(44);
+
+    /*
+     * Nút Lưu chỉ sáng khi THẬT SỰ có thay đổi.
+     *
+     * Giá trị gõ vào phải khác thứ đang lưu — lần đầu viết test này tôi điền
+     * đúng địa chỉ mà PF-03 đã lưu từ lượt trước, nút vẫn xám và test đỏ oan.
+     * Không bấm Lưu nên không có gì bị ghi lại.
+     */
+    const save = page.getByRole('button', { name: /Lưu thay đổi/ });
+    await expect(save).toBeDisabled();
+    await page.getByLabel('Địa chỉ').fill(`Ngõ thử ${Date.now() % 100000}`);
+    await expect(save).toBeEnabled();
   });
 
   test('PF-02 — tải ảnh đại diện lên rồi gỡ ra', async () => {
-    await page.goto('/cai-dat');
-    await expect(page.getByRole('button', { name: /^(Chọn ảnh|Đổi ảnh)$/ })).toBeVisible({
+    await page.goto('/cai-dat/ho-so');
+    await expect(page.getByRole('button', { name: /^(Chọn|Đổi) ảnh đại diện$/ })).toBeVisible({
       timeout: 15_000,
     });
 
@@ -476,10 +495,10 @@ test.describe('Đợt 2 — hồ sơ cá nhân', () => {
       buffer: png,
     });
 
-    // Tải lên xong thì nút đổi tên thành "Đổi ảnh" và hiện thêm nút gỡ.
+    // Tải lên xong thì nút đổi nhãn thành "Đổi ảnh đại diện" và hiện thêm nút gỡ.
     const remove = page.getByRole('button', { name: 'Gỡ ảnh' });
     await expect(remove).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByRole('button', { name: 'Đổi ảnh' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Đổi ảnh đại diện' })).toBeVisible();
 
     // Ảnh phải HIỆN RA thật, không chỉ là nút đổi chữ: `<img>` nằm sau lớp xác
     // thực nên phải tải bằng fetch rồi đổi sang blob URL — kiểm luôn đường đó.
@@ -488,12 +507,14 @@ test.describe('Đợt 2 — hồ sơ cá nhân', () => {
     await expect(img).toHaveJSProperty('naturalWidth', 512);
 
     await remove.click();
-    await expect(page.getByRole('button', { name: 'Chọn ảnh' })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('button', { name: 'Chọn ảnh đại diện' })).toBeVisible({
+      timeout: 20_000,
+    });
     await expect(img).toHaveCount(0);
   });
 
   test('PF-03 — lưu giới thiệu và địa chỉ, tải lại vẫn còn', async () => {
-    await page.goto('/cai-dat');
+    await page.goto('/cai-dat/ho-so');
 
     const bio = page.getByLabel('Vài dòng về bạn');
     const address = page.getByLabel('Địa chỉ');
@@ -506,11 +527,8 @@ test.describe('Đợt 2 — hồ sơ cá nhân', () => {
     // Bộ đếm ký tự phải chạy theo — nếu không, người dùng không biết còn bao nhiêu.
     await expect(page.getByText(`${stamp.length}/160`)).toBeVisible();
 
-    await page
-      .locator('form')
-      .filter({ has: page.getByLabel('Vài dòng về bạn') })
-      .getByRole('button', { name: /Lưu/ })
-      .click();
+    // Nút Lưu neo ở đáy khung nhìn, nằm NGOÀI <form> (nối bằng thuộc tính `form`).
+    await page.getByRole('button', { name: /Lưu thay đổi/ }).click();
 
     await page.reload();
     await expect(page.getByLabel('Vài dòng về bạn')).toHaveValue(stamp, { timeout: 15_000 });
@@ -520,20 +538,67 @@ test.describe('Đợt 2 — hồ sơ cá nhân', () => {
   test('PF-04 — xoá trắng ô giới thiệu thì nội dung cũ THỰC SỰ mất', async () => {
     // Đây là chỗ dễ sai nhất: chuỗi rỗng phải được dịch thành `null` (xoá).
     // Gửi nguyên chuỗi rỗng thì server hiểu là "không đổi" và nội dung cũ ở lại.
-    await page.goto('/cai-dat');
+    await page.goto('/cai-dat/ho-so');
     const bio = page.getByLabel('Vài dòng về bạn');
     await expect(bio).toBeVisible({ timeout: 15_000 });
     await expect(bio).not.toHaveValue('');
 
     await bio.fill('');
-    await page
-      .locator('form')
-      .filter({ has: page.getByLabel('Vài dòng về bạn') })
-      .getByRole('button', { name: /Lưu/ })
-      .click();
+    await page.getByRole('button', { name: /Lưu thay đổi/ }).click();
 
     await page.reload();
     await expect(page.getByLabel('Vài dòng về bạn')).toHaveValue('', { timeout: 15_000 });
+  });
+});
+
+test.describe('Cài đặt — danh sách và màn con', () => {
+  test('CD-01 — danh sách nói đúng trạng thái và mở được từng màn con', async () => {
+    await page.goto('/cai-dat');
+
+    // Thẻ hồ sơ ở đầu màn, kèm tên người dùng.
+    const hero = page.getByRole('link', { name: /Chỉnh sửa hồ sơ cá nhân/ });
+    await expect(hero).toBeVisible({ timeout: 15_000 });
+
+    // Mỗi hàng nói luôn giá trị đang dùng — không phải mở ra mới biết.
+    await expect(page.getByRole('link', { name: /Nút nhắn tin/ })).toContainText(
+      /Zalo|Messenger|Gọi điện|Tin nhắn|Chưa cài/,
+    );
+    await expect(page.getByRole('link', { name: /Quyền riêng tư/ })).toContainText(
+      /Bình thường|Đang ẩn danh|Đang làm mờ|Tắt trực tiếp/,
+    );
+
+    // Mở một màn con rồi quay lại bằng nút ‹ của màn đó.
+    await page.getByRole('link', { name: /Quyền riêng tư/ }).click();
+    await expect(page).toHaveURL(/\/cai-dat\/rieng-tu/);
+    await expect(page.getByRole('switch', { name: 'Chế độ ẩn danh' })).toBeVisible();
+    await page.getByRole('button', { name: 'Quay lại Cài đặt' }).click();
+    await expect(page).toHaveURL(/\/cai-dat$/);
+
+    // Huỷ ghép đôi KHÔNG còn nằm ngoài danh sách — phải vào màn "Chuyện của hai đứa".
+    await expect(page.getByRole('button', { name: /Tôi muốn huỷ ghép đôi/ })).toHaveCount(0);
+    await page.getByRole('link', { name: /Chuyện của hai đứa/ }).click();
+    await expect(page.getByRole('button', { name: /Tôi muốn huỷ ghép đôi/ })).toBeVisible();
+
+    expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
+  });
+
+  test('CD-02 — không màn con nào bị tràn ngang ở khổ 390px', async () => {
+    for (const path of [
+      '/cai-dat',
+      '/cai-dat/ho-so',
+      '/cai-dat/nhan-tin',
+      '/cai-dat/thong-bao',
+      '/cai-dat/rieng-tu',
+      '/cai-dat/ca-doi',
+    ]) {
+      await page.goto(path);
+      await page.waitForLoadState('networkidle');
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow, `${path} bị tràn ngang ${overflow}px`).toBeLessThanOrEqual(0);
+    }
+    expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
   });
 });
 
