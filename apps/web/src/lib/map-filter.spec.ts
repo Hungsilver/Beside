@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { resolveMapRange, toDayInput, type MapRangeState } from './map-filter';
+import {
+  resolveMapRange,
+  shortRangeLabel,
+  toDayInput,
+  type MapRangeState,
+} from './map-filter';
 
 /** 10/09/2026 lúc 12:34 giờ VN. Giờ VN cố định UTC+7 nên 00:00 VN = 17:00Z hôm trước. */
 const NOW = Date.parse('2026-09-10T05:34:00.000Z');
@@ -17,6 +22,20 @@ describe('resolveMapRange — mốc dựng sẵn', () => {
     expect(r.from).toBeNull();
     expect(r.to).toBeNull();
     expect(r.error).toBeNull();
+  });
+
+  it('"Hôm nay" là trọn ngày lịch hiện tại theo giờ VN, không phải 24 giờ vừa qua', () => {
+    const r = resolveMapRange(state({ id: '1d' }), NOW);
+    expect(new Date(r.from!).toISOString()).toBe('2026-09-09T17:00:00.000Z');
+    expect(r.to).toBeNull();
+    expect(r.label).toBe('hôm nay');
+  });
+
+  it('"Hôm nay" lúc 01:00 sáng vẫn lấy từ 00:00 cùng ngày, không lùi sang hôm qua', () => {
+    // 01:00 ngày 10/09 giờ VN = 18:00Z ngày 09/09 — cái bẫy R2.
+    const earlyMorning = Date.parse('2026-09-09T18:00:00.000Z');
+    const r = resolveMapRange(state({ id: '1d' }), earlyMorning);
+    expect(new Date(r.from!).toISOString()).toBe('2026-09-09T17:00:00.000Z');
   });
 
   it('"7 ngày" bắt đầu từ 00:00 giờ VN của ngày thứ 7 tính ngược, KỂ CẢ hôm nay', () => {
@@ -104,5 +123,23 @@ describe('toDayInput', () => {
 
   it('mốc hỏng trả chuỗi rỗng', () => {
     expect(toDayInput(Number.NaN)).toBe('');
+  });
+});
+
+describe('shortRangeLabel — chip lúc bộ lọc thu gọn', () => {
+  it('mốc dựng sẵn lấy đúng nhãn của chip', () => {
+    expect(shortRangeLabel(state({ id: 'all' }))).toBe('Tất cả');
+    expect(shortRangeLabel(state({ id: '1d' }))).toBe('Hôm nay');
+    expect(shortRangeLabel(state({ id: '365d' }))).toBe('1 năm');
+  });
+
+  it('khoảng tự chọn rút về dạng ngày/tháng', () => {
+    expect(
+      shortRangeLabel(state({ id: 'custom', customFrom: '2026-09-01', customTo: '2026-09-05' })),
+    ).toBe('01/09 – 05/09');
+  });
+
+  it('khoảng tự chọn còn dở dang thì vẫn có nhãn đọc được', () => {
+    expect(shortRangeLabel(state({ id: 'custom' }))).toBe('Chọn ngày');
   });
 });

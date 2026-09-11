@@ -56,6 +56,13 @@ interface Props {
   /** Bấm vào một ghim ảnh. */
   onPhotoPinClick?: (id: string) => void;
   /**
+   * Bấm vào một chấm vị trí (`id` của marker: `partner` / `me`).
+   *
+   * Không truyền thì chấm vẫn chỉ là hình vẽ, không bắt sự kiện — màn chọn
+   * toạ độ (`PlacePicker`) cần đúng như vậy.
+   */
+  onMarkerClick?: (id: string) => void;
+  /**
    * Bật chế độ chọn toạ độ: bấm lên bản đồ để lấy điểm.
    * Khi bật, con trỏ đổi thành chữ thập và mọi cú bấm gọi hàm này.
    */
@@ -84,6 +91,7 @@ export default function CoupleMap({
   places,
   photoPins,
   onPhotoPinClick,
+  onMarkerClick,
   onPickPoint,
   recenterToken,
   onMapReady,
@@ -105,6 +113,8 @@ export default function CoupleMap({
   onPickPointRef.current = onPickPoint;
   const onPhotoPinClickRef = useRef(onPhotoPinClick);
   onPhotoPinClickRef.current = onPhotoPinClick;
+  const onMarkerClickRef = useRef(onMarkerClick);
+  onMarkerClickRef.current = onMarkerClick;
   const styleIdRef = useRef(styleId);
   styleIdRef.current = styleId;
 
@@ -211,7 +221,9 @@ export default function CoupleMap({
         continue;
       }
 
-      const el = buildMarkerElement(m, map);
+      const el = buildMarkerElement(m, map, Boolean(onMarkerClickRef.current), (id) =>
+        onMarkerClickRef.current?.(id),
+      );
       const marker = new maplibregl.Marker({ element: el }).setLngLat(lngLat).addTo(map);
       markersRef.current.set(m.id, marker);
     }
@@ -411,9 +423,40 @@ export default function CoupleMap({
 
 // ---------------------------------------------------------------------------
 
-function buildMarkerElement(m: MapMarker, map: MapLibreMap): HTMLElement {
+function buildMarkerElement(
+  m: MapMarker,
+  map: MapLibreMap,
+  clickable: boolean,
+  onClick: (id: string) => void,
+): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'relative flex items-center justify-center';
+
+  /*
+   * Chấm vị trí bấm được để mở chi tiết (toạ độ + chỉ đường).
+   *
+   * Chỉ gắn khi nơi gọi THẬT SỰ cần: ở màn chọn toạ độ, một chấm nuốt mất cú
+   * chạm là người dùng không dời được điểm vừa đặt.
+   *
+   * `stopPropagation` để cú chạm không rơi xuống bản đồ bên dưới, và có bàn
+   * phím cho máy tính — đặt `role="button"` mà không nghe phím là hứa suông
+   * với trình đọc màn hình.
+   */
+  if (clickable) {
+    wrap.setAttribute('role', 'button');
+    wrap.tabIndex = 0;
+    wrap.style.cursor = 'pointer';
+    wrap.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      onClick(m.id);
+    });
+    wrap.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Enter' && ev.key !== ' ') return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      onClick(m.id);
+    });
+  }
 
   const ring = document.createElement('div');
   ring.dataset.role = 'ring';
@@ -438,6 +481,11 @@ function buildMarkerElement(m: MapMarker, map: MapLibreMap): HTMLElement {
 
 function updateMarkerElement(el: HTMLElement, m: MapMarker, map: MapLibreMap): void {
   const c = COLORS[m.color];
+
+  // Nhãn đọc-màn-hình phải theo tên mới nhất (đối phương đổi tên hiển thị).
+  if (el.getAttribute('role') === 'button') {
+    el.setAttribute('aria-label', `Xem vị trí của ${m.label}`);
+  }
 
   const dot = el.querySelector<HTMLElement>('[data-role="dot"]');
   if (dot) {

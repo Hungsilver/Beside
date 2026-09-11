@@ -170,6 +170,28 @@ const run = async () => {
     await seedPinnedPost(a.token);
   }
 
+  /*
+   * Một điểm vị trí của Bình, để tài khoản An mở tab Bản đồ là thấy ngay chấm
+   * của người ấy (và bấm vào xem được toạ độ + chỉ đường).
+   *
+   * Gửi bằng token của Bình chứ không phải An: `POST /locations` luôn ghi cho
+   * CHÍNH người gửi, nên seed bằng token An thì An tự thấy mình, còn ô "vị trí
+   * của người ấy" vẫn trống.
+   */
+  const partnerLoc = await call('GET', '/locations/partner/latest', { token: a.token });
+  if (!partnerLoc.body?.location) {
+    await call('POST', '/locations', {
+      token: b.token,
+      body: {
+        lat: PLACES[1].lat,
+        lng: PLACES[1].lng,
+        accuracyM: 18,
+        battery: 76,
+        ts: Date.now(),
+      },
+    });
+  }
+
   const couple = await call('GET', '/couples/me', { token: a.token });
   const love = await call('GET', '/couples/me/love-summary', { token: a.token });
 

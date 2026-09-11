@@ -33,6 +33,7 @@ import {
   type MapRangeState,
 } from '@/lib/map-filter';
 import MapTimeFilter from '@/components/MapTimeFilter';
+import LocationDetailSheet from '@/components/LocationDetailSheet';
 import PostDetailSheet from '@/components/PostDetailSheet';
 import TabBar from '@/components/TabBar';
 import Avatar from '@/components/Avatar';
@@ -53,6 +54,8 @@ export default function MapScreen() {
   // Bộ lọc thời gian của ghim ảnh — nhớ lại lựa chọn lần trước.
   const [range, setRange] = useState<MapRangeState>(readSavedRange);
   const [openPostId, setOpenPostId] = useState<string | null>(null);
+  /** Đang mở chi tiết vị trí của người ấy (chạm vào chấm trên bản đồ). */
+  const [partnerSheet, setPartnerSheet] = useState(false);
 
   /*
    * Ngày hôm nay theo giờ VN. Dùng làm phụ thuộc để mốc "7 ngày gần đây" tự
@@ -189,6 +192,12 @@ export default function MapScreen() {
         places={places}
         photoPins={photoPinsOn ? photoPins : []}
         onPhotoPinClick={setOpenPostId}
+        onMarkerClick={(id) => {
+          // Chỉ chấm của người ấy mới có gì để xem thêm: toạ độ của CHÍNH MÌNH
+          // thì điện thoại nào cũng có sẵn, và chỉ đường tới chỗ mình đang đứng
+          // là vô nghĩa.
+          if (id === 'partner') setPartnerSheet(true);
+        }}
         recenterToken={recenterToken}
       />
 
@@ -304,6 +313,20 @@ export default function MapScreen() {
           />
         </div>
 
+        {/*
+          Cùng một việc với cú chạm vào chấm trên bản đồ, nhưng ở chỗ dễ thấy:
+          chấm vị trí chỉ rộng 44px và thường nằm khuất dưới bảng này.
+        */}
+        {partnerPoint && (
+          <button
+            type="button"
+            onClick={() => setPartnerSheet(true)}
+            className="btn-ghost mt-3 w-full"
+          >
+            📍 Toạ độ & chỉ đường tới {partner?.displayName ?? 'người ấy'}
+          </button>
+        )}
+
         {live.error && (
           <p role="alert" className="mt-3 rounded-2xl bg-love-50 px-4 py-3 text-[12.5px] font-semibold text-love-700">
             {live.error}
@@ -334,6 +357,17 @@ export default function MapScreen() {
 
       {openPost && (
         <PostDetailSheet post={openPost} onClose={() => setOpenPostId(null)} />
+      )}
+
+      {partnerSheet && partnerPoint && partner && (
+        <LocationDetailSheet
+          point={partnerPoint}
+          name={partner.displayName}
+          avatarUrl={partner.avatarUrl ?? null}
+          distanceM={distanceM}
+          isLive={partnerIsLive}
+          onClose={() => setPartnerSheet(false)}
+        />
       )}
 
       <TabBar />

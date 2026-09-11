@@ -30,14 +30,18 @@
     kèm toạ độ và nút chỉ đường Google Maps. **Khoảnh khắc**: xem ảnh toàn màn hình
     (phóng to, vuốt đổi ảnh) + cắt / chọn tỉ lệ ảnh trước khi đăng.
     28 unit test mới (`crop-math`, `map-filter`, `datetime`, `geo`) + 4 E2E (BD-01…BD-04)
-  - Tổng: **536 unit test** + **336 case trace** + **50 E2E**, typecheck + lint sạch cả 3 workspace
+  - 11/09 — **Bản đồ**: thêm mốc lọc **Hôm nay**; bảng lọc **thu gọn được** (mặc định thu gọn,
+    còn một chip ghi khoảng đang lọc). Chạm **chấm vị trí của người ấy** → tấm trượt chi tiết:
+    khoảng cách · sai số · pin/tốc độ · toạ độ · nút chỉ đường Google Maps; có lối vào thứ hai
+    từ bảng thông tin ở đáy. 5 unit test mới + 1 E2E (BD-05)
+  - Tổng: **541 unit test** + **336 case trace** + **51 E2E**, typecheck + lint sạch cả 3 workspace
   - ✅ `npm run verify:local` → **41/41 mục đạt** trên Docker thật (gồm chốt ESLint và E2E trình duyệt)
     (6/6 container healthy: db · redis · api · web · caddy · minio), đi qua Caddy HTTPS
     — chạy lại ngày 09/09 sau khi thêm bình luận và hai trò chơi: 13 migration, 41 E2E
-  - ⚠️ 10/09: chạy `npm run e2e` trên Docker thật — **45 test đạt** (gồm 4 test mới), **TL-05 hỏng**
-    (lá 4♠ chắn mất lá 3♣ đang được ghim ở bàn Tiến lên) nên 8 test sau nó không chạy.
-    Lỗi này nằm ở màn Tiến lên, **không liên quan** tới phần bản đồ / khoảnh khắc vừa làm —
-    đã ghi vào `docs/BACKLOG.md`. Bộ 4 test mới chạy riêng: 4/4 đạt
+  - ⚠️ 10–11/09: chạy `npm run e2e` trên Docker thật. **TL-05 hỏng** (lá 4♠ chắn mất lá 3♣
+    đang được ghim ở bàn Tiến lên) và nó chặn các test xếp sau — lỗi nằm ở màn Tiến lên,
+    **không liên quan** tới phần bản đồ / khoảnh khắc, đã ghi `docs/BACKLOG.md`.
+    Chạy cả bộ trừ nhóm Tiến lên: **46/46 đạt** (gồm BD-01…BD-05)
 - **Triển khai:** chủ dự án tự deploy — hướng dẫn ở `docs/DEPLOY.md`
 
 ---
@@ -1084,6 +1088,12 @@ Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L
 | 2026-09-10 | Ảnh trong dòng kỷ niệm hiện theo **tỉ lệ thật** (kẹp trong 0,7–1,91), thay cho khung 4:3 cứng | Khung 4:3 cắt mất đầu và chân của mọi ảnh dọc chụp bằng điện thoại — đúng chỗ có mặt người | Thẻ bài cao thấp không đều nhau; `AuthedImage` phải nhận `aspectRatio` để khung có chiều cao trước khi ảnh tải xong (chống nhảy bố cục) |
 | 2026-09-10 | Cắt ảnh **tự viết** (`crop-math.ts` + `PhotoCropper`), không kéo thư viện cropper về | Mọi gói phổ biến nặng 30–60KB gói tải đầu, trong khi phần việc thật chỉ là một phép biến hình; hình học tách ra hàm thuần nên test được bằng ngòi bút (15 unit test) | Tự lo cử chỉ kéo / chụm hai ngón; chưa có xoay ảnh (EXIF đã được `createImageBitmap` xử lý) |
 | 2026-09-10 | Cắt từ **tệp gốc**, không cắt trên bản đã nén ở bước chọn ảnh | Cắt bản nén rồi nén lại là hai lượt mất chất lượng chồng lên nhau, thấy rõ ở vùng trời và da người | Giữ `File` gốc trong bộ nhớ tới lúc đăng (tối đa 3 tệp) và giải mã ảnh thêm một lượt khi mở màn cắt |
+| 2026-09-11 | Bảng lọc thời gian **mặc định thu gọn**, chỉ còn một chip ghi khoảng đang lọc | Bản đồ là thứ người ta mở màn này để nhìn; bảy chip + dòng tóm tắt chiếm mất dải ngang dễ nhìn nhất của khung 390px. Thu gọn hẳn (không còn gì) thì "sao ít ảnh thế" lại thành một câu hỏi không có lời đáp | Muốn đổi khoảng lọc phải chạm thêm một lần; trạng thái mở/thu được nhớ trong `localStorage` |
+| 2026-09-11 | Mốc **"Hôm nay"** là trọn ngày lịch giờ VN, không phải 24 giờ vừa qua | Đi chơi từ tối hôm qua tới sáng nay là hai ngày khác nhau trên tờ lịch, và người dùng mong đúng như thế. Cùng một luật với các mốc còn lại (`startOfDayMs`) | Lúc 00:30 sáng thì "Hôm nay" gần như rỗng — đúng nghĩa đen, và vẫn có mốc "7 ngày" ngay cạnh |
+| 2026-09-11 | Chấm vị trí trên bản đồ **bấm được** → tấm trượt chi tiết + chỉ đường | Bản đồ trong app không dẫn đường được (§3.2: MapLibre + OpenFreeMap, không có dữ liệu routing), nên thứ người dùng cần ngay lúc nhìn thấy chấm là toạ độ và một lối sang Google Maps | Chỉ bật ở màn Bản đồ: `PlacePicker` truyền `onMarkerClick` rỗng, vì ở đó một chấm nuốt mất cú chạm là người dùng không dời được điểm vừa đặt |
+| 2026-09-11 | Thêm **lối vào thứ hai** từ bảng thông tin ở đáy, không chỉ dựa vào cú chạm lên chấm | Chấm chỉ rộng 44px và rất hay nằm khuất dưới bảng thông tin (bảng nhớ nấc "mở rộng" 82% của lần trước) — bắt được ngay khi viết E2E BD-05 | Thêm một nút trong bảng vốn đã khá dày |
+| 2026-09-11 | Khối toạ độ tách thành `CoordinateCard` dùng chung cho khoảnh khắc và vị trí | Ba thứ dễ lệch nếu chép đôi: định dạng toạ độ (dấu CHẤM thập phân, nếu không Google Maps hiểu sai), cách dựng link, và cách xử lý khi trình duyệt không cho sao chép | Thêm một component nhỏ |
+| 2026-09-11 | Tấm trượt vị trí **nói rõ khi toạ độ đang bị làm mờ** (F8) | Không nói thì người xem tin vào một toạ độ lệch tới vài trăm mét và tưởng người kia đứng đúng chỗ đó — làm mờ là tính năng riêng tư, không phải cái bẫy | Người bật làm mờ lộ ra là mình đang bật; đây vốn đã hiện ở thanh trên cùng từ Phase 2 |
 
 ---
 

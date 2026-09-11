@@ -17,7 +17,7 @@ import {
  * client mới biết người dùng đang xem theo múi giờ nào.
  */
 
-export type MapRangeId = 'all' | '7d' | '30d' | '90d' | '365d' | 'custom';
+export type MapRangeId = 'all' | '1d' | '7d' | '30d' | '90d' | '365d' | 'custom';
 
 export interface MapRangePreset {
   id: MapRangeId;
@@ -28,6 +28,10 @@ export interface MapRangePreset {
 
 export const MAP_RANGE_PRESETS: MapRangePreset[] = [
   { id: 'all', label: 'Tất cả', days: null },
+  // "Hôm nay" = trọn ngày lịch hiện tại theo giờ VN, không phải 24 giờ vừa qua:
+  // đi chơi từ tối hôm qua tới sáng nay thì hai tấm ảnh nằm ở hai ngày khác nhau,
+  // và người dùng mong đúng như thế khi chọn "Hôm nay".
+  { id: '1d', label: 'Hôm nay', days: 1 },
   { id: '7d', label: '7 ngày', days: 7 },
   { id: '30d', label: '30 ngày', days: 30 },
   { id: '90d', label: '3 tháng', days: 90 },
@@ -108,7 +112,12 @@ export function resolveMapRange(
 
   // Trừ `days - 1` vì khoảng ĐÃ tính cả ngày hôm nay: "7 ngày" = hôm nay + 6 ngày trước.
   const from = startOfDayMs(new Date(now - (preset.days - 1) * MS_PER_DAY));
-  return { from, to: null, label: `${preset.days} ngày gần đây`, error: null };
+  return {
+    from,
+    to: null,
+    label: preset.days === 1 ? 'hôm nay' : `${preset.days} ngày gần đây`,
+    error: null,
+  };
 }
 
 /** `2026-09-10` → `10/09` — đủ để đọc trên chip hẹp của khung 390px. */
@@ -122,6 +131,7 @@ function formatDay(ymd: string): string {
 // ---------------------------------------------------------------------------
 
 const RANGE_KEY = 'beside:map-range';
+const PANEL_KEY = 'beside:map-filter-open';
 
 /**
  * Đọc/ghi qua `localStorage`, bọc try/catch — chế độ ẩn danh của vài trình duyệt
@@ -156,4 +166,37 @@ export function saveRange(state: MapRangeState): void {
   } catch {
     /* bỏ qua */
   }
+}
+
+/**
+ * Bảng lọc đang mở hay đang thu gọn.
+ *
+ * Mặc định **thu gọn**: bản đồ là thứ người ta mở màn này để nhìn, còn bộ lọc
+ * chỉ dùng tới lúc muốn tìm lại một chuyến đi cũ. Thu gọn rồi vẫn còn một chip
+ * duy nhất ghi khoảng đang lọc — không giấu hẳn, vì người dùng phải biết vì sao
+ * bản đồ chỉ có bấy nhiêu ảnh.
+ */
+export function readFilterOpen(): boolean {
+  try {
+    return localStorage.getItem(PANEL_KEY) === 'on';
+  } catch {
+    return false;
+  }
+}
+
+export function saveFilterOpen(open: boolean): void {
+  try {
+    localStorage.setItem(PANEL_KEY, open ? 'on' : 'off');
+  } catch {
+    /* bỏ qua */
+  }
+}
+
+/** Nhãn ngắn cho chip thu gọn: "Tất cả" · "Hôm nay" · "7 ngày" · "10/09 – 11/09". */
+export function shortRangeLabel(state: MapRangeState): string {
+  if (state.id === 'custom') {
+    if (!state.customFrom || !state.customTo) return 'Chọn ngày';
+    return `${formatDay(state.customFrom)} – ${formatDay(state.customTo)}`;
+  }
+  return (MAP_RANGE_PRESETS.find((p) => p.id === state.id) ?? MAP_RANGE_PRESETS[0]!).label;
 }

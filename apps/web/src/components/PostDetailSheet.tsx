@@ -1,12 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  formatLatLng,
-  googleMapsDirectionsUrl,
-  type PostResponse,
-} from '@beside/shared';
+import type { PostResponse } from '@beside/shared';
 import { formatWhen } from '@/lib/relative-time';
 import AuthedImage from '@/components/AuthedImage';
+import CoordinateCard from '@/components/CoordinateCard';
 import PhotoLightbox from '@/components/PhotoLightbox';
 
 /**
@@ -15,9 +12,8 @@ import PhotoLightbox from '@/components/PhotoLightbox';
  * Dựng bằng div chứ không phải `<dialog>` — cùng lý do với `CommentSheet` và
  * `EventSheet`: Safari iOS 16 chưa hỗ trợ `showModal()` đầy đủ.
  *
- * Toạ độ hiện ĐẦY ĐỦ ở đây là đúng luật: R3 cấm ghi toạ độ chính xác vào *log*,
- * còn đây là dữ liệu của chính couple đang xem, hiện trên máy họ. Cũng chính
- * toạ độ này được truyền sang Google Maps để chỉ đường.
+ * Phần toạ độ / sao chép / chỉ đường nằm ở `CoordinateCard`, dùng chung với
+ * tấm trượt vị trí của người ấy.
  */
 export default function PostDetailSheet({
   post,
@@ -28,7 +24,6 @@ export default function PostDetailSheet({
 }) {
   const navigate = useNavigate();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle');
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -38,32 +33,9 @@ export default function PostDetailSheet({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // Trả câu "Đã sao chép" về trạng thái thường sau vài giây.
-  useEffect(() => {
-    if (copied === 'idle') return;
-    const id = window.setTimeout(() => setCopied('idle'), 2200);
-    return () => window.clearTimeout(id);
-  }, [copied]);
-
   const point =
     post.lat !== null && post.lng !== null ? { lat: post.lat, lng: post.lng } : null;
-  const coords = point ? formatLatLng(point) : '';
-  const mapsUrl = point ? googleMapsDirectionsUrl(point) : null;
   const photo = post.photos[0];
-
-  async function copyCoords() {
-    if (!coords) return;
-    try {
-      // `navigator.clipboard` chỉ tồn tại trên ngữ cảnh bảo mật (https hoặc
-      // localhost). Mở app qua http trong mạng LAN là không có nó — báo cho
-      // người dùng biết thay vì để nút bấm vào không phản ứng gì.
-      if (!navigator.clipboard) throw new Error('no clipboard');
-      await navigator.clipboard.writeText(coords);
-      setCopied('ok');
-    } catch {
-      setCopied('fail');
-    }
-  }
 
   return (
     <>
@@ -143,45 +115,9 @@ export default function PostDetailSheet({
               </p>
             )}
 
-            {/* Toạ độ đã lưu */}
-            <div className="mt-3.5 rounded-2xl bg-plum-100/60 px-4 py-3">
-              <div className="flex items-start gap-2.5">
-                <span className="text-[16px]">📍</span>
-                <div className="min-w-0 flex-1">
-                  {post.placeName && (
-                    <b className="block truncate text-[13.5px]">{post.placeName}</b>
-                  )}
-                  <p className="mt-0.5 select-all break-all font-mono text-[12.5px] text-ink-700">
-                    {coords || 'Không có toạ độ'}
-                  </p>
-                </div>
-              </div>
-
-              {coords && (
-                <button
-                  type="button"
-                  onClick={() => void copyCoords()}
-                  className="mt-2 flex min-h-11 w-full items-center justify-center rounded-xl bg-white text-[12.5px] font-bold text-ink-700"
-                >
-                  {copied === 'ok'
-                    ? '✓ Đã sao chép toạ độ'
-                    : copied === 'fail'
-                      ? 'Không sao chép được — chạm giữ để chọn'
-                      : '⧉ Sao chép toạ độ'}
-                </button>
-              )}
+            <div className="mt-3.5">
+              <CoordinateCard point={point} title={post.placeName} />
             </div>
-
-            {mapsUrl && (
-              <a
-                href={mapsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-primary mt-3 flex min-h-12 w-full items-center justify-center"
-              >
-                🧭 Chỉ đường bằng Google Maps
-              </a>
-            )}
 
             <button
               type="button"

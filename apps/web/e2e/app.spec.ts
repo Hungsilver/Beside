@@ -892,20 +892,28 @@ test.describe('Phòng học chung', () => {
 });
 
 test.describe('Bộ lọc thời gian & xem ảnh (bổ sung 10/09)', () => {
-  test('BD-01 — lọc ghim theo khoảng thời gian, có báo số lượng', async () => {
+  test('BD-01 — bộ lọc thu gọn mở ra được, lọc theo khoảng thời gian', async () => {
     await page.goto('/ban-do');
     const container = page.locator('[aria-label="Bản đồ"]');
     await expect(container).not.toHaveAttribute('data-photo-pins', '0', { timeout: 15_000 });
 
+    // Mặc định THU GỌN: chỉ một chip, không che bản đồ.
+    const opener = page.getByRole('button', { name: 'Mở bộ lọc thời gian' });
+    await expect(opener).toBeVisible();
+    await expect(page.getByRole('group', { name: /Lọc khoảnh khắc/ })).toHaveCount(0);
+
+    await opener.click();
     const group = page.getByRole('group', { name: /Lọc khoảnh khắc theo thời gian/ });
     await expect(group).toBeVisible();
 
-    // Chip phải đủ cao để chạm được (R2: 44px là vùng chạm, chip 36px + khoảng
-    // trống quanh nó vẫn phải ≥ 32px thấy được).
-    const chip = group.getByRole('button', { name: '7 ngày' });
-    expect((await chip.boundingBox())!.height).toBeGreaterThanOrEqual(32);
+    // Chip phải đủ cao để chạm được ở khổ 390px.
+    const today = group.getByRole('button', { name: 'Hôm nay' });
+    expect((await today.boundingBox())!.height).toBeGreaterThanOrEqual(32);
 
-    await chip.click();
+    await today.click();
+    await expect(page.getByText(/· hôm nay/)).toBeVisible();
+
+    await group.getByRole('button', { name: '7 ngày' }).click();
     await expect(page.getByText(/7 ngày gần đây/)).toBeVisible();
 
     // Khoảng tự chọn ngược ngày phải báo lỗi và KHÔNG gọi API.
@@ -917,8 +925,12 @@ test.describe('Bộ lọc thời gian & xem ảnh (bổ sung 10/09)', () => {
     await to.fill('2026-09-01');
     await expect(page.getByText(/Ngày bắt đầu phải trước/)).toBeVisible();
 
-    // Trả về "Tất cả" để các test sau vẫn thấy đủ ghim.
+    // Trả về "Tất cả" rồi thu gọn lại — chip thu gọn phải nhớ khoảng đang lọc.
     await group.getByRole('button', { name: 'Tất cả' }).click();
+    await page.getByRole('button', { name: 'Thu gọn bộ lọc thời gian' }).click();
+    await expect(page.getByRole('button', { name: 'Mở bộ lọc thời gian' })).toContainText(
+      'Tất cả',
+    );
     await expect(container).not.toHaveAttribute('data-photo-pins', '0', { timeout: 15_000 });
   });
 
@@ -927,7 +939,14 @@ test.describe('Bộ lọc thời gian & xem ảnh (bổ sung 10/09)', () => {
     const container = page.locator('[aria-label="Bản đồ"]');
     await expect(container).not.toHaveAttribute('data-photo-pins', '0', { timeout: 15_000 });
 
-    await page.locator('button.maplibregl-marker').first().click();
+    /*
+     * `dispatchEvent` chứ không phải `.click()`: bản đồ tự căn khung nhìn vào
+     * chấm vị trí của người ấy (Quận 3), nên ghim ảnh ở Quận 1 nằm ngoài khung
+     * — Playwright từ chối bấm một điểm ngoài màn hình. Ghim vẫn nằm trong DOM
+     * và vẫn đủ lớn để chạm (E2E-09 kiểm phần đó), ở đây chỉ cần biết cú chạm
+     * có mở đúng tấm trượt chi tiết hay không.
+     */
+    await page.locator('button.maplibregl-marker').first().dispatchEvent('click');
 
     const sheet = page.getByRole('dialog', { name: 'Chi tiết khoảnh khắc' });
     await expect(sheet).toBeVisible();
@@ -989,6 +1008,49 @@ test.describe('Bộ lọc thời gian & xem ảnh (bổ sung 10/09)', () => {
     );
 
     // Cố ý KHÔNG đăng: bộ E2E không được để lại rác trong dữ liệu demo.
+    expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
+  });
+
+  test('BD-05 — chạm chấm vị trí của người ấy để xem toạ độ và chỉ đường', async () => {
+    await page.goto('/ban-do');
+
+    /*
+     * Thu gọn bảng thông tin trước: nó nhớ nấc của lần trước (MC-04 để lại nấc
+     * "mở rộng" cao 82%) và che mất chấm vị trí ở giữa bản đồ. Đây cũng chính
+     * là lý do cần thêm nút mở tấm trượt ngay trong bảng — kiểm ở cuối test.
+     */
+    const handle = page.getByRole('button', { name: /Kéo để thay đổi kích thước bảng/ });
+    await expect(handle).toBeVisible({ timeout: 20_000 });
+    // Chỉ bấm khi đang ở nấc "mở rộng": chạm vào thanh nắm ở nấc "vừa" lại MỞ TO
+    // thêm (xem `DraggableSheet.move`), đúng ngược điều đang cần.
+    if (/mở rộng/.test((await handle.getAttribute('aria-label')) ?? '')) {
+      await handle.click();
+      await page.waitForTimeout(400);
+    }
+
+    // Chấm vị trí là marker DOM của MapLibre, có nhãn đọc-màn-hình riêng.
+    const dot = page.getByRole('button', { name: /Xem vị trí của/ }).first();
+    await expect(dot).toBeVisible({ timeout: 20_000 });
+    await dot.click();
+
+    const sheet = page.getByRole('dialog', { name: 'Chi tiết vị trí' });
+    await expect(sheet).toBeVisible();
+    await expect(sheet.getByText(/-?\d+\.\d{6}, -?\d+\.\d{6}/)).toBeVisible();
+    await expect(
+      sheet.getByRole('link', { name: /Chỉ đường bằng Google Maps/ }),
+    ).toHaveAttribute(
+      'href',
+      /^https:\/\/www\.google\.com\/maps\/dir\/\?api=1&destination=/,
+    );
+
+    await sheet.getByRole('button', { name: 'Xong' }).click();
+    await expect(sheet).toHaveCount(0);
+
+    // Cùng một việc còn mở được từ nút trong bảng thông tin ở đáy màn hình.
+    await page.getByRole('button', { name: /Toạ độ & chỉ đường tới/ }).click();
+    await expect(page.getByRole('dialog', { name: 'Chi tiết vị trí' })).toBeVisible();
+    await page.getByRole('button', { name: 'Xong' }).click();
+
     expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
   });
 });
