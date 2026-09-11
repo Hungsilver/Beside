@@ -5,7 +5,10 @@ import {
   DEFAULT_BREAK_MIN,
   DEFAULT_FOCUS_MIN,
   FOCUS_OPTIONS,
+  MAX_SUBJECT_LEN,
   STUDY_PHASE_LABELS,
+  STUDY_SUBJECT_PRESETS,
+  normalizeSubject,
   type StudyPersonStats,
   type StudySessionResponse,
 } from '@beside/shared';
@@ -20,6 +23,8 @@ import {
   useStudyChannel,
   useStudySummary,
 } from '@/lib/study-api';
+import FlipClock from '@/components/FlipClock';
+import StudyStats from '@/components/StudyStats';
 import TabBar from '@/components/TabBar';
 import { Screen, Spinner } from '@/components/ui';
 
@@ -35,6 +40,9 @@ export default function StudyScreen() {
   if (summary.isLoading) return <Spinner label="Đang mở phòng học..." />;
 
   const myId = user?.id ?? null;
+  const people = summary.data?.people ?? [];
+  const me = people.find((p) => p.userId === myId) ?? null;
+  const partner = people.find((p) => p.userId !== myId) ?? null;
 
   return (
     <Screen>
@@ -54,10 +62,18 @@ export default function StudyScreen() {
       {session ? (
         <ActiveRoom session={session} myId={myId} onError={setError} />
       ) : (
-        <StartRoom onError={setError} />
+        <StartRoom onError={setError} lastSubject={lastSubjectOf(me)} />
       )}
 
-      <Stats people={summary.data?.people ?? []} myId={myId} together={summary.data?.togetherMinutes ?? 0} />
+      <StudyStats
+        me={me}
+        partner={partner}
+        togetherMinutes={summary.data?.togetherMinutes ?? 0}
+      />
+
+      <Link to="/" className="btn-ghost mt-3.5 w-full">
+        Về trang chủ
+      </Link>
 
       <div className="flex-1" />
       <div className="h-[100px]" />
@@ -66,17 +82,34 @@ export default function StudyScreen() {
   );
 }
 
+/**
+ * Môn học nhiều phút nhất tuần qua — dùng làm gợi ý điền sẵn.
+ *
+ * Người ta ôn một môn trong nhiều buổi liền, nên đoán "vẫn môn cũ" đúng nhiều
+ * hơn sai. Vẫn sửa được, chỉ là đỡ phải gõ.
+ */
+function lastSubjectOf(me: StudyPersonStats | null): string | null {
+  return me?.subjects.find((s) => s.subject !== null)?.subject ?? null;
+}
+
 // ---------------------------------------------------------------------------
 
-function StartRoom({ onError }: { onError: (m: string | null) => void }) {
+function StartRoom({
+  onError,
+  lastSubject,
+}: {
+  onError: (m: string | null) => void;
+  lastSubject: string | null;
+}) {
   const start = useStartStudy();
   const [focusMin, setFocusMin] = useState<number>(DEFAULT_FOCUS_MIN);
   const [breakMin, setBreakMin] = useState<number>(DEFAULT_BREAK_MIN);
+  const [subject, setSubject] = useState<string>(lastSubject ?? '');
 
   async function begin() {
     onError(null);
     try {
-      await start.mutateAsync({ focusMin, breakMin });
+      await start.mutateAsync({ focusMin, breakMin, subject: normalizeSubject(subject) });
     } catch (e) {
       onError(e instanceof ApiRequestError ? e.message : 'Không mở được phòng học');
     }
@@ -90,6 +123,47 @@ function StartRoom({ onError }: { onError: (m: string | null) => void }) {
       </p>
 
       <div className="mt-4">
+        <label htmlFor="study-subject" className="text-[11.5px] font-bold text-ink-700">
+          Học gì?
+        </label>
+        <input
+          id="study-subject"
+          type="text"
+          value={subject}
+          maxLength={MAX_SUBJECT_LEN}
+          onChange={(e) => setSubject(e.target.value)}
+          placeholder="Bỏ trống cũng được"
+          className="mt-2 h-12 w-full rounded-2xl border-[1.5px] border-ink-200 px-3.5 text-[15px] outline-none focus:border-love-400"
+        />
+
+        {/*
+          Danh sách gợi ý cuộn ngang: 12 môn xếp thành lưới trên khung 390px sẽ
+          chiếm gần nửa màn, đẩy nút "bắt đầu" xuống dưới nếp gấp.
+        */}
+        <div className="-mx-[18px] mt-2 flex gap-2 overflow-x-auto px-[18px] pb-1">
+          {STUDY_SUBJECT_PRESETS.map((p) => {
+            const active = normalizeSubject(subject) === p.label;
+            return (
+              <button
+                key={p.label}
+                type="button"
+                aria-pressed={active}
+                // Bấm lại chính môn đang chọn thì bỏ chọn — không cần nút xoá riêng.
+                onClick={() => setSubject(active ? '' : p.label)}
+                className={`h-11 shrink-0 rounded-full px-3.5 text-[13px] font-bold transition ${
+                  active
+                    ? 'bg-love-100 text-love-700 ring-[1.5px] ring-love-300'
+                    : 'bg-ink-100 text-ink-600'
+                }`}
+              >
+                {p.emoji} {p.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-3">
         <span className="text-[11.5px] font-bold text-ink-700">Học bao lâu?</span>
         <div className="mt-2 flex gap-2">
           {FOCUS_OPTIONS.map((m) => (
@@ -180,15 +254,20 @@ function ActiveRoom({
     <section
       className={`rounded-[var(--radius-hero)] p-5 text-white ${focus ? 'love-gradient' : 'dusk-gradient'}`}
     >
-      <p className="text-[12px] font-bold tracking-[1.2px] opacity-90">
-        {STUDY_PHASE_LABELS[session.phase].toUpperCase()}
-        {session.roundsDone > 0 && ` · CHẶNG ${session.roundsDone + (focus ? 1 : 0)}`}
-      </p>
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-[12px] font-bold tracking-[1.2px] opacity-90">
+          {STUDY_PHASE_LABELS[session.phase].toUpperCase()}
+          {session.roundsDone > 0 && ` · CHẶNG ${session.roundsDone + (focus ? 1 : 0)}`}
+        </p>
+        {session.subject && (
+          <span className="min-w-0 truncate rounded-full bg-white/25 px-2.5 py-1 text-[11.5px] font-bold">
+            {session.subject}
+          </span>
+        )}
+      </div>
 
-      <div className="mt-2 flex items-baseline gap-2">
-        <span className="text-[54px] font-extrabold leading-none tabular-nums tracking-tight">
-          {formatClock(secondsLeft)}
-        </span>
+      <div className="mt-3">
+        <FlipClock seconds={secondsLeft} />
       </div>
 
       <div className="mt-4 h-[7px] overflow-hidden rounded-full bg-white/30">
@@ -256,84 +335,4 @@ function ActiveRoom({
       </div>
     </section>
   );
-}
-
-// ---------------------------------------------------------------------------
-
-function Stats({
-  people,
-  myId,
-  together,
-}: {
-  people: StudyPersonStats[];
-  myId: string | null;
-  together: number;
-}) {
-  if (people.length === 0) return null;
-
-  return (
-    <section className="card mt-3.5">
-      <p className="text-[11px] font-bold uppercase tracking-[1.4px] text-love-500">
-        Đã học được
-      </p>
-
-      <div className="mt-3 flex flex-col gap-2.5">
-        {people.map((p) => (
-          <div key={p.userId} className="flex items-center gap-3">
-            <span
-              className={`flex size-9 shrink-0 items-center justify-center rounded-full text-[13px] font-extrabold text-white ${
-                p.userId === myId
-                  ? 'bg-gradient-to-br from-[#FF9BB3] to-[#FF4D7D]'
-                  : 'bg-gradient-to-br from-[#8FB8FF] to-[#4D7DFF]'
-              }`}
-            >
-              {p.displayName.charAt(0).toUpperCase()}
-            </span>
-            <div className="min-w-0 flex-1">
-              <b className="block truncate text-[13.5px]">
-                {p.userId === myId ? 'Bạn' : p.displayName}
-              </b>
-              <p className="text-[11.5px] text-ink-500">
-                Hôm nay {formatMinutes(p.todayMinutes)} · tổng {formatMinutes(p.totalMinutes)}
-              </p>
-            </div>
-            {p.streakDays > 0 && (
-              <span className="shrink-0 rounded-full bg-ink-100 px-2.5 py-1 text-[11.5px] font-bold text-ink-600">
-                🔥 {p.streakDays} ngày
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {together > 0 && (
-        <p className="mt-3 rounded-2xl bg-mint-100 px-3.5 py-2.5 text-[12.5px] text-[#03372A]">
-          🤝 Đã ngồi học cùng nhau <b>{formatMinutes(together)}</b>
-        </p>
-      )}
-
-      <Link to="/" className="btn-ghost mt-3 w-full">
-        Về trang chủ
-      </Link>
-    </section>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
-/** `mm:ss`, hoặc `h:mm:ss` khi chặng dài hơn một giờ. */
-function formatClock(totalSeconds: number): string {
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
-  const mm = String(m).padStart(2, '0');
-  const ss = String(s).padStart(2, '0');
-  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
-}
-
-function formatMinutes(minutes: number): string {
-  if (minutes < 60) return `${minutes} phút`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m === 0 ? `${h} giờ` : `${h} giờ ${m} phút`;
 }

@@ -7,7 +7,7 @@
 - **Tên app:** `Beside` (đã chốt)
 - **Domain:** `https://easytech.io.vn` (tạm dùng — đã mua). Sẽ đổi sang domain `beside` sau
   ⇒ **mọi URL phải lấy từ biến môi trường, không hardcode domain ở bất kỳ đâu**
-- **Cập nhật lần cuối:** 2026-09-10
+- **Cập nhật lần cuối:** 2026-09-11
 - **Trạng thái:** `PHASE 7` ✅ xong — bình luận trong khoảnh khắc, cờ caro & tiến lên, phòng học chung.
   Đã chạy trên máy chủ thật `https://easytech.io.vn` từ 2026-09-09 (commit `133e5fc`)
   - Phase 1: `docs/traces/phase-1-auth-pairing.md` — 53/53 case
@@ -72,7 +72,7 @@
 | F11 | Cờ caro | ✅ Bàn 15×15, luật Việt Nam (đúng 5 quân bị chặn hai đầu thì không thắng, ≥6 quân thắng), 30s/lượt |
 | F13 | Đang trên đường về | ✅ Bấm một nút khi bắt đầu về; người ấy nhận thông báo lúc khởi hành và lúc tới nơi, xem được giờ dự kiến. Điểm đến là một Địa điểm đã lưu (F6), chính hàng rào ảo của nó phát hiện "đã tới nơi" |
 | F14 | Chu kỳ kinh nguyệt | ✅ Ghi kỳ, dự đoán kỳ tới, nhắc trước 1 ngày. **Dữ liệu sức khoẻ của MỘT người** — mặc định người ấy không thấy gì; ba mức chia sẻ do chính chủ chọn; có nút xoá sạch |
-| F12 | Học cùng nhau | ✅ Phòng Pomodoro chung: đồng hồ chạy đồng bộ hai máy, thống kê giờ học + chuỗi ngày. **Không có gọi video** — xem §1.1b |
+| F12 | Học cùng nhau | ✅ Phòng Pomodoro chung: **đồng hồ số lật** chạy đồng bộ hai máy, đặt tên môn cho buổi học, mục tiêu phút mỗi ngày, thống kê 7 ngày + phân bổ theo môn + chuỗi ngày. **Không có gọi video** — xem §1.1b |
 
 ### 1.1b Ngoài phạm vi (không làm)
 
@@ -511,6 +511,7 @@ model StudySession {                     // F12 — Pomodoro cho hai người
   status         StudyStatus @default(RUNNING) // RUNNING | DONE | CANCELLED
   focusMin       Int         @default(25)
   breakMin       Int         @default(5)
+  subject        String?                       // môn / việc đang học
   endsAt         DateTime                      // đồng hồ của SERVER
   roundsDone     Int         @default(0)
   presentUserIds Json        @default("[]")    // ai đang trong phòng
@@ -525,10 +526,15 @@ model StudyLog {                         // một chặng HỌC đã hoàn thàn
   sessionId String?
   round     Int                          // (sessionId, round) = khoá của một chặng
   minutes   Int
+  subject   String?                      // BẢN CHÉP tên môn lúc ghi công
   day       DateTime @db.Date            // ngày lịch GIỜ VN
   @@index([coupleId, userId, day])
+  @@index([coupleId, day])               // biểu đồ 7 ngày của cả couple
 }
 ```
+
+`User.studyGoalMin` (Int, mặc định `0`) giữ mục tiêu phút mỗi ngày. `0` nghĩa là chưa đặt —
+giao diện ẩn vòng tiến độ. Không dùng `NULL` vì mọi chỗ đọc ra đều đem đi cộng/so sánh.
 
 **Đồng hồ học chạy ngược với đồng hồ ván bài.** Đồng hồ ván bài *dừng* khi người tới lượt
 khoá màn hình (§6.6). Đồng hồ học phải *chạy tiếp*: khoá máy để khỏi bị phân tâm chính là
@@ -540,6 +546,10 @@ con số thống kê nói đúng sự thật.
 
 `day` là **ngày lịch giờ Việt Nam**, không phải ngày UTC: chuỗi ngày học đếm theo cột này,
 mà lưu timestamp rồi so sau sẽ tính nhầm mọi buổi học sau nửa đêm (ADR 2026-09-07).
+
+**Tên môn nằm ở cả hai bảng là cố ý**, không phải chuẩn hoá thiếu. `study_logs.subject` là
+bản chép tại thời điểm ghi công: phiên bị xoá thì `sessionId` thành `NULL` (`onDelete:
+SetNull`), mà lịch sử "hôm đó học Toán 50 phút" vẫn phải còn đúng.
 
 ### 6.6 Đồng hồ 30 giây — và cách không phạt oan người dùng
 
@@ -762,7 +772,9 @@ POST   /games/:id/resign           đầu hàng                                 
 
 GET    /study/current              phiên đang chạy, hoặc null                     🔸
 GET    /study/summary              tổng giờ + chuỗi ngày + "học cùng nhau"        🔸
-POST   /study                      {focusMin, breakMin} — đã có phòng thì vào cùng 🔸
+                                   + 7 ngày gần nhất + phân bổ theo môn + mục tiêu
+PUT    /study/goal                 {dailyGoalMin} — mục tiêu của CHÍNH mình        🔸
+POST   /study                      {focusMin, breakMin, subject?} — có phòng thì vào cùng 🔸
 POST   /study/:id/join             vào học cùng                                   🔸
 POST   /study/:id/leave            rời phòng; người cuối rời thì phiên đóng lại    🔸
 POST   /study/:id/cancel           dừng hẳn — ai trong hai người cũng dừng được    🔸
@@ -1129,6 +1141,10 @@ Bộ E2E này **đã được kiểm chứng là đỏ được**: đưa lỗi L
 | 2026-09-11 | **F14**: dữ liệu chu kỳ thuộc về MỘT NGƯỜI, không thuộc về couple | Đây là dữ liệu sức khoẻ. Mặc định `OFF`; ba mức chia sẻ do chính chủ đặt; mức `SUMMARY` không lộ ngày nào kể cả "còn mấy ngày" (từ đó suy ngược ra ngày cụ thể) | Người ấy có thể không thấy gì — đúng ý đồ. Có `partnerView()` ở `packages/shared` là nơi DUY NHẤT cắt gọt, 25 unit test soi vào nó |
 | 2026-09-11 | **F14**: trễ kỳ thì trả `daysUntilNext` ÂM, không nhảy sang chu kỳ kế | "Trễ 5 ngày" là thông tin người dùng cần nhất lúc đó. Lặng lẽ dời dự đoán sang chu kỳ sau là giả vờ mọi thứ vẫn đúng lịch | Giao diện phải xử lý số âm ở mọi chỗ hiển thị |
 | 2026-09-11 | **F14**: bỏ qua khoảng cách trên 90 ngày khi tính chu kỳ trung bình | Đó là lúc người dùng quên ghi vài kỳ liên tiếp, không phải một chu kỳ 4 tháng. Gộp vào trung bình sẽ đẩy mọi dự đoán sau đó sai hàng tuần | Người có chu kỳ thật sự dài bất thường sẽ phải tự đặt độ dài trong cài đặt |
+| 2026-09-11 | **F12 đợt 1**: tên môn được **chép** sang `StudyLog`, không tra ngược qua `sessionId` | `sessionId` là `onDelete: SetNull`. Chuẩn hoá triệt để thì mỗi phiên bị dọn đi là một mảng lịch sử mất tên môn, và thống kê "học môn gì" tự bốc hơi theo | Đổi tên phiên giữa chừng không sửa lại các chặng đã ghi — đúng ý đồ, lịch sử phải nói thứ có thật lúc đó |
+| 2026-09-11 | **F12 đợt 1**: biểu đồ tuần dùng **một thang đo chung** cho cả hai người | Mỗi người một thang riêng thì hai cột cao bằng nhau lại đang là 20 phút và 3 tiếng — người xem hiểu ngược hoàn toàn | Người học ít hơn hẳn sẽ thấy cột của mình gần như phẳng |
+| 2026-09-11 | **F12 đợt 1**: thống kê 7 ngày gắn vào `GET /study/summary`, không tách endpoint riêng | `summary()` đã nạp sẵn toàn bộ `StudyLog` của couple để tính tổng và chuỗi ngày. Tách ra là quét bảng lần thứ hai cho đúng bộ dữ liệu đó | Khi cần khung tháng/năm sẽ phải tách — lúc đó mới tách |
+| 2026-09-11 | **F12 đợt 1**: đồng hồ số lật viết bằng CSS thuần trong `index.css`, không kéo thư viện | Cần `@keyframes` + `backface-visibility` + `perspective` đi cùng nhau; nhét vào class tiện ích thì mỗi chỗ dùng phải chép lại cả cụm. Thư viện flip-clock nào cũng gánh theo phần đếm giờ riêng, mà đồng hồ ở đây do SERVER giữ mốc | Thêm ~90 dòng CSS vào tệp chung |
 | 2026-09-11 | **F14**: không log nội dung chu kỳ, chỉ log số lượng | Nhật ký máy chủ đã cấm toạ độ chính xác (R3); dữ liệu sức khoẻ còn nhạy cảm hơn | Gỡ lỗi khó hơn một chút |
 | 2026-09-11 | Sửa gốc lỗi **"deploy xong vẫn thấy giao diện cũ"**: app tự đăng ký service worker và mời tải lại | `registerType: 'prompt'` + `injectRegister: 'auto'` = bản mới cài xong rồi NẰM CHỜ tới khi đóng hết tab — trên điện thoại thì gần như không bao giờ. Giờ app bắt `onNeedRefresh`, hiện dải "Đã có bản mới", tự hỏi lại server mỗi lần quay về tiền cảnh và mỗi 30 phút | Thêm một dải thông báo trên đỉnh màn hình; đổi lại không còn kẹt ở bản cũ |
 | 2026-09-11 | Vẫn giữ **không tự tải lại**, chỉ mời | Người dùng có thể đang gõ dở một lời nhắn hoặc đang giữa ván bài — cướp trang của họ để cập nhật tệ hơn hẳn việc chờ thêm vài phút | Ai bỏ qua dải thông báo thì vẫn ở bản cũ tới lần mở sau |

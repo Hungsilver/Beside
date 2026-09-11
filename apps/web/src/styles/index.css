@@ -390,6 +390,129 @@ button {
     }
   }
 
+  /* =======================================================================
+     Đồng hồ số lật (F12 — phòng học)
+
+     Mỗi chữ số là một tấm thẻ cắt đôi theo chiều ngang. Khi số đổi:
+       · lá TRÊN mang số CŨ gập xuống  (rotateX  0 → -90°)
+       · lá DƯỚI mang số MỚI lật lên   (rotateX 90 →   0°, bắt đầu ở nửa sau)
+     Hai nửa tĩnh phía dưới đã sẵn sàng với số mới/cũ nên lúc lá gập qua khỏi
+     90° người xem không thấy khoảng trống nào.
+
+     Vì sao viết CSS thuần thay vì tiện ích Tailwind: bộ này cần `@keyframes`,
+     `backface-visibility` và `perspective` đi cùng nhau — nhét vào class tiện
+     ích thì mỗi chỗ dùng phải chép lại cả cụm.
+     ======================================================================= */
+  .flip-digit {
+    position: relative;
+    display: block;
+    width: 1em;
+    height: 1.42em;
+    perspective: 22em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.42em;
+    text-align: center;
+    border-radius: 0.16em;
+    /* Khe hở giữa hai nửa — thứ khiến mắt đọc ra "tấm thẻ" chứ không phải chữ số */
+    background: linear-gradient(#2a1b28 0 calc(50% - 0.5px), #120b11 calc(50% + 0.5px) 100%);
+    color: #fff;
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+      0 3px 10px rgba(35, 19, 32, 0.28);
+  }
+
+  /* Bốn lớp dùng chung một cách cắt: nửa trên cắt bỏ phần dưới và ngược lại. */
+  .flip-digit > span {
+    position: absolute;
+    left: 0;
+    right: 0;
+    overflow: hidden;
+    border-radius: inherit;
+    backface-visibility: hidden;
+  }
+  .flip-digit > span > i {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    font-style: normal;
+  }
+
+  .flip-half-top,
+  .flip-flap-top {
+    top: 0;
+    bottom: 50%;
+  }
+  .flip-half-bottom,
+  .flip-flap-bottom {
+    top: 50%;
+    bottom: 0;
+  }
+  .flip-half-top > i,
+  .flip-flap-top > i {
+    top: 0;
+  }
+  /* Nửa dưới: kéo chữ số lên đúng một nửa thẻ để ghép liền với nửa trên. */
+  .flip-half-bottom > i,
+  .flip-flap-bottom > i {
+    top: -100%;
+  }
+
+  /*
+    Hai lá phải TỰ VẼ nền, không `background: inherit` — nền của thẻ là một
+    gradient, thừa kế xuống ô cao bằng nửa thì gradient được vẽ lại theo khung
+    mới và lá sẽ lệch màu hẳn so với nửa nó vừa che đi.
+  */
+  .flip-flap-top,
+  .flip-flap-bottom {
+    transform-origin: bottom center;
+    animation-duration: 320ms;
+    animation-timing-function: cubic-bezier(0.36, 0, 0.66, -0.2);
+    animation-fill-mode: both;
+  }
+  .flip-flap-top {
+    background: #2a1b28;
+    animation-name: flip-fold-down;
+  }
+  .flip-flap-bottom {
+    background: #120b11;
+    transform-origin: top center;
+    /* Lật lên chỉ bắt đầu khi lá trên đã che khuất — nối hai nửa thành một cú lật */
+    animation-name: flip-fold-up;
+    animation-delay: 300ms;
+    animation-timing-function: cubic-bezier(0.3, 1.1, 0.5, 1);
+  }
+
+  @keyframes flip-fold-down {
+    0% {
+      transform: rotateX(0deg);
+    }
+    100% {
+      transform: rotateX(-90deg);
+    }
+  }
+  @keyframes flip-fold-up {
+    0% {
+      transform: rotateX(90deg);
+    }
+    100% {
+      transform: rotateX(0deg);
+    }
+  }
+
+  /*
+    Tắt hiệu ứng lật thì hai lá bay đi, nhưng hai nửa TĨNH phải hiện đúng số
+    MỚI — nếu không đồng hồ sẽ đứng im một nhịp ở mỗi giây. Component lo phần
+    đó bằng cách bỏ hẳn giai đoạn lật khi người dùng xin giảm chuyển động.
+  */
+  @media (prefers-reduced-motion: reduce) {
+    .flip-flap-top,
+    .flip-flap-bottom {
+      animation: none;
+      display: none;
+    }
+  }
+
   .love-gradient {
     background: linear-gradient(135deg, #ff7a9c 0%, #ff4d7d 42%, #b14be8 100%);
   }

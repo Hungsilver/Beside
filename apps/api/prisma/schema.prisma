@@ -100,6 +100,9 @@ model User {
   // {ghostMode: boolean, shareLive: boolean, fuzzRadiusM: number}
   privacy Json @default("{\"ghostMode\":false,\"shareLive\":true,\"fuzzRadiusM\":0}")
 
+  /// F12 — mục tiêu số phút học mỗi ngày. 0 = chưa đặt, giao diện ẩn vòng tiến độ.
+  studyGoalMin Int @default(0)
+
   coupleId String?
   couple   Couple? @relation(fields: [coupleId], references: [id], onDelete: SetNull)
 
@@ -108,10 +111,10 @@ model User {
   posts          Post[]
   comments       Comment[]
   createdEvents  Event[]
-  gameTurns      Game[]     @relation("GameTurn")
-  gameWins       Game[]     @relation("GameWinner")
+  gameTurns      Game[]             @relation("GameTurn")
+  gameWins       Game[]             @relation("GameWinner")
   gameMoves      GameMove[]
-  studyStarted   StudySession[] @relation("StudyStarter")
+  studyStarted   StudySession[]     @relation("StudyStarter")
   studyLogs      StudyLog[]
   locationPoints LocationPoint[]
   geofenceEvents GeofenceEvent[]
@@ -167,19 +170,19 @@ model Couple {
 /// Refresh token có xoay vòng (rotation) + phát hiện tái sử dụng.
 /// Chỉ lưu SHA-256 của token, không bao giờ lưu token gốc.
 model RefreshToken {
-  id        String    @id @default(uuid())
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash String    @unique
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash    String    @unique
   /// Cùng một chuỗi xoay vòng dùng chung familyId. Nếu một token cũ bị dùng lại
   /// → coi như bị đánh cắp → thu hồi cả family.
-  familyId   String
-  expiresAt  DateTime
-  revokedAt  DateTime?
+  familyId     String
+  expiresAt    DateTime
+  revokedAt    DateTime?
   replacedById String?
-  userAgent  String?
-  ip         String?
-  createdAt  DateTime  @default(now())
+  userAgent    String?
+  ip           String?
+  createdAt    DateTime  @default(now())
 
   @@index([userId])
   @@index([familyId])
@@ -289,10 +292,10 @@ model Trip {
 
   status TripStatus @default(ACTIVE)
 
-  startedAt  DateTime  @default(now())
-  arrivedAt  DateTime?
-  endedAt    DateTime?
-  updatedAt  DateTime  @updatedAt
+  startedAt DateTime  @default(now())
+  arrivedAt DateTime?
+  endedAt   DateTime?
+  updatedAt DateTime  @updatedAt
 
   /// Mỗi người chỉ có MỘT chuyến đang chạy: bắt đầu chuyến mới thì chuyến cũ
   /// tự huỷ. Chỉ số này phục vụ truy vấn "chuyến đang chạy của couple".
@@ -307,30 +310,30 @@ model Trip {
 /// lên đều phải trả lời "đang ở trong hay ngoài", mà truy vấn "sự kiện mới nhất
 /// theo từng địa điểm" là một câu khó và tốn. Bảng này chỉ vài dòng mỗi người.
 model GeofenceState {
-  userId  String
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  placeId String
-  place   Place   @relation(fields: [placeId], references: [id], onDelete: Cascade)
-  inside  Boolean @default(false)
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  placeId        String
+  place          Place     @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  inside         Boolean   @default(false)
   /// Lần đầu thấy điểm nằm trong hàng rào của lượt vào này.
   /// Phải ở đủ lâu (GEOFENCE_MIN_DWELL_MS) mới tính là đã tới nơi — đi xe ngang
   /// qua nhà thì không phải là về tới nhà.
   candidateSince DateTime?
-  updatedAt      DateTime @updatedAt
+  updatedAt      DateTime  @updatedAt
 
   @@id([userId, placeId])
   @@map("geofence_states")
 }
 
 model GeofenceEvent {
-  id        String            @id @default(uuid())
-  coupleId  String
-  couple    Couple            @relation(fields: [coupleId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  placeId   String
-  place     Place             @relation(fields: [placeId], references: [id], onDelete: Cascade)
-  type      GeofenceEventType
+  id         String            @id @default(uuid())
+  coupleId   String
+  couple     Couple            @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  placeId    String
+  place      Place             @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  type       GeofenceEventType
   occurredAt DateTime
 
   @@index([coupleId, occurredAt])
@@ -342,11 +345,11 @@ model GeofenceEvent {
 // ---------------------------------------------------------
 
 model Post {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   coupleId  String
-  couple    Couple   @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  couple    Couple    @relation(fields: [coupleId], references: [id], onDelete: Cascade)
   authorId  String
-  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
   caption   String?
   mood      String?
   lat       Float?
@@ -362,19 +365,19 @@ model Post {
 }
 
 model Photo {
-  id       String @id @default(uuid())
-  postId   String
-  post     Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
-  keyOrig  String
-  keyMd    String
-  keyThumb String
-  width     Int
-  height    Int
+  id          String @id @default(uuid())
+  postId      String
+  post        Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  keyOrig     String
+  keyMd       String
+  keyThumb    String
+  width       Int
+  height      Int
   /// Ảnh 20px nhúng thẳng dạng data URI, hiện trong lúc ảnh thật đang tải.
   /// Trước đây tên là `blurhash`, nhưng đây không phải thuật toán BlurHash —
   /// đổi tên cho khớp bản chất, xem migration 20260907190000.
   placeholder String
-  sortOrder Int   @default(0)
+  sortOrder   Int    @default(0)
 
   @@index([postId])
   @@map("photos")
@@ -436,19 +439,19 @@ model Event {
 }
 
 model Milestone {
-  id       String        @id @default(uuid())
-  coupleId String
-  couple   Couple        @relation(fields: [coupleId], references: [id], onDelete: Cascade)
-  title    String
+  id        String        @id @default(uuid())
+  coupleId  String
+  couple    Couple        @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  title     String
   /// Ngày trôi nổi (§6.3): "kỷ niệm 11/11" là một ô trên tờ lịch, không phải
   /// một khoảnh khắc — nên lưu kiểu Date, không kèm múi giờ.
-  date     DateTime      @db.Date
-  kind     MilestoneKind
-  emoji    String        @default("💖")
+  date      DateTime      @db.Date
+  kind      MilestoneKind
+  emoji     String        @default("💖")
   /// Lặp lại hằng năm (mặc định) hay chỉ xảy ra đúng một lần.
   /// Mốc một lần đã qua thì biến mất khỏi danh sách "sắp tới".
-  yearly   Boolean       @default(true)
-  createdAt DateTime     @default(now())
+  yearly    Boolean       @default(true)
+  createdAt DateTime      @default(now())
 
   @@index([coupleId, date])
   @@map("milestones")
@@ -479,19 +482,19 @@ model Game {
 
   /// Mốc hết giờ của lượt hiện tại. NULL = đồng hồ đang TẠM DỪNG vì người tới
   /// lượt không mở app (iOS treo JS khi khoá màn hình — ARCHITECTURE.md §1.3).
-  turnDeadlineAt DateTime?
+  turnDeadlineAt  DateTime?
   /// Còn lại bao nhiêu mili-giây khi tạm dừng; chạy tiếp thì cộng từ đây.
-  turnRemainingMs Int @default(30000)
+  turnRemainingMs Int       @default(30000)
 
   /// Nước đi gần nhất. Quá ABANDON_AFTER_MS không ai đi thì cron huỷ ván.
   /// KHÔNG dùng `updatedAt` thay: tạm dừng đồng hồ cũng là một lần ghi, nên
   /// `updatedAt` sẽ tự đẩy hạn huỷ ra xa mỗi lần người dùng khoá màn hình.
-  lastMoveAt DateTime @default(now())
+  lastMoveAt   DateTime @default(now())
   /// Nước đi gần nhất do đồng hồ tự sinh, không phải người bấm.
-  lastMoveAuto Boolean @default(false)
+  lastMoveAuto Boolean  @default(false)
 
-  winnerId String?
-  winner   User?   @relation("GameWinner", fields: [winnerId], references: [id], onDelete: SetNull)
+  winnerId  String?
+  winner    User?   @relation("GameWinner", fields: [winnerId], references: [id], onDelete: SetNull)
   /// HET_BAI | DU_QUAN | HET_GIO | DAU_HANG | HOA | BO_DO
   endReason String?
 
@@ -502,8 +505,8 @@ model Game {
   version Int @default(0)
 
   moves      GameMove[]
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
   finishedAt DateTime?
 
   @@index([coupleId, kind, status])
@@ -517,15 +520,15 @@ model Game {
 /// Lịch sử nước đi. KHÔNG dùng để dựng lại ván (cột `state` đã đủ), mà để hiện
 /// "nước vừa đánh", gỡ lỗi khi luật xử sai, và sau này làm màn phát lại.
 model GameMove {
-  id     BigInt @id @default(autoincrement())
-  gameId String
-  game   Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        BigInt   @id @default(autoincrement())
+  gameId    String
+  game      Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// Số thứ tự trong ván, bắt đầu từ 1.
-  no Int
+  no        Int
   /// Tiến lên: {cards:[...]} hoặc {pass:true}. Caro: {r,c}.
-  payload Json
+  payload   Json
   /// Do đồng hồ tự sinh chứ không phải người bấm — giao diện nói rõ "hết giờ".
   auto      Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -555,18 +558,23 @@ model StudySession {
   focusMin    Int         @default(25)
   breakMin    Int         @default(5)
 
+  /// Môn / việc đang học, do người mở phòng gõ. `null` = buổi học không đặt tên.
+  /// Có tên thì thông báo đẩy nói được "đang ôn Toán" thay vì "đang học", và
+  /// thống kê mới tách được thời gian theo môn.
+  subject String?
+
   /// Mốc kết thúc chặng hiện tại.
-  endsAt DateTime
+  endsAt     DateTime
   /// Số chặng HỌC đã hoàn thành (chặng nghỉ không tính).
-  roundsDone Int @default(0)
+  roundsDone Int      @default(0)
 
   /// Ai đang ở trong phòng — mảng userId. Chỉ hai người nên để Json là đủ,
   /// cùng lý do với `Post.reactions`: tách bảng chỉ tốn thêm một lần join.
   presentUserIds Json @default("[]")
 
   logs       StudyLog[]
-  startedAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  startedAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
   finishedAt DateTime?
 
   @@index([coupleId, status])
@@ -591,6 +599,11 @@ model StudyLog {
   round     Int
   minutes   Int
 
+  /// CHÉP LẠI tên môn tại thời điểm ghi công, không tra ngược qua `session`.
+  /// Phiên bị xoá (`onDelete: SetNull`) hoặc đổi tên giữa chừng thì lịch sử vẫn
+  /// phải nói đúng thứ đã học lúc đó.
+  subject String?
+
   /// Ngày lịch GIỜ VIỆT NAM, không phải ngày UTC. Chuỗi ngày học đếm theo cột
   /// này; lưu timestamp rồi so sau sẽ tính nhầm mọi buổi học sau nửa đêm
   /// (ADR 2026-09-07).
@@ -599,6 +612,8 @@ model StudyLog {
   createdAt DateTime @default(now())
 
   @@index([coupleId, userId, day])
+  /// Thống kê 7 ngày gom theo (ngày, môn) cho cả couple — không lọc theo user.
+  @@index([coupleId, day])
   @@map("study_logs")
 }
 
@@ -621,8 +636,8 @@ enum CycleShareLevel {
 /// Bản ghi được tạo LƯỜI (lúc ghi lần đầu), nên "chưa có hàng" = "chưa bật
 /// theo dõi" và không cần thêm cột cờ bật/tắt.
 model CycleSettings {
-  userId String          @id
-  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String          @id
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   shareLevel CycleShareLevel @default(OFF)
 
   /// Người dùng tự đặt, để trống thì tính từ lịch sử.

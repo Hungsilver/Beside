@@ -3,13 +3,20 @@ import { Prisma, StudyPhase, StudyStatus, type StudySession } from '@prisma/clie
 import {
   DISPLAY_TIMEZONE,
   ERROR_CODES,
+  MAX_DAILY_GOAL_MIN,
+  STATS_DAYS,
   nextPhase,
+  normalizeSubject,
   phaseDurationMs,
+  recentDayKeys,
   studyStreak,
   ymdInTimeZone,
   ymdToUtcMidnight,
+  type SetStudyGoalInput,
   type StartStudyInput,
+  type StudyDayBucket,
   type StudySessionResponse,
+  type StudySubjectBucket,
   type StudySummaryResponse,
 } from '@beside/shared';
 import { PrismaService } from '../common/prisma/prisma.service';
@@ -55,6 +62,10 @@ export class StudyService {
     }
 
     const now = Date.now();
+    // Đi qua `normalizeSubject` một lần nữa dù Zod đã làm: service còn được gọi
+    // từ chỗ khác ngoài controller, và "không đặt tên" phải luôn là `null`.
+    const subject = normalizeSubject(input.subject);
+
     const session = await this.prisma.studySession.create({
       data: {
         coupleId: ctx.coupleId,
@@ -62,6 +73,7 @@ export class StudyService {
         phase: StudyPhase.FOCUS,
         focusMin: input.focusMin,
         breakMin: input.breakMin,
+        subject,
         endsAt: new Date(now + input.focusMin * 60_000),
         presentUserIds: [userId] as unknown as Prisma.InputJsonValue,
       },
@@ -70,7 +82,9 @@ export class StudyService {
 
     void this.push.sendToPartner(userId, {
       kind: 'STUDY_INVITE',
-      title: `${ctx.displayName} vừa mở phòng học`,
+      title: subject
+        ? `${ctx.displayName} đang học ${subject}`
+        : `${ctx.displayName} vừa mở phòng học`,
       body: `Phiên ${input.focusMin} phút vừa bắt đầu — vào học cùng nhé`,
       url: '/hoc-cung-nhau',
       tag: `study:${session.id}`,
@@ -152,19 +166,28 @@ export class StudyService {
       this.findRunning(ctx.coupleId),
       this.prisma.studyLog.findMany({
         where: { coupleId: ctx.coupleId },
-        select: { userId: true, minutes: true, day: true, sessionId: true, round: true },
+        select: {
+          userId: true,
+          minutes: true,
+          day: true,
+          sessionId: true,
+          round: true,
+          subject: true,
+        },
       }),
       this.prisma.user.findMany({
         where: { coupleId: ctx.coupleId },
-        select: { id: true, displayName: true },
+        select: { id: true, displayName: true, studyGoalMin: true },
         orderBy: { createdAt: 'asc' },
       }),
     ]);
 
-    const todayKey = ymdKey(new Date());
+    const windowKeys = recentDayKeys(STATS_DAYS);
+    const todayKey = windowKeys[windowKeys.length - 1] ?? ymdKey(new Date());
 
     const people = members.map((m) => {
       const mine = logs.filter((l) => l.userId === m.id);
+      const inWindow = mine.filter((l) => windowKeys.includes(ymdKey(l.day)));
       return {
         userId: m.id,
         displayName: m.displayName,
@@ -173,6 +196,9 @@ export class StudyService {
           .filter((l) => ymdKey(l.day) === todayKey)
           .reduce((sum, l) => sum + l.minutes, 0),
         streakDays: studyStreak(mine.map((l) => ymdKey(l.day))),
+        goalMin: m.studyGoalMin,
+        days: bucketByDay(inWindow, windowKeys),
+        subjects: bucketBySubject(inWindow),
       };
     });
 
@@ -200,7 +226,24 @@ export class StudyService {
       current: running ? this.toResponse(running) : null,
       people,
       togetherMinutes,
+      statsFrom: windowKeys[0] ?? todayKey,
     };
+  }
+
+  /**
+   * Đặt mục tiêu phút mỗi ngày cho CHÍNH MÌNH.
+   *
+   * Không nhận `userId` mục tiêu từ client (R3): mục tiêu của người kia là
+   * chuyện của người kia, thấy được nhưng không sửa được.
+   */
+  async setGoal(userId: string, input: SetStudyGoalInput): Promise<number> {
+    const minutes = Math.min(MAX_DAILY_GOAL_MIN, Math.max(0, Math.round(input.dailyGoalMin)));
+    const saved = await this.prisma.user.update({
+      where: { id: userId },
+      data: { studyGoalMin: minutes },
+      select: { studyGoalMin: true },
+    });
+    return saved.studyGoalMin;
   }
 
   /** Couple của một người — gateway cần nó để biết phát vào phòng nào. */
@@ -257,6 +300,7 @@ export class StudyService {
           sessionId: session.id,
           round: session.roundsDone + 1,
           minutes: session.focusMin,
+          subject: session.subject,
           day: new Date(ymdToUtcMidnight(ymdInTimeZone(session.endsAt))),
         })),
       });
@@ -344,6 +388,7 @@ export class StudyService {
       phase: session.phase,
       focusMin: session.focusMin,
       breakMin: session.breakMin,
+      subject: session.subject,
       endsAt: session.endsAt.getTime(),
       roundsDone: session.roundsDone,
       startedById: session.startedById,
@@ -356,6 +401,47 @@ export class StudyService {
 function parsePresent(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   return raw.filter((v): v is string => typeof v === 'string');
+}
+
+type MinuteRow = { minutes: number; day: Date; subject: string | null };
+
+/**
+ * Gom số phút theo ngày, trả về ĐÚNG một phần tử cho mỗi ngày trong `dayKeys`.
+ *
+ * Ngày không học vẫn phải có mặt với `0`: thiếu nó thì biểu đồ tuần co lại còn
+ * mấy cột và hai người nhìn vào tưởng mình học đều hơn thực tế.
+ */
+function bucketByDay(rows: MinuteRow[], dayKeys: string[]): StudyDayBucket[] {
+  const sums = new Map<string, number>(dayKeys.map((k) => [k, 0]));
+  for (const r of rows) {
+    const key = ymdKey(r.day);
+    const current = sums.get(key);
+    if (current !== undefined) sums.set(key, current + r.minutes);
+  }
+  return dayKeys.map((day) => ({ day, minutes: sums.get(day) ?? 0 }));
+}
+
+/**
+ * Gom số phút theo môn, nhiều phút xếp trước.
+ *
+ * Buổi không đặt tên gom hết vào một nhóm `null` và LUÔN xếp cuối — nó không
+ * phải một môn, để nó chen lên đầu chỉ làm nhiễu bảng.
+ */
+function bucketBySubject(rows: MinuteRow[]): StudySubjectBucket[] {
+  const named = new Map<string, number>();
+  let unnamed = 0;
+  for (const r of rows) {
+    const subject = normalizeSubject(r.subject);
+    if (subject === null) unnamed += r.minutes;
+    else named.set(subject, (named.get(subject) ?? 0) + r.minutes);
+  }
+
+  const out: StudySubjectBucket[] = [...named.entries()]
+    .map(([subject, minutes]) => ({ subject, minutes }))
+    .sort((a, b) => b.minutes - a.minutes || a.subject.localeCompare(b.subject, 'vi'));
+
+  if (unnamed > 0) out.push({ subject: null, minutes: unnamed });
+  return out;
 }
 
 /** `YYYY-MM-DD` theo ngày lịch giờ Việt Nam. */

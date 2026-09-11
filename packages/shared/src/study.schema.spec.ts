@@ -2,9 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_BREAK_MIN,
   DEFAULT_FOCUS_MIN,
+  MAX_DAILY_GOAL_MIN,
   MAX_ROUNDS,
+  MAX_SUBJECT_LEN,
+  STATS_DAYS,
   nextPhase,
+  normalizeSubject,
   phaseDurationMs,
+  recentDayKeys,
+  setStudyGoalSchema,
   startStudySchema,
   studyStreak,
 } from './study.schema';
@@ -120,5 +126,98 @@ describe('studyStreak', () => {
   it('chuỗi ngày hỏng định dạng thì bỏ qua, không làm sập', () => {
     expect(studyStreak(['khong-phai-ngay'], NOW)).toBe(0);
     expect(studyStreak(['2026-09-09', 'hong'], NOW)).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Đợt 1: môn học · mục tiêu ngày · khoảng ngày cho biểu đồ
+// ---------------------------------------------------------------------------
+
+describe('normalizeSubject', () => {
+  it('cắt khoảng trắng thừa và gộp khoảng trắng giữa chừng', () => {
+    expect(normalizeSubject('  Toán   cao  cấp ')).toBe('Toán cao cấp');
+  });
+
+  it('chuỗi rỗng / toàn khoảng trắng / null / undefined đều cho null', () => {
+    // "Không đặt tên" phải có ĐÚNG MỘT cách biểu diễn, nếu không thống kê sẽ
+    // đẻ ra một nhóm rỗng nằm cạnh nhóm null.
+    expect(normalizeSubject('')).toBeNull();
+    expect(normalizeSubject('   ')).toBeNull();
+    expect(normalizeSubject(null)).toBeNull();
+    expect(normalizeSubject(undefined)).toBeNull();
+  });
+
+  it('cắt bớt khi dài quá trần', () => {
+    const long = 'x'.repeat(MAX_SUBJECT_LEN + 30);
+    expect(normalizeSubject(long)).toHaveLength(MAX_SUBJECT_LEN);
+  });
+});
+
+describe('startStudySchema — môn học', () => {
+  it('bỏ trống môn thì ra null, không phải chuỗi rỗng', () => {
+    const r = startStudySchema.safeParse({ subject: '   ' });
+    expect(r.success && r.data.subject).toBeNull();
+  });
+
+  it('không truyền môn cũng hợp lệ', () => {
+    const r = startStudySchema.safeParse({});
+    expect(r.success && r.data.subject).toBeNull();
+  });
+
+  it('môn dài quá trần bị từ chối', () => {
+    expect(startStudySchema.safeParse({ subject: 'x'.repeat(MAX_SUBJECT_LEN + 1) }).success).toBe(
+      false,
+    );
+  });
+});
+
+describe('setStudyGoalSchema', () => {
+  it('0 là hợp lệ — nghĩa là tắt mục tiêu', () => {
+    expect(setStudyGoalSchema.safeParse({ dailyGoalMin: 0 }).success).toBe(true);
+  });
+
+  it('từ chối số âm, số lẻ và số vượt trần', () => {
+    expect(setStudyGoalSchema.safeParse({ dailyGoalMin: -30 }).success).toBe(false);
+    expect(setStudyGoalSchema.safeParse({ dailyGoalMin: 30.5 }).success).toBe(false);
+    expect(setStudyGoalSchema.safeParse({ dailyGoalMin: MAX_DAILY_GOAL_MIN + 1 }).success).toBe(
+      false,
+    );
+  });
+});
+
+describe('recentDayKeys', () => {
+  it('trả đúng số ngày, cũ → mới, ngày cuối là hôm nay', () => {
+    const keys = recentDayKeys(STATS_DAYS, NOW);
+    expect(keys).toHaveLength(STATS_DAYS);
+    expect(keys[keys.length - 1]).toBe('2026-09-09');
+    expect(keys[0]).toBe('2026-09-03');
+  });
+
+  it('0 ngày cho mảng rỗng, số âm cũng vậy', () => {
+    expect(recentDayKeys(0, NOW)).toEqual([]);
+    expect(recentDayKeys(-5, NOW)).toEqual([]);
+  });
+
+  it('lúc 00:30 giờ VN vẫn đếm "hôm nay" là ngày mới, không trùng khoá', () => {
+    // 17:30 UTC = 00:30 hôm sau ở VN. Đây đúng cái bẫy ADR 2026-09-07.
+    const keys = recentDayKeys(3, new Date('2026-09-08T17:30:00.000Z'));
+    expect(keys).toEqual(['2026-09-07', '2026-09-08', '2026-09-09']);
+    expect(new Set(keys).size).toBe(3);
+  });
+
+  it('bắc qua đầu tháng vẫn lùi đúng ngày', () => {
+    expect(recentDayKeys(3, new Date('2026-03-02T05:00:00.000Z'))).toEqual([
+      '2026-02-28',
+      '2026-03-01',
+      '2026-03-02',
+    ]);
+  });
+
+  it('năm nhuận: 29/02 không bị nhảy qua', () => {
+    expect(recentDayKeys(3, new Date('2028-03-01T05:00:00.000Z'))).toEqual([
+      '2028-02-28',
+      '2028-02-29',
+      '2028-03-01',
+    ]);
   });
 });

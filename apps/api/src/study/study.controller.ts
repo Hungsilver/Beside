@@ -7,10 +7,13 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Put,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
+  setStudyGoalSchema,
   startStudySchema,
+  type SetStudyGoalInput,
   type StartStudyInput,
   type StudySessionResponse,
   type StudySummaryResponse,
@@ -36,6 +39,19 @@ export class StudyController {
   @Get('current')
   async current(@CurrentUserId() userId: string): Promise<StudySessionResponse | null> {
     return this.study.current(userId);
+  }
+
+  /**
+   * Mục tiêu phút mỗi ngày của CHÍNH mình. Đặt trước các route `:id` cùng lý do
+   * với `summary` — nếu không "goal" sẽ khớp vào `:id` rồi chết ở `ParseUUIDPipe`.
+   */
+  @Put('goal')
+  @HttpCode(HttpStatus.OK)
+  async setGoal(
+    @CurrentUserId() userId: string,
+    @Body(new ZodBody(setStudyGoalSchema)) dto: SetStudyGoalInput,
+  ): Promise<{ dailyGoalMin: number }> {
+    return { dailyGoalMin: await this.study.setGoal(userId, dto) };
   }
 
   @Post()

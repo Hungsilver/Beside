@@ -4,6 +4,7 @@ import type { Socket } from 'socket.io-client';
 import {
   STUDY_RT_EVENTS,
   STUDY_RT_NAMESPACE,
+  type SetStudyGoalInput,
   type StartStudyInput,
   type StudySessionResponse,
   type StudySummaryResponse,
@@ -28,6 +29,21 @@ export function useStartStudy() {
   return useMutation({
     mutationFn: (input: StartStudyInput) =>
       api.post<StudySessionResponse>('/study', input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: studyKeys.all }),
+  });
+}
+
+/**
+ * Đặt mục tiêu phút mỗi ngày.
+ *
+ * Server chỉ cho sửa mục tiêu của chính người gọi nên không cần gửi `userId`;
+ * xong thì nạp lại tổng hợp để vòng tiến độ đổi theo ngay.
+ */
+export function useSetStudyGoal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SetStudyGoalInput) =>
+      api.put<{ dailyGoalMin: number }>('/study/goal', input),
     onSuccess: () => qc.invalidateQueries({ queryKey: studyKeys.all }),
   });
 }
