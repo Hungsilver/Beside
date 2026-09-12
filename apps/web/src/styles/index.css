@@ -429,6 +429,25 @@ button {
   }
 
   /*
+    Thẻ NHÓM — cả một đơn vị (`09`) trên một tấm, đúng dáng đồng hồ lật thật.
+
+    Bề ngang do component truyền vào qua `--flip-cw` vì nó phụ thuộc số chữ số:
+    nhóm hai chữ số rộng 1.46em, nhưng đếm ngược dài (`100:00:00`) có nhóm ba
+    chữ số. `line-height` PHẢI bằng `height` — bốn lớp nửa thẻ căn chữ số theo
+    hộp dòng, lệch một chút là chữ số không khớp nếp gấp giữa thẻ.
+
+    Thẻ nhóm rộng hơn cao (1.46 × 1.2) chứ không cao hơn rộng như thẻ một chữ
+    số: đó là tỉ lệ của một lá thẻ in hai chữ số thật.
+  */
+  .flip-digit.is-group {
+    width: var(--flip-cw, 1.46em);
+    height: 1.2em;
+    line-height: 1.2em;
+    border-radius: 0.1em;
+    perspective: 18em;
+  }
+
+  /*
     Mặt đồng hồ ở chế độ toàn màn hình.
 
     `.flip-stage` là khung chứa được đo; `.flip-fluid` là mặt đồng hồ bên trong

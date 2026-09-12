@@ -16,3 +16,21 @@ declare const __BUILD_ID__: string;
 interface Window {
   webkitAudioContext?: typeof AudioContext;
 }
+
+/**
+ * Battery Status API — Chrome/Edge trên Android và máy tính có, Safari và
+ * Firefox thì KHÔNG (Firefox đã gỡ hẳn vì lo bị dùng để nhận dạng máy).
+ *
+ * Không nằm trong `lib.dom.d.ts` nên phải tự khai. `useBattery()` hỏi bằng
+ * `'getBattery' in navigator` trước khi gọi, và module Đồng hồ ẩn hẳn mức pin
+ * đi khi trình duyệt không trả lời.
+ */
+interface BatteryManager extends EventTarget {
+  /** 0–1. */
+  readonly level: number;
+  readonly charging: boolean;
+}
+
+interface Navigator {
+  getBattery?: () => Promise<BatteryManager>;
+}

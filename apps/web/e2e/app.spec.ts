@@ -923,16 +923,32 @@ test.describe('Phòng học chung', () => {
 
   test('ST-02 — bắt đầu phiên thì đồng hồ hiện ra và đếm ngược thật', async () => {
     await page.goto('/hoc-cung-nhau');
-    await page.getByRole('button', { name: '15 phút' }).click();
+    /*
+     * `.first()` vì `15 phút` khớp HAI nút: mốc học 15 phút và mốc nghỉ dài 15
+     * phút (`LONG_BREAK_OPTIONS` thêm ngày 12/09 làm selector cũ nhập nhằng và
+     * test này đỏ từ lúc đó). Mốc học đứng trước trong DOM.
+     */
+    await page.getByRole('button', { name: '15 phút' }).first().click();
     await page.getByRole('button', { name: /Bắt đầu học/ }).click();
 
-    const clock = page.getByText(/^\d{2}:\d{2}$/);
-    await expect(clock.first()).toBeVisible({ timeout: 15_000 });
+    /*
+     * Đọc `aria-label` của mặt số thay vì `textContent`.
+     *
+     * Mỗi tấm thẻ lật giữ CẢ số mới và số cũ trong hai nửa tĩnh, nên
+     * `textContent` của mặt số ra `1155:0000` chứ không ra `15:00` — không
+     * regex nào khớp cho ra ý nghĩa. `aria-label` thì do component đặt tường
+     * minh ("Còn lại 14 phút 59 giây") và cũng chính là thứ người khiếm thị
+     * nghe được.
+     */
+    const clock = page.getByRole('timer');
+    await expect(clock).toBeVisible({ timeout: 15_000 });
 
-    const first = await clock.first().textContent();
+    const first = await clock.getAttribute('aria-label');
     // Chờ qua hai nhịp cập nhật rồi đọc lại — đồng hồ phải nhỏ đi.
     await expect
-      .poll(async () => (await clock.first().textContent()) !== first, { timeout: 8_000 })
+      .poll(async () => (await clock.getAttribute('aria-label')) !== first, {
+        timeout: 8_000,
+      })
       .toBe(true);
 
     await expect(page.getByText(/ĐANG HỌC/)).toBeVisible();
@@ -947,13 +963,170 @@ test.describe('Phòng học chung', () => {
 
   test('ST-03 — thống kê hiện lên sau khi đã có giờ học', async () => {
     await page.goto('/hoc-cung-nhau');
-    // Mục thống kê chỉ hiện khi couple đã có thành viên — luôn đúng ở đây.
-    await expect(page.getByText('Đã học được')).toBeVisible({ timeout: 15_000 });
+    /*
+     * `Đã học được` là nhãn của bản thống kê ĐẦU TIÊN (commit 9a632af) và đã
+     * biến mất khi mục này được dựng lại — test đỏ từ lúc đó. Nhãn hiện tại là
+     * `7 ngày qua`, thứ luôn hiện khi couple đã có thành viên.
+     */
+    await expect(page.getByText('7 ngày qua')).toBeVisible({ timeout: 15_000 });
 
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
     expect(overflow, 'trang bị tràn ngang').toBeLessThanOrEqual(0);
+    expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
+  });
+});
+
+test.describe('Module Đồng hồ (/dong-ho)', () => {
+  /*
+   * Bộ này chốt đúng điều chủ dự án yêu cầu ngày 12/09: mặt số phải là phần
+   * CHÍNH của màn hình, không phải một khối bị ba hàng chip đẩy xuống còn nửa.
+   * Đó là thứ chỉ trình duyệt thật đo được — typecheck và unit test không thấy
+   * một pixel nào.
+   */
+
+  /** Mặt số: `role="timer"` do `FlipClock` đặt. */
+  const face = () => page.getByRole('timer');
+
+  test('DH-01 — vào từ trang chủ, mặt số chiếm phần chính màn hình', async () => {
+    await page.goto('/');
+    await page.getByRole('link', { name: /Đồng hồ số lật toàn màn hình/ }).click();
+
+    await expect(face()).toBeVisible();
+
+    const viewport = page.viewportSize()!;
+    const box = (await face().boundingBox())!;
+
+    /*
+     * Ngưỡng 55%: bản cũ (bốn chip chế độ + hàng nút riêng + nút cài đặt + dòng
+     * hướng dẫn dưới đáy) cho mặt số khoảng 45% chiều cao. Bản này xếp chồng ba
+     * thẻ nhóm ở khổ dọc nên phải vượt hẳn ngưỡng đó, và nếu ai thêm lại một
+     * hàng chip vào đáy thì test này đỏ ngay.
+     */
+    expect(
+      box.height / viewport.height,
+      `mặt số chỉ cao ${Math.round(box.height)}px trên khung ${viewport.height}px`,
+    ).toBeGreaterThan(0.55);
+
+    // Và không được tràn ra ngoài mép ngang.
+    expect(box.width).toBeLessThanOrEqual(viewport.width);
+
+    // Đáy chỉ có MỘT hàng tab — không hàng chip nào khác.
+    const tabs = page.getByRole('tablist', { name: 'Chế độ đồng hồ' });
+    await expect(tabs).toBeVisible();
+    const tabsBox = (await tabs.boundingBox())!;
+    expect(tabsBox.height, 'hàng tab bị xuống dòng').toBeLessThanOrEqual(70);
+
+    // Bốn khe tab, mỗi khe đủ 44px để chạm (R2).
+    const items = tabs.getByRole('tab');
+    expect(await items.count()).toBeGreaterThanOrEqual(3);
+    for (const item of await items.all()) {
+      expect((await item.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    }
+
+    expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
+  });
+
+  test('DH-02 — hẹn giờ gõ được số phút tuỳ ý rồi đếm ngược thật', async () => {
+    await page.goto('/dong-ho');
+    await page.getByRole('tab', { name: 'Hẹn giờ' }).click();
+
+    // Chưa đặt gì thì màn ĐẶT chiếm chỗ mặt số — mặt số `00:00` không nói gì.
+    await expect(page.getByText('Hẹn giờ trong bao lâu?')).toBeVisible();
+
+    const minutes = page.getByLabel(/Số phút tuỳ ý/);
+    const start = page.getByRole('button', { name: /Bắt đầu/ });
+
+    // Ô trống thì nút phải KHOÁ, không được bắt đầu một mốc 0 phút.
+    await expect(start).toBeDisabled();
+    // Ngoài biên cũng khoá.
+    await minutes.fill('0');
+    await expect(start).toBeDisabled();
+    await minutes.fill('9999');
+    await expect(start).toBeDisabled();
+
+    await minutes.fill('3');
+    await expect(start).toBeEnabled();
+    await start.click();
+
+    // Mặt số quay lại và đang đếm ngược thật.
+    await expect(face()).toBeVisible();
+    const first = await face().getAttribute('aria-label');
+    await expect
+      .poll(async () => (await face().getAttribute('aria-label')) !== first, {
+        timeout: 8_000,
+      })
+      .toBe(true);
+
+    await expect(page.getByRole('button', { name: /Tạm dừng/ })).toBeVisible();
+
+    // Dọn: đặt lại về chưa hẹn gì.
+    await page.getByRole('button', { name: /Đặt lại/ }).click();
+    await expect(page.getByText('Hẹn giờ trong bao lâu?')).toBeVisible();
+    expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
+  });
+
+  test('DH-03 — cài đặt nằm trong bảng trượt, tắt giây thì thẻ to ra', async () => {
+    await page.goto('/dong-ho');
+    await expect(face()).toBeVisible();
+
+    /** Thẻ số theo NHÓM — một thẻ mang cả `09`, như đồng hồ lật thật. */
+    const cards = page.locator('.flip-digit.is-group');
+
+    // Mặc định có giây: ba thẻ (giờ · phút · giây) xếp chồng ở khổ dọc.
+    await expect(cards).toHaveCount(3);
+    const narrow = (await cards.first().boundingBox())!.width;
+
+    await page.getByRole('button', { name: 'Cài đặt đồng hồ' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Cài đặt đồng hồ' });
+    await expect(sheet).toBeVisible();
+
+    // Những công tắc trước đây là chip dưới đáy màn giờ phải nằm TRONG bảng.
+    await sheet.getByRole('button', { name: /Hiện giây/ }).click();
+    await sheet.getByRole('button', { name: /Chủ đề Giấy/ }).click();
+
+    await sheet.getByRole('button', { name: 'Xong' }).click();
+    await expect(sheet).toHaveCount(0);
+
+    /*
+     * Bỏ thẻ giây thì khối đồng hồ KHÔNG thấp đi — nó vẫn lấp đầy khung, và cỡ
+     * chữ tính ngược từ chỗ còn lại nên mỗi thẻ TO RA. Đó là điểm của cách đo
+     * theo khung chứa; đo sai chiều thì sẽ tưởng công tắc không ăn.
+     */
+    await expect(cards).toHaveCount(2);
+    await expect
+      .poll(async () => (await cards.first().boundingBox())!.width > narrow, {
+        timeout: 5_000,
+      })
+      .toBe(true);
+
+    // To ra nhưng vẫn không được tràn ra ngoài mép.
+    const viewport = page.viewportSize()!;
+    expect((await cards.first().boundingBox())!.width).toBeLessThanOrEqual(viewport.width);
+
+    // Trả lại mặc định cho các test sau (tuỳ chọn lưu trong localStorage).
+    await page.getByRole('button', { name: 'Cài đặt đồng hồ' }).click();
+    await sheet.getByRole('button', { name: /Hiện giây/ }).click();
+    await sheet.getByRole('button', { name: /Chủ đề Mực/ }).click();
+    await sheet.getByRole('button', { name: 'Xong' }).click();
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow, 'trang bị tràn ngang').toBeLessThanOrEqual(0);
+    expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
+  });
+
+  test('DH-04 — Phòng học dẫn sang module, không mở lớp phủ tại chỗ', async () => {
+    await page.goto('/hoc-cung-nhau');
+    await page.getByRole('link', { name: /Xem đồng hồ toàn màn hình/ }).click();
+    await expect(page).toHaveURL(/\/dong-ho/);
+    await expect(face()).toBeVisible();
+
+    // Thoát thì quay lại đúng chỗ vừa tới, không nhảy về trang chủ.
+    await page.getByRole('button', { name: 'Thoát đồng hồ' }).click();
+    await expect(page).toHaveURL(/\/hoc-cung-nhau/);
     expect(jsErrors, `lỗi JS: ${jsErrors.join(' | ')}`).toHaveLength(0);
   });
 });

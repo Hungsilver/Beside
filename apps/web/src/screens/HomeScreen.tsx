@@ -206,6 +206,26 @@ export default function HomeScreen() {
         </div>
       </Link>
 
+      {/*
+        Đồng hồ đứng NGANG HÀNG với Phòng học, không nằm bên trong nó: thứ dùng
+        thường xuyên nhất là dựng máy trên bàn mà xem giờ, chuyện đó không dính
+        gì tới một phiên học nào.
+      */}
+      <Link to="/dong-ho" className="card mt-3.5 block">
+        <div className="flex items-center gap-3">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-ink-100 text-[22px]">
+            🕐
+          </span>
+          <div className="min-w-0 flex-1">
+            <b className="block text-[15.5px]">Đồng hồ</b>
+            <p className="mt-0.5 text-[12.5px] leading-relaxed text-ink-500">
+              Đồng hồ số lật toàn màn hình, hẹn giờ và bấm giờ
+            </p>
+          </div>
+          <span className="shrink-0 text-[18px] text-ink-400">›</span>
+        </div>
+      </Link>
+
       <Link to="/tro-choi" className="card mt-3.5 block">
         <div className="flex items-center gap-3">
           <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-ink-100 text-[22px]">

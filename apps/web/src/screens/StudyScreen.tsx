@@ -28,7 +28,6 @@ import {
   useStudySummary,
 } from '@/lib/study-api';
 import FlipClock from '@/components/FlipClock';
-import FullscreenClock from '@/components/FullscreenClock';
 import StudyCheerBar, { CheerToast } from '@/components/StudyCheer';
 import StudyDDays from '@/components/StudyDDays';
 import StudyNoise from '@/components/StudyNoise';
@@ -40,6 +39,15 @@ import StudyVersus from '@/components/StudyVersus';
 import TabBar from '@/components/TabBar';
 import { useNoise } from '@/lib/use-noise';
 import { Screen, Spinner } from '@/components/ui';
+
+/**
+ * Đường sang module Đồng hồ, mang sẵn chế độ "phiên học".
+ *
+ * Không để đồng hồ tự đoán: vào từ trang chủ thì người ta muốn XEM GIỜ, vào từ
+ * phòng học lúc đang có phiên thì muốn thấy chặng đang đếm ngược. Hai ý đó chỉ
+ * phân biệt được bằng đường vào.
+ */
+const CLOCK_LINK = '/dong-ho?che-do=phien-hoc';
 
 export default function StudyScreen() {
   const { user } = useAuth();
@@ -53,7 +61,6 @@ export default function StudyScreen() {
   const noise = useNoise();
 
   const [error, setError] = useState<string | null>(null);
-  const [fullscreen, setFullscreen] = useState(false);
 
   if (summary.isLoading) return <Spinner label="Đang mở phòng học..." />;
 
@@ -83,23 +90,17 @@ export default function StudyScreen() {
           onError={setError}
           onCheer={channel.sendCheer}
           canCheer={channel.connected}
-          onExpand={() => setFullscreen(true)}
         />
       ) : (
         <>
           <StartRoom onError={setError} lastSubject={lastSubjectOf(me)} />
           {/*
-            Lối vào đồng hồ khi CHƯA học. Đây là thứ dùng thường xuyên nhất của
-            một app đồng hồ số lật: dựng máy trên bàn mà xem giờ, không cần phải
-            mở một phiên học nào trước.
+            Đồng hồ đã tách thành module riêng (`/dong-ho`), nên đây chỉ còn là
+            một lối đi sang — không phải lớp phủ mở tại chỗ nữa.
           */}
-          <button
-            type="button"
-            onClick={() => setFullscreen(true)}
-            className="btn-ghost mt-3.5 w-full"
-          >
+          <Link to="/dong-ho" className="btn-ghost mt-3.5 w-full">
             🕐 Xem đồng hồ toàn màn hình
-          </button>
+          </Link>
         </>
       )}
 
@@ -145,14 +146,6 @@ export default function StudyScreen() {
       <div className="h-[100px]" />
       <CheerToast cheer={channel.cheer} />
       <TabBar />
-
-      {fullscreen && (
-        <FullscreenClock
-          session={session}
-          noise={noise}
-          onClose={() => setFullscreen(false)}
-        />
-      )}
     </Screen>
   );
 }
@@ -330,14 +323,12 @@ function ActiveRoom({
   onError,
   onCheer,
   canCheer,
-  onExpand,
 }: {
   session: StudySessionResponse;
   myId: string | null;
   onError: (m: string | null) => void;
   onCheer: (code: StudyCheerCode) => boolean;
   canCheer: boolean;
-  onExpand: () => void;
 }) {
   const join = useJoinStudy();
   const leave = useLeaveStudy();
@@ -382,30 +373,27 @@ function ActiveRoom({
               {session.subject}
             </span>
           )}
-          <button
-            type="button"
-            onClick={onExpand}
+          <Link
+            to={CLOCK_LINK}
             aria-label="Mở đồng hồ toàn màn hình"
             className="-mr-1 flex size-9 items-center justify-center rounded-full bg-white/25 text-[14px]"
           >
             ⛶
-          </button>
+          </Link>
         </div>
       </div>
 
       {/*
-        Chạm vào mặt đồng hồ là mở toàn màn hình — vùng chạm lớn nhất trên màn,
-        và đúng chỗ ngón tay đang nhìn vào. Nút ⛶ giữ lại cho người dùng trình
-        đọc màn hình, vì một khối số không tự nói được là nó bấm được.
+        Chạm vào mặt đồng hồ là sang module Đồng hồ — vùng chạm lớn nhất trên
+        màn, và đúng chỗ ngón tay đang nhìn vào. Nút ⛶ giữ lại cho người dùng
+        trình đọc màn hình, vì một khối số không tự nói được là nó bấm được.
+
+        Mang theo `?che-do=phien-hoc` để đồng hồ mở đúng chặng đang chạy: vào từ
+        trang chủ thì nó mặc định xem giờ, còn vào từ đây thì phải là phiên học.
       */}
-      <button
-        type="button"
-        onClick={onExpand}
-        aria-label="Mở đồng hồ toàn màn hình"
-        className="mt-3 block w-full"
-      >
+      <Link to={CLOCK_LINK} aria-label="Mở đồng hồ toàn màn hình" className="mt-3 block w-full">
         <FlipClock seconds={secondsLeft} />
-      </button>
+      </Link>
 
       <div className="mt-4 h-[7px] overflow-hidden rounded-full bg-white/30">
         <i className="block h-full rounded-full bg-white transition-all" style={{ width: `${progress}%` }} />

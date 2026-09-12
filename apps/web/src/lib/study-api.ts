@@ -26,11 +26,20 @@ export const studyKeys = {
   summary: () => ['study', 'summary'] as const,
 };
 
-export function useStudySummary() {
+/**
+ * Tổng hợp phòng học.
+ *
+ * `enabled` để module Đồng hồ tắt hẳn truy vấn khi người dùng chưa ghép đôi:
+ * `/dong-ho` mở được cả khi chưa có couple (một cái đồng hồ không cần người thứ
+ * hai), mà `GET /study/summary` thì đòi couple — bật bừa thì mỗi lần mở đồng hồ
+ * là một lần gọi API trả 4xx.
+ */
+export function useStudySummary({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: studyKeys.summary(),
     queryFn: () => api.get<StudySummaryResponse>('/study/summary'),
     retry: false,
+    enabled,
   });
 }
 

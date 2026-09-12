@@ -31,6 +31,7 @@ const GamesScreen = lazy(() => import('@/screens/GamesScreen'));
 const GameScreen = lazy(() => import('@/screens/GameScreen'));
 const StudyScreen = lazy(() => import('@/screens/StudyScreen'));
 const CycleScreen = lazy(() => import('@/screens/CycleScreen'));
+const ClockScreen = lazy(() => import('@/screens/ClockScreen'));
 
 export default function App() {
   const { user, isRestoring } = useAuth();
@@ -157,6 +158,19 @@ export default function App() {
                 <StudyScreen />
               </Suspense>
             </RequireCouple>
+          }
+        />
+        {/*
+          Đồng hồ là module RIÊNG, ngang hàng với Phòng học. Không bọc trong
+          RequireCouple: xem giờ thì không cần người thứ hai. Chế độ "phiên học"
+          bên trong nó tự ẩn đi khi chưa ghép đôi.
+        */}
+        <Route
+          path="/dong-ho"
+          element={
+            <Suspense fallback={<Spinner label="Đang mở đồng hồ..." />}>
+              <ClockScreen />
+            </Suspense>
           }
         />
         {/*
