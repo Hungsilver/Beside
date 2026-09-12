@@ -16,6 +16,13 @@ export interface WallClock {
   meridiem: string | null;
   /** `Thứ Sáu, 12/09/2026`. */
   dateLabel: string;
+  /**
+   * Giờ theo đồng hồ 24h, BẤT KỂ người dùng đang xem ở chế độ 12 hay 24 giờ.
+   *
+   * Chế độ đêm tự động cần con số này. Đọc `hour` của mặt đồng hồ thì lúc đang
+   * ở chế độ 12 giờ, 9 giờ tối sẽ ra `9` và khung giờ đêm không bao giờ khớp.
+   */
+  hour24: number;
   /** Chuỗi cho trình đọc màn hình: `9 giờ 05 phút`. */
   spoken: string;
 }
@@ -70,6 +77,8 @@ export function useWallClock({
   }, []);
 
   const { hour, minute, second, dayPeriod } = readParts(now, hour12);
+  // Đọc riêng một lần nữa ở hệ 24 giờ — rẻ, và không phải suy ngược từ `SA/CH`.
+  const hour24 = hour12 ? readParts(now, false).hour : hour;
 
   const parts: ClockPart[] = [
     { id: 'h', digits: pad(hour) },
@@ -81,6 +90,7 @@ export function useWallClock({
     parts,
     meridiem: hour12 ? dayPeriod : null,
     dateLabel: formatDate(now),
+    hour24,
     spoken: `${hour} giờ ${String(minute).padStart(2, '0')} phút`,
   };
 }

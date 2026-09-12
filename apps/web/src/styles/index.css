@@ -418,8 +418,11 @@ button {
       Khe rộng 1.5px chứ không 1px: ở cỡ toàn màn hình, một đường tóc biến mất
       hẳn và bốn tấm thẻ dính lại thành một khối chữ số.
     */
-    background: linear-gradient(#332232 0 calc(50% - 0.75px), #150d14 calc(50% + 0.75px) 100%);
-    color: #fff;
+    background: linear-gradient(
+      var(--flip-top, #332232) 0 calc(50% - 0.75px),
+      var(--flip-bottom, #150d14) calc(50% + 0.75px) 100%
+    );
+    color: var(--flip-ink, #fff);
     box-shadow:
       inset 0 0 0 1px rgba(255, 255, 255, 0.08),
       0 4px 14px rgba(35, 19, 32, 0.34);
@@ -433,6 +436,22 @@ button {
   */
   .flip-stage {
     container-type: size;
+  }
+
+  /*
+    Chống lưu ảnh (burn-in).
+
+    Màn OLED để nguyên một mặt đồng hồ hàng giờ sẽ in vệt chữ số lại vĩnh viễn.
+    Mọi app đồng hồ để bàn đều dịch nhẹ vị trí theo chu kỳ vì lý do đó — vài
+    pixel là đủ, mắt không thấy nhưng điểm ảnh thì được nghỉ.
+  */
+  .flip-drift {
+    transition: transform 2s ease-in-out;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .flip-drift {
+      transition: none;
+    }
   }
   .flip-fluid {
     font-size: var(--flip-vp);
@@ -505,13 +524,13 @@ button {
     will-change: transform;
   }
   .flip-flap-top {
-    background: #332232;
+    background: var(--flip-top, #332232);
     animation-name: flip-fold-down;
     /* Gập XUỐNG thì nhanh dần — lá bài rơi theo trọng lực, không rơi đều. */
     animation-timing-function: cubic-bezier(0.52, 0.02, 0.72, 0.32);
   }
   .flip-flap-bottom {
-    background: #150d14;
+    background: var(--flip-bottom, #150d14);
     transform-origin: top center;
     animation-name: flip-fold-up;
     animation-delay: 210ms;
