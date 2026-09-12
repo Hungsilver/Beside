@@ -147,7 +147,11 @@ export default function StudyScreen() {
       <TabBar />
 
       {fullscreen && (
-        <FullscreenClock session={session} onClose={() => setFullscreen(false)} />
+        <FullscreenClock
+          session={session}
+          noise={noise}
+          onClose={() => setFullscreen(false)}
+        />
       )}
     </Screen>
   );

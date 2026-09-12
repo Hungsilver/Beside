@@ -271,14 +271,56 @@ export interface StudyChannel {
 
 /** Số giây còn lại của chặng hiện tại, làm tròn lên. */
 export function useSecondsLeft(endsAt: number | null): number {
-  const [now, setNow] = useState(() => Date.now());
+  const [left, setLeft] = useState(() => secondsUntil(endsAt));
 
   useEffect(() => {
-    if (endsAt === null) return;
-    const id = setInterval(() => setNow(Date.now()), 500);
-    return () => clearInterval(id);
+    if (endsAt === null) {
+      setLeft(0);
+      return;
+    }
+
+    let timer: number | null = null;
+
+    /*
+     * Hẹn giờ ĐÚNG vào lúc con số sắp đổi, không hỏi lại mỗi 500ms.
+     *
+     * Bản đầu gọi `setInterval(…, 500)`: con số vẫn đúng, nhưng khoảnh khắc nó
+     * ĐỔI lệch khỏi giây thật tới nửa giây, và độ lệch đó không đều giữa các
+     * lần. Trên mặt số lật thì thấy ngay — các cú lật rơi lệch nhịp nhau, có
+     * lúc dồn sát, có lúc thưa ra.
+     */
+    const tick = () => {
+      const remaining = endsAt - Date.now();
+      setLeft(Math.max(0, Math.ceil(remaining / 1000)));
+      if (remaining <= 0) return;
+      // Mốc đổi kế tiếp nằm ở bội số 1000 gần nhất phía dưới `remaining`.
+      // Cộng 25ms để chắc chắn đã qua mốc, tránh hẹn lại đúng một giá trị cũ.
+      const step = remaining % 1000 === 0 ? 1000 : remaining % 1000;
+      timer = window.setTimeout(tick, step + 25);
+    };
+    tick();
+
+    /*
+     * Trình duyệt treo bộ hẹn giờ khi trang bị ẩn. Quay lại app là đọc lại
+     * ngay, nếu không mặt đồng hồ còn đứng ở con số của lúc khoá máy.
+     */
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (timer !== null) window.clearTimeout(timer);
+      tick();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      if (timer !== null) window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [endsAt]);
 
+  return left;
+}
+
+function secondsUntil(endsAt: number | null): number {
   if (endsAt === null) return 0;
-  return Math.max(0, Math.ceil((endsAt - now) / 1000));
+  return Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
 }

@@ -413,12 +413,34 @@ button {
     line-height: 1.42em;
     text-align: center;
     border-radius: 0.16em;
-    /* Khe hở giữa hai nửa — thứ khiến mắt đọc ra "tấm thẻ" chứ không phải chữ số */
-    background: linear-gradient(#2a1b28 0 calc(50% - 0.5px), #120b11 calc(50% + 0.5px) 100%);
+    /*
+      Khe hở giữa hai nửa — thứ khiến mắt đọc ra "tấm thẻ" chứ không phải chữ số.
+      Khe rộng 1.5px chứ không 1px: ở cỡ toàn màn hình, một đường tóc biến mất
+      hẳn và bốn tấm thẻ dính lại thành một khối chữ số.
+    */
+    background: linear-gradient(#332232 0 calc(50% - 0.75px), #150d14 calc(50% + 0.75px) 100%);
     color: #fff;
     box-shadow:
-      inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-      0 3px 10px rgba(35, 19, 32, 0.28);
+      inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+      0 4px 14px rgba(35, 19, 32, 0.34);
+  }
+
+  /*
+    Mặt đồng hồ ở chế độ toàn màn hình.
+
+    `.flip-stage` là khung chứa được đo; `.flip-fluid` là mặt đồng hồ bên trong
+    nó. Trình duyệt không có container query thì rơi về bản đo theo khung nhìn.
+  */
+  .flip-stage {
+    container-type: size;
+  }
+  .flip-fluid {
+    font-size: var(--flip-vp);
+  }
+  @supports (container-type: size) {
+    .flip-fluid {
+      font-size: var(--flip-cq);
+    }
   }
 
   /* Bốn lớp dùng chung một cách cắt: nửa trên cắt bỏ phần dưới và ngược lại. */
@@ -466,21 +488,55 @@ button {
   .flip-flap-top,
   .flip-flap-bottom {
     transform-origin: bottom center;
-    animation-duration: 320ms;
-    animation-timing-function: cubic-bezier(0.36, 0, 0.66, -0.2);
+    /*
+      210ms mỗi nửa, NỐI ĐUÔI KHÍT (lá dưới trễ đúng 210ms).
+      Bản đầu để 320ms + trễ 300ms = 620ms cho một cú lật, mà thẻ giây thì đổi
+      mỗi 1000ms — hiệu ứng chiếm hơn nửa nhịp nên mặt đồng hồ lúc nào cũng
+      đang động đậy, nhìn rất nặng. 420ms để lại hơn nửa giây đứng yên.
+
+      Trước đây hai nửa còn CHỒNG NHAU 20ms và lá dưới dùng đường cong vọt quá
+      (`1.1`), nên đúng lúc giao nhau có một cú nảy — đó chính là chỗ trông
+      giật chứ không phải tốc độ.
+    */
+    animation-duration: 210ms;
     animation-fill-mode: both;
+    /* Tách hẳn sang lớp của GPU: thiếu nó thì mỗi khung hình phải vẽ lại chữ
+       số, và trên máy yếu cú lật rớt khung thấy rõ. */
+    will-change: transform;
   }
   .flip-flap-top {
-    background: #2a1b28;
+    background: #332232;
     animation-name: flip-fold-down;
+    /* Gập XUỐNG thì nhanh dần — lá bài rơi theo trọng lực, không rơi đều. */
+    animation-timing-function: cubic-bezier(0.52, 0.02, 0.72, 0.32);
   }
   .flip-flap-bottom {
-    background: #120b11;
+    background: #150d14;
     transform-origin: top center;
-    /* Lật lên chỉ bắt đầu khi lá trên đã che khuất — nối hai nửa thành một cú lật */
     animation-name: flip-fold-up;
-    animation-delay: 300ms;
-    animation-timing-function: cubic-bezier(0.3, 1.1, 0.5, 1);
+    animation-delay: 210ms;
+    /* Lật LÊN thì chậm dần rồi dừng hẳn, không nảy: nảy ở đây trông như thẻ
+       bị lỏng chứ không như đồng hồ cơ chắc chắn. */
+    animation-timing-function: cubic-bezier(0.22, 0.75, 0.3, 1);
+  }
+
+  /*
+    Bóng đổ chạy theo cú lật — thứ làm mắt tin rằng tấm thẻ có bề dày.
+    Vẽ bằng lớp giả để không phải thêm phần tử nào vào DOM.
+  */
+  .flip-flap-top::after,
+  .flip-flap-bottom::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: #000;
+    pointer-events: none;
+  }
+  .flip-flap-top::after {
+    animation: flip-shade-in 210ms cubic-bezier(0.52, 0.02, 0.72, 0.32) both;
+  }
+  .flip-flap-bottom::after {
+    animation: flip-shade-out 210ms cubic-bezier(0.22, 0.75, 0.3, 1) 210ms both;
   }
 
   @keyframes flip-fold-down {
@@ -497,6 +553,22 @@ button {
     }
     100% {
       transform: rotateX(0deg);
+    }
+  }
+  @keyframes flip-shade-in {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 0.45;
+    }
+  }
+  @keyframes flip-shade-out {
+    0% {
+      opacity: 0.45;
+    }
+    100% {
+      opacity: 0;
     }
   }
 

@@ -62,16 +62,16 @@ export default function FlipClock({
     <div
       className={
         stacked
-          ? `flex flex-col items-center gap-[0.08em] ${digitClass} font-extrabold leading-none tracking-tight`
-          : `flex items-end justify-center ${digitClass} font-extrabold leading-none tracking-tight`
+          ? `flip-fluid flex select-none flex-col items-center gap-[0.06em] ${digitClass} font-extrabold leading-none tracking-tight`
+          : `${fluid ? 'flip-fluid ' : ''}flex select-none items-end justify-center ${digitClass} font-extrabold leading-none tracking-tight`
       }
       // Người khiếm thị nghe "12:34" chứ không phải bốn con số rời rạc.
       role="timer"
       aria-label={label ?? `Còn lại ${spokenTime(seconds ?? 0)}`}
-      style={fluid ? { fontSize: fluidFontSize(shown, stacked) } : undefined}
+      style={fluid ? fluidStyle(shown, stacked) : undefined}
     >
       {shown.map((part, groupIndex) => (
-        <div key={part.id} className="flex items-end">
+        <div key={part.id} className="relative flex items-end">
           {/* Xếp chồng thì bỏ dấu hai chấm: xuống dòng đã tách nhóm rồi, thêm
               dấu vào chỉ làm hàng lệch tâm. */}
           {groupIndex > 0 && !stacked && (
@@ -89,12 +89,16 @@ export default function FlipClock({
             Nhãn đơn vị, CHỈ ở chế độ xếp chồng. Không có dấu hai chấm thì hai
             hàng `18` và `07` có thể đọc thành giờ:phút thay vì phút:giây — mà
             đây là màn hình người ta liếc qua chứ không đọc kỹ.
+
+            Đặt CHỒNG vào góc thẻ chứ không nằm cạnh: nằm cạnh thì nó ăn mất
+            khoảng 20% bề ngang, và chữ số — thứ người ta thật sự nhìn — nhỏ đi
+            đúng chừng ấy. Góc thẻ thì luôn trống vì chữ số căn giữa.
           */}
           {stacked && (
             <span
               aria-hidden
-              className={`ml-[0.1em] pb-[0.3em] text-[0.13em] font-bold uppercase tracking-[0.1em] ${
-                tone === 'light' ? 'text-white/35' : 'text-ink-300'
+              className={`pointer-events-none absolute bottom-[0.07em] right-[0.09em] text-[0.1em] font-bold uppercase leading-none tracking-[0.08em] ${
+                tone === 'light' ? 'text-white/30' : 'text-ink-300'
               }`}
             >
               {UNIT_LABEL[part.id]}
@@ -125,27 +129,64 @@ const UNIT_LABEL: Record<ClockPart['id'], string> = {
  * kể cả đệm hai bên. Chặn thêm theo chiều cao (`vh`) để lúc xoay ngang đồng hồ
  * không cao quá khung.
  */
-function fluidFontSize(parts: ClockPart[], stacked: boolean): string {
+/**
+ * Cỡ chữ cho chế độ toàn màn hình, tính theo SỐ THẺ đang hiện.
+ *
+ * Trả về HAI giá trị:
+ *   · `--flip-vp` đo theo khung nhìn — bản dự phòng cho trình duyệt cũ.
+ *   · `--flip-cq` đo theo KHUNG CHỨA (`cqw`/`cqh`) — bản dùng thật.
+ *
+ * Vì sao phải có bản thứ hai: phần giữa màn hình co lại khi bảng chỉnh
+ * sáng/tiếng mở ra, mà `vh` thì không biết chuyện đó — đồng hồ giữ nguyên cỡ và
+ * tràn đè lên các nút. Đơn vị theo khung chứa co đúng theo chỗ còn lại.
+ *
+ * Một thẻ rộng `1em`, cao `1.42em`; khe giữa hai thẻ `0.05em`; mỗi dấu hai chấm
+ * chiếm ~`0.78em` kể cả đệm. Nhãn đơn vị không tính vào đây vì nó nằm chồng
+ * trong góc thẻ.
+ */
+function fluidStyle(parts: ClockPart[], stacked: boolean): React.CSSProperties {
+  let widthEm: number;
+  let heightEm: number;
+
   if (stacked) {
-    // Mỗi hàng hai thẻ; chiều CAO mới là thứ giới hạn. `1.42` là tỉ lệ cao/rộng
-    // của một thẻ, `0.08` là khe giữa hai hàng.
     const rows = Math.max(1, parts.length);
     const widest = Math.max(...parts.map((p) => p.digits.length), 1);
-    // Trừ hao 0.45em cho nhãn đơn vị bên phải, nếu không cụm số bị đẩy lệch tâm.
-    const byWidth = (92 / (widest * 1.05 + 0.38)).toFixed(2);
-    const byHeight = (64 / (rows * 1.42 + (rows - 1) * 0.08)).toFixed(2);
-    return `min(${byWidth}vw, ${byHeight}vh, 220px)`;
+    // Nhãn đơn vị nằm CHỒNG trong góc thẻ nên không chiếm thêm bề ngang nào.
+    widthEm = widest * 1.05;
+    heightEm = rows * 1.42 + (rows - 1) * 0.06;
+  } else {
+    const digits = parts.reduce((sum, p) => sum + p.digits.length, 0);
+    const separators = Math.max(0, parts.length - 1);
+    widthEm = digits * 1.05 + separators * 0.78;
+    heightEm = 1.42;
   }
 
-  const digits = parts.reduce((sum, p) => sum + p.digits.length, 0);
-  const separators = Math.max(0, parts.length - 1);
-  const widthEm = digits * 1.05 + separators * 0.82;
-  const byWidth = (92 / widthEm).toFixed(2);
-  return `min(${byWidth}vw, 46vh, 220px)`;
+  const w = (97 / widthEm).toFixed(2);
+  const h = (94 / heightEm).toFixed(2);
+
+  return {
+    // `vh` dự phòng phải DÈ DẶT hơn: nó đo cả màn hình chứ không riêng phần
+    // giữa, nên lấy đúng 94% sẽ tràn ra ngoài hai thanh trên/dưới.
+    '--flip-vp': `min(${w}vw, ${(Number(h) * 0.7).toFixed(2)}vh, ${MAX_FLUID_PX}px)`,
+    '--flip-cq': `min(${w}cqw, ${h}cqh, ${MAX_FLUID_PX}px)`,
+  } as React.CSSProperties;
 }
 
-/** Thời gian lật, phải khớp `animation-duration + delay` của `.flip-flap-*`. */
-const FLIP_MS = 620;
+/**
+ * Trần cỡ chữ ở chế độ linh hoạt.
+ *
+ * Điện thoại không bao giờ chạm tới con số này (bị chặn bởi `vw`/`vh` trước);
+ * nó chỉ để trên máy tính bảng hay màn hình rộng đồng hồ không phình tới mức
+ * lố. 300px là khoảng cao bằng một tấm thẻ flip clock để bàn thật.
+ */
+const MAX_FLUID_PX = 300;
+
+/**
+ * Thời gian lật, phải khớp `animation-duration + delay` của `.flip-flap-*`
+ * (210ms + 210ms). Cộng thêm một chút để lá cuối kịp về đúng chỗ trước khi
+ * component gỡ nó đi.
+ */
+const FLIP_MS = 450;
 
 function FlipDigit({ value }: { value: string }) {
   const [current, setCurrent] = useState(value);

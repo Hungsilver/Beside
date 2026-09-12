@@ -3,8 +3,10 @@ import { STUDY_PHASE_LABELS, type StudySessionResponse } from '@beside/shared';
 import FlipClock from '@/components/FlipClock';
 import { useSecondsLeft } from '@/lib/study-api';
 import { useLandscape } from '@/lib/use-landscape';
+import { useSlideAdjust } from '@/lib/use-slide-adjust';
 import { useWakeLock } from '@/lib/use-wake-lock';
 import { useWallClock } from '@/lib/use-wall-clock';
+import { NOISE_PRESETS, type NoiseControls } from '@/lib/use-noise';
 
 /**
  * Đồng hồ toàn màn hình — đặt máy dựng trên bàn mà nhìn.
@@ -29,7 +31,21 @@ const PREFS_KEY = 'beside:clock-prefs';
 interface Prefs {
   showSeconds: boolean;
   hour12: boolean;
+  /** Độ tối của lớp phủ, 0 = sáng nhất. Xem `MAX_DIM`. */
+  dim: number;
 }
+
+/**
+ * Trần độ tối.
+ *
+ * Web KHÔNG chỉnh được độ sáng phần cứng — không có API nào cả. Thứ duy nhất
+ * làm được là phủ một lớp đen lên trên, và đó cũng là cách mọi app đồng hồ chạy
+ * trong trình duyệt làm.
+ *
+ * Chặn ở 0.82 là để tự cứu mình: cho tối 100% thì nút thoát biến mất hẳn và
+ * người dùng kẹt trong một màn hình đen không biết bấm vào đâu.
+ */
+const MAX_DIM = 0.82;
 
 function readPrefs(): Prefs {
   try {
@@ -41,26 +57,42 @@ function readPrefs(): Prefs {
         return {
           showSeconds: typeof p.showSeconds === 'boolean' ? p.showSeconds : true,
           hour12: typeof p.hour12 === 'boolean' ? p.hour12 : false,
+          // Giá trị hỏng (chuỗi, NaN, số ngoài khoảng) đều quy về sáng nhất —
+          // mở app lên mà màn hình đen sì thì không ai biết vì sao.
+          dim:
+            typeof p.dim === 'number' && Number.isFinite(p.dim)
+              ? Math.min(MAX_DIM, Math.max(0, p.dim))
+              : 0,
         };
       }
     }
   } catch {
     /* localStorage bị chặn (chế độ riêng tư) — dùng mặc định */
   }
-  return { showSeconds: true, hour12: false };
+  return { showSeconds: true, hour12: false, dim: 0 };
 }
 
 export default function FullscreenClock({
   session,
+  noise,
   onClose,
 }: {
   /** Phiên đang chạy, `null` thì chỉ còn chế độ xem giờ. */
   session: StudySessionResponse | null;
+  /**
+   * Tiếng ồn nền dùng chung với màn hình phía dưới.
+   *
+   * Truyền vào chứ không tự gọi `useNoise()` ở đây: gọi lại sẽ dựng một
+   * `AudioContext` thứ hai, và tiếng đang kêu ở màn kia không tắt đi — hai
+   * luồng nhiễu chồng lên nhau.
+   */
+  noise: NoiseControls;
   onClose: () => void;
 }) {
   const [prefs, setPrefs] = useState<Prefs>(readPrefs);
   const [mode, setMode] = useState<Mode>(session ? 'countdown' : 'clock');
   const [chromeVisible, setChromeVisible] = useState(true);
+  const [panel, setPanel] = useState(false);
   const hideRef = useRef<number | null>(null);
 
   const landscape = useLandscape();
@@ -127,6 +159,22 @@ export default function FullscreenClock({
    */
   const layout = landscape.portrait ? 'stack' : 'row';
 
+  const setDim = useCallback(
+    // Thanh trượt nói "độ sáng" nên phải LẬT ngược: sáng 1.0 = tối 0.
+    (brightness: number) =>
+      setPrefs((p) => ({ ...p, dim: (1 - brightness) * MAX_DIM })),
+    [],
+  );
+  const brightness = 1 - prefs.dim / MAX_DIM;
+
+  const slide = useSlideAdjust({
+    getLeft: () => brightness,
+    getRight: () => noise.volume,
+    onLeft: setDim,
+    onRight: noise.setVolume,
+    enabled: true,
+  });
+
   return (
     <div
       // Nền tối đặc: đây là thứ để trên bàn lúc học đêm, nền sáng thì chói mắt.
@@ -172,8 +220,16 @@ export default function FullscreenClock({
         </div>
       </Chrome>
 
-      {/* Mặt đồng hồ chiếm hết phần giữa và tự căn giữa ở cả hai chiều. */}
-      <div className="flex min-h-0 flex-1 items-center justify-center px-2">
+      {/*
+        Mặt đồng hồ chiếm hết phần giữa, và cũng là VÙNG VUỐT: nửa trái chỉnh
+        độ sáng, nửa phải chỉnh âm lượng. Đặt cử chỉ ở đây chứ không ở lớp gốc
+        để các nút ở hai đầu màn hình vẫn bấm được bình thường.
+        `touch-none` để trình duyệt không hiểu nhầm thành cuộn trang.
+      */}
+      <div
+        className="flip-stage flex min-h-0 flex-1 touch-none select-none items-center justify-center px-2"
+        {...slide.handlers}
+      >
         {counting ? (
           <FlipClock seconds={secondsLeft} size="fluid" layout={layout} />
         ) : (
@@ -231,22 +287,155 @@ export default function FullscreenClock({
                 {landscape.immersive ? '↩ Về dọc' : '⟳ Xoay ngang'}
               </Toggle>
             )}
+
+            <Toggle on={panel} onClick={() => setPanel((v) => !v)}>
+              🔅 Sáng &amp; tiếng
+            </Toggle>
           </div>
 
-          <p className="mt-2 text-center text-[11px] text-white/35">
+          {/*
+            Thanh trượt THẬT, bên cạnh cử chỉ vuốt.
+            Cử chỉ không tự nói cho ai biết là nó tồn tại, và người dùng trình
+            đọc màn hình thì không vuốt được — nên hai đường vào phải cùng có.
+          */}
+          {panel && (
+            <div className="mt-3 flex flex-col gap-3 rounded-2xl bg-white/[0.07] px-3.5 py-3">
+              <Slider
+                icon="🔅"
+                label="Độ sáng"
+                value={brightness}
+                onChange={setDim}
+              />
+              <Slider
+                icon="🔊"
+                label="Âm lượng tiếng nền"
+                value={noise.volume}
+                onChange={noise.setVolume}
+              />
+
+              {noise.supported && (
+                <div className="flex gap-2">
+                  {NOISE_PRESETS.map((p) => {
+                    const on = noise.playing === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => noise.toggle(p.id)}
+                        className={`h-11 flex-1 rounded-xl text-[12.5px] font-bold transition ${
+                          on ? 'bg-white text-[#0B0710]' : 'bg-white/10 text-white/75'
+                        }`}
+                      >
+                        {p.emoji} {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          <p className="mt-2 text-center text-[11px] leading-relaxed text-white/35">
+            Vuốt dọc nửa trái để chỉnh sáng, nửa phải để chỉnh tiếng
             {!landscape.canLock && landscape.portrait
-              ? 'Xoay ngang điện thoại để đồng hồ to hết cỡ'
+              ? ' · xoay ngang máy để đồng hồ to hết cỡ'
               : wake.held
-                ? 'Màn hình được giữ sáng'
+                ? ' · màn hình đang được giữ sáng'
                 : ''}
           </p>
         </div>
       </Chrome>
+
+      {/*
+        Lớp làm tối. Nằm TRÊN mọi thứ (kể cả nút bấm) vì đó mới giống giảm độ
+        sáng thật, nhưng DƯỚI bảng báo giá trị — đang vuốt mà không đọc được số
+        phần trăm thì chỉnh bằng cảm giác.
+        `pointer-events-none` để nó không nuốt cú chạm nào.
+      */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-10 bg-black transition-opacity duration-200"
+        style={{ opacity: prefs.dim }}
+      />
+
+      {slide.active !== null && (
+        <Hud
+          side={slide.active}
+          value={slide.active === 'left' ? brightness : noise.volume}
+          muted={slide.active === 'right' && noise.playing === null}
+        />
+      )}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
+
+function Slider({
+  icon,
+  label,
+  value,
+  onChange,
+}: {
+  icon: string;
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <span aria-hidden className="w-5 shrink-0 text-center text-[14px]">
+        {icon}
+      </span>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        value={Math.round(value * 100)}
+        onChange={(e) => onChange(Number(e.target.value) / 100)}
+        aria-label={label}
+        className="h-11 min-w-0 flex-1 accent-white"
+      />
+      <span className="w-[38px] shrink-0 text-right text-[11.5px] tabular-nums text-white/50">
+        {Math.round(value * 100)}%
+      </span>
+    </div>
+  );
+}
+
+/** Bảng báo giá trị khi đang vuốt. Nổi trên cả lớp làm tối. */
+function Hud({
+  side,
+  value,
+  muted,
+}: {
+  side: 'left' | 'right';
+  value: number;
+  muted: boolean;
+}) {
+  const pct = Math.round(value * 100);
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center"
+    >
+      <div className="flex min-w-[136px] flex-col items-center gap-2 rounded-3xl bg-black/70 px-6 py-5 backdrop-blur-sm">
+        <span aria-hidden className="text-[30px] leading-none">
+          {side === 'left' ? (value > 0.5 ? '🔆' : '🔅') : pct === 0 ? '🔇' : '🔊'}
+        </span>
+        <b className="text-[22px] tabular-nums">{pct}%</b>
+        <div className="h-1.5 w-[104px] overflow-hidden rounded-full bg-white/20">
+          <i className="block h-full rounded-full bg-white" style={{ width: `${pct}%` }} />
+        </div>
+        <span className="text-[11px] text-white/55">
+          {side === 'left' ? 'Độ sáng' : muted ? 'Tiếng nền đang tắt' : 'Âm lượng'}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 /** Lớp nút bấm tự mờ đi. Vẫn nhận được chạm khi mờ — chạm để gọi nó hiện lại. */
 function Chrome({ visible, children }: { visible: boolean; children: React.ReactNode }) {
